@@ -781,7 +781,7 @@ Lát 4 tách làm hai commit. **Lát 4-1 xong** (hàm thuần, chỉ báo, danh 
 - **Phát hiện trong lúc làm, chưa sửa (ngoài phạm vi lát này):**
   1. **Hạn mức FHIR mặc định chỉ đủ cho khoảng 20 lượt khám mỗi phút qua một tài khoản máy.** Một lượt khám đi hết đường tốn chừng 2.500 điểm (ghi 100, tìm 20) [Phân tích, từ mã]. Khi chưa nâng hạn mức, hai lần chạy đều bị Medplum trả 429 ở chu kỳ 17–18; log BFF ghi `_consumedPoints 50011, limit 50000` và BFF trả HTTP 500 bảy lần [Đã đo]. Ở cả hai lần đó số đếm cuối vẫn đúng 20/20: nhóm "gửi lại" của OFF-7 hội tụ. Hệ quả cho T6: "đồng bộ 40 ca trong 60 giây" cần khoảng 100.000 điểm trong một phút, gấp đôi hạn mức mặc định, nên T-QUOTA phải làm trước T6.
   2. **Mục "thử lại" có thể nằm chờ thêm tới 30 giây.** `SyncEngine.schedule` chỉ hẹn theo các mục có `nextAt` còn ở tương lai. Mục hết thời gian chờ ngay trong lúc một lượt gửi đang chạy thì bị bỏ qua ở lượt đó và không được hẹn lại, phải chờ chu kỳ 30 giây [Đã đọc mã]. Ở bước thử, sau khi máy sập rồi đăng nhập lại ngay, 5 mục nằm yên hơn 16 giây dù có mạng [Đã đo]. Không mất dữ liệu.
-  3. **"Ký & In" có lúc báo đã giữ trên máy nhưng không in.** Xảy ra khi ký lúc ứng dụng coi là có mạng mà một thao tác trước của lượt khám còn trong thời gian chờ gửi lại. Câu báo là "Đang chờ thao tác trước đó của lượt khám này được máy chủ nhận…" hoặc "Mất kết nối. Đã giữ trên máy và sẽ tự gửi khi có mạng…". Mục ký đã vào hàng đợi và sẽ tự gửi, nhưng không có tờ đơn; bấm lại thì in. Gặp ở 1/100 chu kỳ của lần chạy 100, và 11–26 lần bấm liền ở một chu kỳ khi Medplum trả 429 [Đã đo]. Bác sĩ không bấm lại thì lượt khám được lưu mà bệnh nhân không có đơn giấy.
+  3. **"Ký & In" có lúc báo đã giữ trên máy nhưng không in.** Xảy ra khi ký lúc ứng dụng coi là có mạng mà một thao tác trước của lượt khám còn trong thời gian chờ gửi lại. Câu báo là "Đang chờ thao tác trước đó của lượt khám này được máy chủ nhận…" hoặc "Mất kết nối. Đã giữ trên máy và sẽ tự gửi khi có mạng…". Mục ký đã vào hàng đợi và sẽ tự gửi, nhưng không có tờ đơn; bấm lại thì in. Gặp ở 1/100 chu kỳ của lần chạy 100, và 11–26 lần bấm liền ở một chu kỳ khi Medplum trả 429 [Đã đo]. Bác sĩ không bấm lại thì lượt khám được lưu mà bệnh nhân không có đơn giấy. Thiết kế sửa: mục "Thiết kế OFF-8" bên dưới (chờ duyệt).
   4. **Chế độ "Mất mạng" không tự thoát khi không còn mục chờ.** Sau một lần gọi lỗi mạng mà trình duyệt không phát sự kiện `online`, ứng dụng không còn lời gọi nào thăm dò lại máy chủ: tìm kiếm, hàng chờ và nạp trước đều chỉ gọi khi đang "có mạng". Nó chỉ thoát khi có lần ghi kế tiếp hoặc một mục chờ gửi lại thành công [Đã đọc mã; chưa đo riêng].
   5. **Hàng chờ có lúc hiện hai dòng cho cùng một lượt khám.** Sau một lần mất phản hồi ở "cấp số", máy chủ đã có lượt khám còn mục cấp số trên máy chưa được gửi lại. Nếu lúc đó máy tải được hàng chờ của máy chủ thì `mergeQueue` không biết hai thứ là một (dòng của máy chủ không mang `clientUuid`), nên hiện cả dòng của máy chủ ("Gọi vào khám") lẫn dòng tạm trên máy ("Tiếp tục khám" nếu đã mở). Hết khi mục cấp số gửi lại xong. Máy chủ vẫn chỉ có một lượt khám. Gặp ở lần chạy CI đầu tiên (hạt giống 2533173637, chu kỳ 02), không gặp ở máy dev với cùng hạt giống (hai lần chạy) [Đã đo; cơ chế: Đã đọc mã]. Bấm "Gọi vào khám" ở dòng của máy chủ sẽ mở một bản nháp trống cho lượt đang khám dở [Đã đọc mã, chưa đo].
 - **Bẫy mới:**
@@ -794,6 +794,147 @@ Lát 4 tách làm hai commit. **Lát 4-1 xong** (hàm thuần, chỉ báo, danh 
   - Lần chạy đầu (hạt giống 2533173637) đỏ ở chu kỳ 02: bộ định vị của bài gặp hai nút khi hàng chờ hiện hai dòng cho một lượt khám (phát hiện 5). Lỗi là của bài kiểm thử; 19 chu kỳ còn lại vẫn đúng số bản ghi. Đã sửa bài.
   - Lần chạy kế (hạt giống 1428297068) xanh cả ba job, bài đạt 11/11. Bước M0-2 mất 41 giây (bài 39,7 giây). Job e2e mất 3 phút 35 giây, so với 2 phút 41 giây trên `main` (commit `950823a`): tăng khoảng 1 phút.
   - Job e2e còn xa mức 10 phút nên chưa cần tách job riêng.
+
+#### Thiết kế OFF-8: "Ký & In" lúc có mạng mà máy chủ chưa nhận ngay [Chờ duyệt] (03/10/2026)
+
+Thiết kế cho phát hiện 3 của lát 5. **Chưa sửa mã sản phẩm, chưa sửa BFF**: mới có kiểm thử tái hiện và bản thiết kế này. Chờ chủ dự án duyệt hướng làm và trả lời bốn câu hỏi ở cuối mục.
+
+**Hiện tượng và cơ chế [Đã đọc mã, đã tái hiện].** Ở nhánh có mạng, `OfflineClient.complete` lưu mục hoàn tất vào hàng đợi rồi gọi `engine.submit(opId, promote)`. `submit` có hai kết quả dứt điểm: máy chủ nhận (`done`, in qua máy chủ) và máy chủ từ chối (`rejected`, bỏ mục, bản nháp còn). Năm kết quả còn lại đều bị `complete` trả thành `failed` kèm một dòng lỗi, trong khi mục vẫn nằm trong hàng đợi và bộ máy vẫn tự gửi nó. `promote` (chuyển mục sang dạng ký khi mất mạng, rồi in từ máy) chỉ chạy khi chính lượt gửi đó gặp lỗi mạng: `settleFocus` thoát ngay trong mọi trường hợp khác.
+
+| Kết quả | Khi nào | Yêu cầu hoàn tất đã tới máy chủ chưa | Nếu bác sĩ không bấm lại |
+|---|---|---|---|
+| `waiting` | Mục trước của lượt khám (cấp số, mở hồ sơ) đang `retry`, chưa hết thời gian chờ | Chưa | Mục trước xong thì máy tự gửi: lượt khám kết thúc trên máy chủ, không có đơn giấy |
+| `offline`, chưa chuyển | Bộ máy chuyển sang "mất mạng" sau lúc `complete` còn thấy "có mạng": mạng vừa có lại, lượt gửi lại mục trước lỗi mạng đúng lúc đó | Chưa | Như trên |
+| `retrying` | Chính yêu cầu hoàn tất nhận 5xx, 503 `incomplete` hoặc 429 | Rồi; máy chủ có thể đã ghi dở | Máy tự gửi lại sau 2 s · 2^(n−1): như trên |
+| `paused` | Phiên hết hạn (401) | Chưa (bị chặn ở khâu xác thực) | Ứng dụng về màn hình đăng nhập ngay, nên **không còn nút nào để bấm lại**. Đăng nhập lại thì máy tự gửi: như trên |
+| `held` | Mục trước đã bị máy chủ từ chối (409, lỗi khác) | Chưa | Không bao giờ gửi (M0 chưa có giải quyết xung đột). **Bấm lại cũng không in**, và máy không giữ bản đơn nào để in lại |
+
+Mục nằm lại ở "dạng có mạng": không có id tạm của đơn (`rxTmpId`), không có bản đơn trong bảng `signed`, không có mục ghi nhận in, bản nháp chưa bị xóa. Riêng `clientTimes` thì tùy cách mở hồ sơ: mở lúc có mạng thì không có; mở bằng dữ liệu trên máy (ca `waiting` và `held` thường gặp, vì mục mở hồ sơ chưa xong) thì yêu cầu đã mang sẵn giờ ký của lần bấm.
+
+Gốc của lỗi là một trạng thái lẽ ra không được tồn tại: **mục hoàn tất đã vào hàng đợi và sẽ tự gửi, nhưng chưa có tờ đơn, còn màn hình vẫn là màn hình khám.**
+
+**Tái hiện [Đã đo].** 7 bài mới trong `apps/clinic-web/src/local/client.test.ts`, nhóm "TÁI HIỆN (chưa sửa)…", dùng BFF giả và đồng hồ ảo. Cả 7 xanh trên mã hiện tại (15 lần chạy liền, 0 lần đỏ). Chúng ghi lại hành vi hiện tại, tức là lỗi; khi sửa thì đổi kỳ vọng theo phần "Kiểm thử" bên dưới.
+
+1. `waiting`: mục mở hồ sơ gặp 503 hai lần, còn 4 giây mới gửi lại. Ký: "Đang chờ thao tác trước đó…", 0 lần in, yêu cầu hoàn tất chưa gửi lần nào. Cho thời gian trôi 4 giây: máy chủ có lượt khám `done`, bản nháp bị xóa, vẫn 0 lần in và máy không có bản đơn.
+2. Cùng tình huống, bấm lại sau khi mục trước xong: máy chủ nhận (đường "bấm lại thì in được").
+3. `offline` chưa chuyển: yêu cầu gửi lại mục mở hồ sơ đang đi thì bác sĩ ký, rồi yêu cầu đó lỗi mạng. Ký: "Mất kết nối. Đã giữ trên máy…", 0 lần in; sau đó máy tự gửi, lượt khám `done`.
+4. `retrying`: yêu cầu hoàn tất gặp 503. 0 lần in, mục ở trạng thái `retry` và không có `clientTimes`; 2 giây sau máy gửi lại (2 yêu cầu cùng `clientUuid`), lượt khám `done`.
+5. `paused`: 401 lúc ký. 0 lần in; đổi token (đăng nhập lại) thì bộ máy gửi ngay, lượt khám `done`.
+6. `held`: mục mở hồ sơ đang xung đột (người khác đang khám). Bấm hai lần đều báo lỗi, 0 lần in, 0 yêu cầu hoàn tất, máy không có bản đơn.
+7. Liên quan tới rủi ro 503: ký gặp 503, rồi mất mạng, ký lại. Nhánh mất mạng chuyển luôn mục đã tới máy chủ sang giờ ký mới của máy khách. Quy tắc "không đổi giờ ký sau 503" của lát 3b-1 vì thế hiện chỉ được giữ ở `submit`, không được giữ ở đường này.
+
+Sau khi thêm 7 bài: kiểu đạt 7 gói, 370 kiểm thử đơn vị (363 + 7) [Đã đo]. Chưa chạy lại bài e2e 100 chu kỳ; hai số đo 1/100 chu kỳ và 11–26 lần bấm là của lát 5.
+
+**Bất biến phải đạt (K).** Khi `complete()` trả về, không có mục hoàn tất nào vừa còn tự gửi được, vừa chưa có tờ đơn và chưa có bản đơn in lại được trên máy. "Ký & In" chỉ được kết thúc bằng một trong ba cách:
+
+1. máy chủ nhận, in qua máy chủ;
+2. đã lưu bền trên máy ở dạng ký khi mất mạng, in từ máy, màn hình chuyển sang kết quả ký;
+3. không lưu được hoặc máy chủ từ chối: không in, hàng đợi không có mục hoàn tất nào của lượt này, màn hình khám còn nguyên và nói rõ "CHƯA in".
+
+K giữ nguyên N1 (cách 2 lưu bền rồi mới in), N2 (cùng mục, cùng `clientUuid`), N3 (không có kết quả nào im lặng) và không cần nút xóa mục chưa đồng bộ.
+
+**Phương án A: máy chủ chưa nhận ngay thì ký như khi mất mạng.**
+
+- Mọi kết quả chưa dứt điểm đi cùng một đường với ký khi mất mạng: trong **một** giao dịch, chuyển mục sang dạng ngoại tuyến (`clientTimes`, `rxTmpId`; cùng id, cùng `clientUuid`), ghi bản đơn để in lại, ghi mục ghi nhận in, xóa bản nháp; sau đó mới in từ máy, có nhãn; màn hình kết quả ký theo dõi mục (chờ đồng bộ, đã đồng bộ, bị giữ, xung đột, chờ xác nhận) như đã có từ lát 3b-2.
+- Giờ ký là giờ của lần bấm, đã tính trước lần gửi đầu tiên. Việc chuyển không sinh giờ mới.
+- Việc chuyển làm **trong bộ máy đồng bộ, lúc đang giữ khóa**, như ca lỗi mạng hiện nay; không làm ở `complete` sau khi `submit` trả về. Làm sau thì một lượt gửi nền có thể chen vào gửi bản cũ. Nếu bản cũ được máy chủ nhận trước khi kịp chuyển, mục ghi nhận in sẽ mang một id tạm không bao giờ có ánh xạ và nằm mãi trong hàng đợi [Đã đọc mã: `effectsOf` chỉ ghi ánh xạ khi mục mang `rxTmpId` lúc gửi].
+- Kết thúc khám không kê đơn đi cùng đường, chỉ không có bước in.
+- Không sửa BFF: máy chủ nhận một yêu cầu y như yêu cầu ký khi mất mạng đã có kiểm thử tích hợp.
+
+Rủi ro của A:
+
+1. **Mục đã tới máy chủ (ca `retrying`).** Xem riêng ở dưới.
+2. Tờ đơn mang nhãn "KÝ KHI MẤT MẠNG: chưa đồng bộ lên hệ thống, chưa liên thông" cả khi phòng khám đang có mạng và máy chủ nhận sau đó vài giây. Vế "chưa đồng bộ, chưa liên thông" đúng tại lúc in; vế "mất mạng" thì không.
+3. Các lượt này được đo thời gian khám bằng đồng hồ máy khách (nguồn `client`) và nhật ký ghi `queryKind: 'offline'`, dù lúc đó có mạng. Đúng theo OFF-3, nhưng cột "Đo ở máy khám" sẽ gồm cả chúng.
+4. `held`: in một đơn cho lượt khám mà hệ thống đã biết là đang xung đột. Kết cục giống hệt ca "ký khi mất mạng rồi mới biết xung đột" mà OFF-7 đã chấp nhận (đơn giữ trên máy, in lại được, báo đỏ), chỉ khác là lần này biết trước khi in.
+5. `paused`: tờ đơn in ra khi ứng dụng đang chuyển về màn hình đăng nhập. Việc chuyển mục phải ghi xong trước khi kho bị đóng theo phiên; thứ tự này phụ thuộc React [Chưa đo]. Thua cuộc đua thì rơi về hành vi hiện nay.
+6. Sửa vào bộ máy đồng bộ, lõi của "0 mất, 0 trùng": phải chạy lại toàn bộ đột biến của lát 3b và 4, và bài 20 chu kỳ.
+
+**Phương án B: giữ luồng, nói rõ "CHƯA in, bấm lại để in", đánh dấu trong danh sách chờ đồng bộ.**
+
+- Đổi câu báo; dòng của mục trong danh sách "Chờ đồng bộ" có nhãn "chưa in".
+- Rủi ro: vẫn trông vào việc bác sĩ đọc và bấm lại. Bác sĩ bỏ đi thì kết cục như hiện nay.
+- Không cứu được `paused` (màn hình khám đã mất) và `held` (bấm lại không in, máy không có bản đơn).
+- Khi máy chủ lỗi kéo dài (429, Medplum dừng mà BFF còn chạy) bác sĩ không in được đơn nào, tệ hơn cả lúc mất mạng hẳn: 11–26 lần bấm đã đo vẫn còn nguyên.
+- Mục xong thì rời danh sách, nên nhãn "chưa in" mất theo. Muốn nhãn sống tới khi in thật thì phải thêm trạng thái "đã ký, chưa in" lưu trên máy, thông báo riêng và nút in từ thông báo: nhiều việc giao diện hơn A mà bảo đảm yếu hơn.
+- Ưu điểm: không đụng bộ máy đồng bộ, không đổi nội dung của bất kỳ mục nào.
+
+**Phương án C: xử lý mục trước rồi mới quyết định.**
+
+- **C1, đẩy mục trước ngay.** Khi một mục đang được người dùng chờ kết quả, các mục trước của nó bỏ qua thời gian chờ gửi lại trong lượt gửi đó (giống "Đồng bộ ngay" nhưng chỉ cho chuỗi của lượt khám này). Máy chủ đã hồi thì mục trước xong, yêu cầu hoàn tất được gửi và nhận ngay: ký có mạng bình thường, giờ máy chủ, không nhãn.
+- **C2, chờ có giới hạn.** Giữ nút ở "Đang lưu…" tối đa vài giây cho bộ máy tự gửi lại, rồi mới quyết định.
+- Cả hai chỉ giảm số ca, không đóng được K: mục trước lại lỗi, `held`, `paused`, hoặc máy chủ lỗi lâu hơn thời gian chờ thì vẫn phải rơi về A hoặc B.
+- Rủi ro C1: mỗi lần bấm ký thêm tối đa một yêu cầu cho mỗi mục trước, bỏ qua thời gian chờ lũy thừa (không đáng kể khi A làm cho chỉ còn một lần bấm).
+- Rủi ro C2: thêm bộ hẹn giờ và trạng thái chờ ở màn hình khám; bác sĩ chờ vô ích khi máy chủ lỗi dài (cửa sổ hạn mức 429 là một phút); thêm kiểm thử hẹn giờ.
+
+**Loại:**
+
+- Tự gỡ mục khỏi hàng đợi khi không in ("không in thì cũng không gửi"): không áp dụng được cho mục máy chủ có thể đã ghi dở, đi ngược N1, và bác sĩ vẫn phải bấm lại.
+- In từ máy nhưng giữ nguyên yêu cầu ở dạng có mạng: giấy ghi giờ bấm, còn bản ghi lấy giờ máy chủ của lần gửi lại thành công. Máy chủ lỗi càng lâu thì lệch càng lớn; qua nửa đêm thì mã trên giấy không có trên máy chủ.
+- Cố định giờ ký ở máy khách cho mọi lần ký, kể cả lúc có mạng: gọn nhất về lâu dài, nhưng phải sửa BFF và đổi nghĩa của số đo "đo ở máy chủ" (OFF-3). Để lại cho M1 cùng T-SIGN.
+
+**Khuyến nghị: A, kèm C1 trong cùng lát.** A là phương án duy nhất đưa cả năm kết quả về K (trừ các ca hiếm ở "Rủi ro còn lại"); C1 là thay đổi nhỏ giúp ca đo được ở lát 5 (mục trước đang chờ gửi lại, máy chủ đã hồi) đi đường có mạng bình thường thay vì mang nhãn mất mạng. Không làm C2. Phần "nói rõ CHƯA in" của B chỉ dùng làm câu báo cho các ca còn lại mà A không chuyển được (xem "Rủi ro còn lại").
+
+**Mục đã tới máy chủ (`retrying`): cân nhắc riêng, vì lát 3b-1 đã quyết không đổi giờ ký sau 503.** Lý do khi đó: máy chủ có thể đã ghi dở với giờ của nó, đổi sang giờ máy khách có thể làm lệch mã đơn giữa các phần đã ghi. Đọc lại mã cho thấy rủi ro này có thật nhưng hẹp hơn mô tả, và đã có sẵn ở các đường khác:
+
+- Giờ ký của máy khách được tính trước lần gửi đầu, trong cùng một lần `complete()`. Nó và giờ máy chủ của lần ghi dở là **cùng một thời điểm đọc trên hai đồng hồ**: chênh nhau bằng độ lệch đồng hồ cộng độ trễ mạng [Đã đọc mã].
+- Đường gửi lại hiện nay của mục dạng có mạng còn lệch hơn thế: mỗi lần gửi lại, máy chủ lấy giờ mới làm giờ ký (`routes/clinical.ts`), nên các phần ghi ở lần 1 và lần 2 cách nhau đúng bằng thời gian chờ gửi lại, 2 đến 60 giây hoặc lâu hơn [Đã đọc mã]. Sau khi chuyển, mọi lần gửi lại mang cùng một giờ ký, nên không lệch thêm.
+- Nhánh mất mạng đã đổi giờ ký của mục đã tới máy chủ (bài tái hiện 7) [Đã đo].
+- Cái hỏng thật sự chỉ xảy ra khi hai đồng hồ **khác ngày** (giờ Việt Nam): mã đơn tính theo ngày ký, và nằm ở ba nơi (`MedicationRequest.groupIdentifier`, `List.identifier`, `Task.identifier`) [Đã đọc mã]. Ghi dở với mã ngày này rồi ghi nốt với mã ngày khác cho ra một đơn mang hai mã, không có kiểm tra nào hiện nay phát hiện.
+
+Hai lựa chọn:
+
+- **A-1 (khuyến nghị): vẫn chuyển, có hàng rào ngày.** Chỉ chuyển mục đã tới máy chủ khi ngày theo giờ ký của máy khách trùng ngày theo giờ máy chủ lúc trả lỗi (tiêu đề `Date` của phản hồi lỗi). Khác ngày, hoặc không đọc được `Date`, thì không chuyển, không in, báo "CHƯA in". Ca hai mã bị chặn; phần còn lại là độ lệch vài giây giữa các mốc thời gian, nhỏ hơn mức đường gửi lại hiện nay đã có. Cần `api.ts` giữ lại tiêu đề `Date` của phản hồi lỗi. [Chưa đo: tiêu đề này có tới trình duyệt qua proxy của Vite và qua bản build hay không.]
+- **A-2: không chuyển mục đã tới máy chủ.** Giữ nguyên quy tắc lát 3b-1; ca này không in và báo "CHƯA in, máy chủ đang lỗi, bấm lại". Hiện tượng còn nguyên ở đúng nơi đã đo 11–26 lần bấm, và khi Medplum dừng mà BFF còn chạy thì không in được đơn nào dù máy chủ chưa ghi gì.
+
+Cách sửa tận gốc nằm ở BFF: gói hoàn tất đọc lại giờ ký và mã của phần đã ghi trước khi ghi nốt. Việc này đóng luôn ca gửi lại qua nửa đêm của đường có mạng. Ngoài phạm vi OFF-8, ghi vào T-IDEM.
+
+**Chi tiết của phương án khuyến nghị (A + C1 + A-1).**
+
+- `SyncEngine`:
+  - `settleFocus` chuyển mọi mục đang được chờ kết quả mà cuối lượt gửi chưa xong và chưa bị từ chối, không chỉ khi lỗi mạng; kể cả ở hai lối ra sớm (phiên không phải chủ kho, đang chờ đăng nhập lại).
+  - `promote` nhận thêm thông tin "máy chủ đã trả lỗi cho mục này chưa" và giờ máy chủ của lần lỗi đó, và được phép từ chối chuyển.
+  - Kết quả của `submit` cho biết mục đã được chuyển hay chưa.
+  - C1: trong lượt gửi, mục trước (qua mọi bậc) của một mục đang được chờ kết quả cũng bỏ qua `nextAt`.
+- `OfflineClient.complete`: sau `submit`, `done` và `rejected` như cũ; mọi kết quả khác mà mục đã chuyển thì in từ máy và trả `offline`; chưa chuyển thì trả `failed` với một câu duy nhất có chữ "CHƯA in". Nhánh mất mạng dùng chung hàm chuyển, nên cùng chịu hàng rào ngày.
+- `checkIn` và `openVisit` bỏ lần ghi lại mục sau `submit`: bộ máy đã chuyển trong lúc giữ khóa. Lần ghi lại hiện nay còn đặt `nextAt` về 0, nên mục vừa bị máy chủ trả lỗi tạm sẽ được gửi lại ở lượt gửi kế tiếp bất kỳ, không chờ hết thời gian chờ [Đã đọc mã].
+- Màn hình kết quả ký khi mất mạng dùng lại nguyên: đã có trạng thái chờ, bị giữ, xung đột, chờ xác nhận và nút in lại.
+- Tệp dự kiến sửa: `local/sync.ts`, `local/client.ts`, `api.ts`, kiểm thử và e2e. Không sửa BFF, không sửa gói in (nếu giữ nhãn, câu hỏi 4).
+
+**Rủi ro còn lại sau khi làm** (K không đúng ở các ca này; màn hình phải nói rõ "CHƯA in"):
+
+1. Hàng rào ngày từ chối (A-1): mục đã tới máy chủ, hai đồng hồ khác ngày. Mục vẫn tự gửi.
+2. Lỗi kép: máy chủ chưa nhận **và** kho trên máy không ghi được lúc chuyển (đầy bộ nhớ). Mục dạng có mạng đã lưu từ trước nên vẫn tự gửi.
+3. 401 lúc ký mà kho đóng trước khi kịp chuyển [Chưa đo]. Đo bằng e2e; nếu xảy ra thật thì phải cho việc về màn hình đăng nhập chờ bộ máy xong lượt đang chạy.
+4. Trình duyệt sập hoặc bị tải lại giữa lúc lưu mục và lúc có kết quả: mở lại thì mục tự gửi, không có tờ đơn, không có dấu "chưa in". Cùng loại với "máy sập đúng lúc in" mà lát 5 đã ghi nhận; A không đóng lỗ này. Hướng xử lý chung là một dấu "đã ký, chưa in" trên bản đơn giữ ở máy kèm thông báo: ngoài phạm vi OFF-8.
+
+**Kiểm thử và tiêu chí chấp nhận (khi được duyệt).**
+
+- Đổi kỳ vọng của 7 bài tái hiện:
+  - bài 1: máy chủ đã hồi thì C1 đẩy mục mở hồ sơ, kết quả `online`, không cần bấm lại; thêm biến thể mục trước lỗi tiếp: `offline`, in đúng một lần **sau** khi mục, bản đơn và mục ghi nhận in đã nằm trong kho, bản nháp đã xóa; đồng bộ xong có đúng 1 lần hoàn tất và 1 dòng ghi nhận in;
+  - bài 2 bỏ (không còn đường "bấm lại");
+  - bài 3, 5, 6: `offline`, in đúng một lần; bài 6 thêm: mục bị giữ, in lại được từ danh sách chờ đồng bộ;
+  - bài 4: `offline`, in đúng một lần, giờ ký trong mục là giờ bấm, 2 yêu cầu cùng `clientUuid`; thêm hai biến thể hàng rào ngày (khác ngày; không có `Date`): `failed` có "CHƯA in", mục giữ nguyên dạng;
+  - bài 7: nhánh mất mạng chịu cùng hàng rào.
+- Bài mới ở `sync.test.ts`: chuyển trong lúc giữ khóa khi hai tab cùng mở; C1 không đẩy mục của lượt khám khác; mục bị từ chối không bao giờ bị chuyển.
+- Đột biến, mỗi cái phải làm ít nhất một bài đỏ: chỉ chuyển khi lỗi mạng (hành vi hiện nay); chuyển ngoài khóa; in trước khi ghi; sinh `clientUuid` mới khi chuyển; lấy giờ ký lúc chuyển thay cho giờ bấm; bỏ hàng rào ngày; C1 đẩy mọi mục; trả `failed` mà không có chữ "CHƯA in".
+- e2e:
+  - `offline-cycles.mjs` đang ghi số lần "Ký & In" báo chưa ký được: đổi thành bước kiểm, phải bằng 0. Chạy 100 chu kỳ với hạt giống 558698034 và một lần 20 chu kỳ không nâng hạn mức FHIR (ca 429): mỗi chu kỳ đúng một lần in, 11 bước cũ vẫn đạt.
+  - `offline-sign.mjs` thêm ca máy chủ trả 503 cho yêu cầu hoàn tất (giả lập bằng `page.route`): in một lần, PDF một trang A5, đồng bộ xong có đúng một đơn, mã trùng mã đã in.
+  - `offline-conflict.mjs` thêm ca 401 đúng lúc ký (rủi ro còn lại 3).
+
+**Câu hỏi cần chủ dự án quyết:**
+
+1. Duyệt hướng **A kèm C1**, hay chọn B, hay chỉ A?
+2. Mục đã tới máy chủ (5xx, 503, 429): **A-1** (vẫn chuyển, có hàng rào ngày; khuyến nghị) hay **A-2** (không chuyển, báo "CHƯA in", giữ đúng quy tắc lát 3b-1)?
+3. `held` (đã biết xung đột trước khi ký) và `paused` (hết phiên đúng lúc ký): in như ký khi mất mạng (khuyến nghị, nhất quán với OFF-6 và OFF-7), hay không in?
+4. Nhãn trên giấy: giữ "KÝ KHI MẤT MẠNG: chưa đồng bộ lên hệ thống, chưa liên thông" cho M0 (khuyến nghị; chỉ đổi tiêu đề màn hình kết quả thành "Đã ký đơn, chờ máy chủ nhận" khi đang có mạng), hay đổi nhãn trên giấy thành câu trung tính "CHƯA ĐỒNG BỘ…" (phải sửa gói in và các bài kiểm trang in)?
+
+**Phát hiện thêm trong lúc thiết kế, chưa sửa:**
+
+1. `paused` và `held` nặng hơn mô tả ban đầu của phát hiện 3: ở hai ca này bấm lại không có tác dụng (xem bảng).
+2. Sau khi "Ký & In" báo lỗi mà mục còn trong hàng đợi, màn hình khám vẫn sửa được. Nếu bác sĩ sửa đơn rồi ký lại sau khi máy đã tự gửi xong mục cũ, lần ký lại trả kết quả cũ và in **đơn cũ**, khác với màn hình [Đã đọc mã, chưa đo]. A làm đường này biến mất, trừ các ca ở "Rủi ro còn lại".
+3. Rủi ro còn lại 4 (sập giữa lúc lưu và lúc có kết quả) có từ lát 3b, không do OFF-8 sinh ra.
 
 **Quyết định của chủ dự án (02/10/2026):**
 
