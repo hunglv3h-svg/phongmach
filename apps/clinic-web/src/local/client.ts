@@ -7,7 +7,7 @@ import { buildPatient, normalizeCccd, toPatientSummary, type PatientSummary } fr
 import { ApiError, api, type AuthState, type CompleteRequest, type CompleteResponse, type NewPatient, type RulesRejected } from '../api';
 import { localPrescriptionCode, printLocal } from '../print';
 import { parseNum, toCompleteRequest, toLineInput, type Draft } from '../visit/draft';
-import { mergeQueue, nextLocalNumber, searchLocal, type CachedPatient, type LocalQueueItem, type QueueSnapshot, type SignedOffline } from './cache';
+import { adoptedVisits, mergeQueue, nextLocalNumber, searchLocal, type CachedPatient, type LocalQueueItem, type QueueSnapshot, type SignedOffline } from './cache';
 import { isTmp, newTmpId, type AnyOp, type NewOp, type Op, type OpDisplay, type Payloads } from './ops';
 import type { Change, LocalStore } from './store';
 import type { Outcome, SyncEngine } from './sync';
@@ -146,9 +146,24 @@ export class OfflineClient {
 
   // ------------------------------------------------------------------------------------------- hàng chờ
 
+  /**
+   * Giữ ảnh chụp hàng chờ của máy chủ. Nếu trong đó có lượt khám của một mục cấp số còn chưa xong trên máy (yêu cầu tới được
+   * máy chủ nhưng phản hồi không về; nhận ra theo `clientUuid`) thì ghi luôn ánh xạ id tạm → id máy chủ trong CÙNG giao dịch:
+   * từ lúc dòng của máy chủ hiện ra, mọi chỗ tra bí danh (bản nháp, mục mở hồ sơ, mục phụ thuộc) đã coi hai id là một lượt.
+   * Mục cấp số vẫn nằm trong hàng đợi và vẫn được gửi lại cùng `clientUuid`; ánh xạ này chính là cái nó sẽ ghi khi xong.
+   */
   async saveSnapshot(day: string, items: QueueItem[]): Promise<void> {
     const value: QueueSnapshot = { day, items, fetchedAt: iso(this.now()) };
-    await this.store.commit([{ table: 'snapshots', id: day, plain: { day }, value }]);
+    const changes: Change[] = [{ table: 'snapshots', id: day, plain: { day }, value }];
+    // Không còn mục nào chưa xong thì không có gì để khớp: khỏi giải mã hàng đợi ở mỗi lần tải hàng chờ (đếm theo kho, tính cả tab khác).
+    if ((await this.store.pendingCount()) > 0) {
+      const adopted = adoptedVisits(items, await this.engine.ops());
+      const ids = adopted.size ? await this.store.ids() : undefined;
+      for (const [localId, serverId] of adopted) {
+        if (ids?.get(localId) !== serverId) changes.push({ table: 'ids', id: localId, serverId, day: this.today() });
+      }
+    }
+    await this.store.commit(changes);
   }
 
   async snapshot(): Promise<QueueSnapshot | undefined> {
@@ -293,9 +308,16 @@ export class OfflineClient {
     const deps = (await this.engine.ops()).filter((o) => o.meta.kind === 'patient' && o.meta.status !== 'done' && (o as Op<'patient'>).body.payload.tmpId === patient.id).map((o) => o.id);
     const body = { clientUuid: sel.clientUuid, patientId: patient.id, specialty: sel.specialty, priority: sel.priority, ...(sel.reason ? { reason: sel.reason } : {}) };
     const display = { patientName: patient.fullName, ...(patient.birthDate ? { birthDate: patient.birthDate } : {}) };
-    const offlinePayload = async (): Promise<Payloads['checkin']> => ({ visitTmpId, display, body: { ...body, arrivedAt: clickAt, proposedNumber: nextLocalNumber(await this.localQueue()) } });
+    // Yêu cầu tới được máy chủ nhưng phản hồi không về, và hàng chờ của máy chủ đã về trước: lượt này đã có dòng của máy chủ
+    // (nhận ra theo clientUuid, xem `saveSnapshot`). Số của dòng đó là số thật, không đề xuất số khác.
+    const adopted = (queue: LocalQueueItem[]) => queue.find((i) => i.clientUuid === sel.clientUuid.toLowerCase());
+    const offlinePayload = async (): Promise<Payloads['checkin']> => {
+      const queue = await this.localQueue();
+      return { visitTmpId, display, body: { ...body, arrivedAt: clickAt, proposedNumber: adopted(queue)?.number ?? nextLocalNumber(queue) } };
+    };
     const tentative = async () => {
-      const item = (await this.localQueue()).find((i) => i.id === visitTmpId);
+      const queue = await this.localQueue();
+      const item = adopted(queue) ?? queue.find((i) => i.id === visitTmpId);
       if (!item) throw new Error('Không thấy lượt vừa cấp trong hàng chờ trên máy');
       return { item, created: true, tentative: true };
     };
