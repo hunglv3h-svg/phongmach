@@ -1,10 +1,13 @@
 # Kế hoạch triển khai chi tiết — PHONGMACH
 
-Cập nhật 02/10/2026 (lần 2). Dựa trên ba nguồn:
+Cập nhật 02/10/2026 (lần 3). Dựa trên ba nguồn:
 
 1. Báo cáo "Quản lý Phòng mạch Việt Nam" v2.0 (29/09/2026), viết cho nhà đầu tư.
 2. Tài liệu nội bộ "Phân tích – Kế hoạch triển khai SaaS Quản lý Phòng mạch" v1.0 (29/09/2026, 34 trang), viết tắt **TL34**.
 3. Kết quả cài và thử backend Medplum 5.2.0 trong `infra/medplum/`.
+
+**Quyết định của chủ dự án (02/10/2026):** làm sớm và cắt phạm vi; nhiệm vụ là ra MVP nhanh để nhà đầu tư được thuyết phục hơn.
+Hệ quả: mục 5 và 6 được viết lại quanh hai cột mốc MVP, **M0 (13/11/2026, trình nhà đầu tư)** và **M1 (31/03/2027, pilot)**.
 
 Quy ước độ tin cậy:
 
@@ -24,11 +27,14 @@ Thử nghiệm xác nhận phần cốt lõi (cách ly tenant, danh mục dùng 
 
 Năm điều quan trọng nhất:
 
-1. **Lịch Giai đoạn 1 không khớp**: TL34 liệt kê 12 sprint (S1–S12) nhưng giai đoạn chỉ dài khoảng 17 tuần, trừ Tết còn khoảng 8 sprint. Phải cắt phạm vi, bắt đầu sớm, hoặc lùi pilot (mục 6).
+1. **Lịch Giai đoạn 1 không khớp** (TL34 có 12 sprint cho khoảng 8 sprint khả dụng): đã xử lý bằng quyết định 02/10 là bắt đầu xây từ 05/10 và cắt phạm vi. Còn thiếu khoảng 1,5 sprint, bù bằng danh sách cắt (mục 6).
 2. **"Xóa trọn project" không xóa hết**: `$expunge` xóa dữ liệu và cả nhật ký truy cập nhưng **để lại ảnh/PDF (`Binary`)**; export cấp project **không có Binary** và **lộ `secret` của tài khoản máy** (mục 3.2).
 3. **Nhật ký truy cập tốn kém hơn dự tính**: một lần đọc = một dòng ≈ 5 KB, tìm kiếm không được lưu, và việc ghi không đợi kết quả. Ở 300 phòng khám có thể là 1–13 TB/năm, lớn hơn cả dữ liệu lâm sàng (mục 3.2).
 4. **Idempotency theo "UUID client" phải đổi cách làm**: Medplum không cho `PUT` tạo mới với id do client chọn. Dùng `If-None-Exist` theo identifier (đã thử, hoạt động) (mục 4).
 5. **Ba con số chi phí hạ tầng mâu thuẫn nhau** trong TL34 (15, 25 và 60 triệu đ/tháng cho 300 phòng khám), cần một mô hình duy nhất trước khi dùng làm tiêu chí "đi" (mục 3.3).
+
+**Hệ quả của quyết định MVP-first (mục 5):** đội xây ứng dụng ngay từ tuần 1, song song với kiểm chứng. Cuộc họp đi/không đi 13/11 có một MVP chạy thật (M0) cùng gói bằng chứng,
+trong đó cổng đơn thuốc, ký số và Zalo **mô phỏng và ghi rõ**; kết nối thật dời sang M1. Phạm vi M0 và tiêu chí chấp nhận ở mục 5.2–5.3, cần bạn xác nhận (Q14–Q16).
 
 Câu hỏi của bản kế hoạch trước đã được trả lời: phương án dự phòng là .NET + PostgreSQL (TL34 E.2), và "khóa riêng cho từng phòng khám" là mã hóa cấp trường ở lớp BFF (TL34 C.1, D.1).
 Kéo theo một vấn đề mới: trường đã mã hóa thì Medplum không tìm được (T-ENC).
@@ -143,7 +149,7 @@ Cần quyết định mức chi tiết của nhật ký (Q13).
 
 | # | Vấn đề | Chi tiết | Đề xuất |
 |---|---|---|---|
-| 1 | **12 sprint trong một giai đoạn 4 tháng** (E.3) | S1–S2, S3–S4, S5–S6, S7–S8, S9, S10, S11–S12 = 12 sprint = 24 tuần. Giai đoạn 12/2026–03/2027 dài khoảng 17 tuần, trừ Tết (khoảng 06/02/2027) còn khoảng 8 sprint. Thiếu 3–4 sprint, khoảng một phần tư phạm vi | Mục 6 |
+| 1 | **12 sprint trong một giai đoạn 4 tháng** (E.3) | S1–S2, S3–S4, S5–S6, S7–S8, S9, S10, S11–S12 = 12 sprint = 24 tuần. Giai đoạn 12/2026–03/2027 dài khoảng 17 tuần, trừ Tết (khoảng 06/02/2027) còn khoảng 8 sprint. Thiếu 3–4 sprint, khoảng một phần tư phạm vi | Đã xử lý theo quyết định 02/10/2026: bắt đầu xây từ 05/10 và cắt phạm vi (mục 6) |
 | 2 | **Ba con số chi phí hạ tầng cho 300 tenant** | E.5: ≤ 50.000 đ/tenant/tháng (= 15 triệu); E.2 tiêu chí "đi": ≤ 25 triệu/tháng (= 83.000 đ/tenant); E.6 ngân sách: tăng đến ≈ 60 triệu/tháng (= 200.000 đ/tenant). D.6 và B.5 lại nhắm ≤ 40.000 đ/tenant ở **1.000** tenant (= 40 triệu). Tiêu chí "đi" thấp hơn ngân sách chính nó | Một mô hình chi phí duy nhất (T-COST), dựa trên số đo (Q1) |
 | 3 | **Hệ số đỉnh chưa giải thích** (D.4) | 300 tenant × 40 phiên × 60 yêu cầu = 720.000 yêu cầu/ngày; 60% trong 4 giờ ≈ 30 yêu cầu/giây. TL34 ghi đỉnh ≈ 400/giây, gấp khoảng 13 lần | Làm rõ (đỉnh theo giây? khuếch đại FHIR?); kích thước hệ thống chênh một bậc tùy cách hiểu |
 | 4 | **Phương án B tái sử dụng lớp tích hợp** (A.4, E.2) | Lớp BFF/tích hợp đề xuất viết bằng NestJS/TypeScript (C.2), còn phương án B là .NET. Chỉ tái sử dụng được nếu lớp đó là các dịch vụ REST độc lập. "+6 tuần" có thể lạc quan | Thiết kế bộ nối thành dịch vụ riêng, độc lập ngôn ngữ; ước lượng lại phương án B ở Giai đoạn 0 |
@@ -190,12 +196,94 @@ Kubernetes hai vùng. Những điều chỉnh bên dưới đều có bằng ch�
 
 ---
 
-## 5. Giai đoạn 0 — Kiểm chứng (6 tuần)
+## 5. MVP trình nhà đầu tư (M0) và Giai đoạn 0 — Kiểm chứng (6 tuần)
 
 Giả định bắt đầu thứ Hai **05/10/2026**, kết thúc **13/11/2026** (TL34 và báo cáo: "10–11/2026, 6 tuần"). Ngân sách ≈ 12% tổng (xem Q8).
 Phần đã làm sẵn: môi trường Medplum chạy được, smoke test, bộ số đo cơ sở (mục 2) và các script thử nghiệm.
 
-### 5.1 Tiêu chí "đi / không đi"
+### 5.1 Quyết định 02/10/2026 và mục tiêu
+
+**Quyết định của chủ dự án:** làm sớm (bắt đầu xây từ 05/10, song song với kiểm chứng, không đợi hết Giai đoạn 0) và cắt phạm vi (cách A + B của bản trước).
+Nhiệm vụ: ra được MVP nhanh để nhà đầu tư thấy sản phẩm chạy thật và được thuyết phục hơn. Tôi hiểu "thuyết phục" là cuộc họp đi/không đi 13/11, nơi nhà đầu tư quyết định giải ngân phần còn lại (Q14 để xác nhận).
+
+Vì vậy có hai cột mốc MVP thay cho một:
+
+| Cột mốc | Ngày | Là gì | Dành cho |
+|---|---|---|---|
+| **M0 — MVP trình nhà đầu tư** | 13/11/2026 | Lát cắt dọc chạy thật trên Medplum: tiếp đón → khám → kê đơn → in, có ngoại tuyến, nhật ký truy cập, cách ly phòng khám, bác sĩ thật dùng thử và có số đo. Kết nối bên ngoài (cổng đơn thuốc, ký số, Zalo) **mô phỏng và ghi rõ** | Nhà đầu tư, bác sĩ cố vấn |
+| **M1 — MVP pilot** | 31/03/2027 | Cùng ứng dụng, đã nối thật cổng đơn thuốc, ký số, thanh toán QR, Zalo gửi đơn; 15–20 phòng mạch dùng thay phần mềm cũ (mục 6) | Phòng mạch pilot |
+
+Điều nhà đầu tư cần thấy, theo báo cáo v2.0 và TL34, và M0 trả lời được đến đâu:
+
+| Nhà đầu tư cần thấy | M0 trả lời |
+|---|---|
+| Lời hứa "khám xong trong một phút" đo được | Có: bác sĩ thật, đồng hồ phiên khám, số đo p50/p90 |
+| Phần khó có đường đi (cổng, ký số, ngoại tuyến) | Ngoại tuyến: chạy thật. Cổng, ký số: bằng chứng từ PoC cùng giai đoạn (T1), M0 chỉ mô phỏng giao diện |
+| Tuân thủ: nhật ký truy cập, cách ly phòng khám, dữ liệu trong nước | Có (nếu M0 chạy trên hạ tầng trong nước, xem Q16) |
+| Nhu cầu thật | Không phải việc của M0: đến từ nghiên cứu (T9, 5 thư cam kết) |
+| Kinh tế đơn vị | Không phải việc của M0: đến từ số đo và mô hình chi phí (T5) |
+| Rủi ro đã được giảm | Không phải việc của M0: đến từ T1–T10 và phương án B |
+
+Do đó cuộc họp 13/11 cần **gói bằng chứng** (M0 + T1–T10 + 5 thư cam kết + mô hình chi phí + rủi ro/phương án B), không chỉ riêng demo.
+
+**Nguyên tắc trình diễn trung thực:** mọi phần mô phỏng có nhãn trên màn hình và có một trang "đã thật / mô phỏng / chưa làm" trong bài thuyết trình.
+Báo cáo đặt "đúng luật trọn gói" làm lời hứa; một demo bị hiểu là đã tích hợp thật sẽ mất niềm tin ngay khi nhà đầu tư thẩm định.
+
+### 5.2 Phạm vi M0 [Đề xuất]
+
+Cắt mạnh để làm kịp 6 tuần, giữ những gì chứng minh lời hứa cốt lõi.
+
+| Nhóm | Làm thật | Mô phỏng (ghi rõ trên màn hình) | Không làm ở M0 |
+|---|---|---|---|
+| Tiếp đón, hàng chờ | Tìm bệnh nhân theo số điện thoại, 4 số cuối, CCCD, tên không dấu; tạo nhanh; cấp số; màn hình chờ; ưu tiên người đã hẹn (quy tắc cơ bản) | | Đặt lịch Zalo, check-in QR, nhập Excel, đồng ý điện tử đầy đủ |
+| Khám | Màn hình khám một trang: sinh hiệu, lý do khám, triệu chứng, chẩn đoán ICD-10 gõ tắt, dị ứng, tiền sử, lịch sử khám; **2 chuyên khoa** (đề xuất nội tổng quát và nhi, Q15) | | Mẫu khám tự thiết kế, ảnh đính kèm, ký phiếu khám, các chuyên khoa khác |
+| Kê đơn | Đơn mẫu, kê lại một nút, kiểm tra trùng hoạt chất / dị ứng / số ngày tối đa (30 ngày, bệnh mạn tính 90 ngày), in A5 có mã QR | **Ký số** ("ký mô phỏng", chưa gọi nhà cung cấp) | Tương tác thuốc đầy đủ, đơn thuốc cổ truyền |
+| Liên thông cổng đơn thuốc | Bộ nối với giao diện chuẩn, hàng đợi gửi, trạng thái từng đơn (đã ký / chờ gửi / đã gửi / lỗi), thử lại, màn hình "đơn chưa gửi được" | **Cổng quốc gia mô phỏng**, có nút chèn lỗi để trình diễn thử lại, cho đến khi có tài liệu API và sandbox (TL34 Q1) | Gửi lên cổng thật |
+| Ngoại tuyến | Tiếp đón, khám, kê đơn, in khi mất mạng; đồng bộ khi có mạng; 0 mất, 0 trùng; kịch bản ngắt mạng ngay trên sân khấu | | Chờ ký và gửi khi mất mạng ở mức đầy đủ, xung đột sửa đồng thời, cache toàn bộ 20.000 bệnh nhân |
+| Zalo | | Nút "gửi đơn qua Zalo" hiện bản xem trước tin nhắn, không gửi | ZNS thật, nhắc lịch |
+| Thu tiền | | | Cả nhóm: phiếu thu, QR, sổ thu, hóa đơn điện tử (sang M1 và Giai đoạn 2) |
+| Tuân thủ | Cách ly hai phòng khám demo; nhật ký truy cập xem được trên màn hình quản trị; thời gian từng phiên khám hiển thị | | Đồng ý điện tử đầy đủ, xuất/xóa theo yêu cầu, bộ hồ sơ DPIA, phân quyền chi tiết |
+| Hạ tầng | Medplum 5.2.0 + PostgreSQL 16 + Redis, trên hạ tầng nhà cung cấp trong nước nếu có tài khoản thử từ tuần 2 (Q16) | | HA, vùng thứ hai, PITR (đo riêng ở T3) |
+
+Dữ liệu M0 là dữ liệu giả hoàn toàn, không dùng dữ liệu bệnh nhân thật. Danh mục: khoảng 200–300 mã ICD-10 phổ biến cho hai chuyên khoa (nguồn là bộ ICD-10 tiếng Việt do Bộ Y tế ban hành; cần xác nhận nguồn và giấy phép), khoảng 150 hoạt chất phổ biến
+(**dữ liệu minh họa, không phải danh mục thuốc chính thức**), khoảng 10 đơn mẫu cho các bệnh thường gặp do cố vấn y khoa duyệt.
+
+Công nghệ [Đề xuất điều chỉnh nhỏ so với TL34 C.2]: PWA React + TypeScript + Vite (Dexie, Workbox cho ngoại tuyến), BFF TypeScript là lớp duy nhất gọi Medplum.
+TL34 chọn NestJS; cho M0 có thể dùng khung nhẹ hơn (ví dụ Fastify) để nhanh hơn nếu kiến trúc sư đồng ý, miễn ranh giới module giữ nguyên để chuyển sau.
+
+### 5.3 Kịch bản trình diễn, tiêu chí chấp nhận và phân công
+
+Kịch bản 10 phút:
+
+1. Phụ tá gõ "nguyen van an" hoặc 4 số cuối điện thoại, tìm ra bệnh nhân, cấp số; màn hình chờ cập nhật (1 phút).
+2. Bác sĩ mở hồ sơ, khám một trang, gõ tắt chẩn đoán, chọn đơn mẫu; hệ thống cảnh báo trùng thuốc/dị ứng (cố ý); sửa; bấm "Ký & In"; in A5 có QR; đồng hồ phiên khám hiển thị (2 phút).
+3. Trạng thái liên thông: đơn "đã gửi"; chèn lỗi cổng, đơn "chờ gửi", tự thử lại và thành công, không mất đơn (cổng mô phỏng, có nhãn) (1 phút).
+4. Ngắt mạng giữa buổi khám: tiếp đón, khám, kê đơn, in vẫn chạy; bật lại, đồng bộ, không trùng (2 phút).
+5. Cách ly: phòng khám B không thấy bệnh nhân của A; màn hình nhật ký truy cập của A cho biết ai đã mở hồ sơ nào (1 phút).
+6. Số đo thật: thời gian phiên khám của các bác sĩ đã dùng thử; chi phí hạ tầng trên mỗi phòng khám theo số đo (1 phút).
+7. Gói bằng chứng: T1–T10 hiện trạng, thư cam kết, rủi ro và phương án B (2 phút).
+
+Tiêu chí chấp nhận M0 [Đề xuất]:
+
+| # | Tiêu chí | Ngưỡng | Cách đo |
+|---|---|---|---|
+| M0-1 | Thời gian từ mở hồ sơ đến in đơn | 3 bác sĩ thật, ≥ 10 lượt khám mô phỏng mỗi người: p50 ≤ 60 s, p90 ≤ 120 s (mục tiêu của TL34 B.5) | Đồng hồ trong ứng dụng (T-TELE) |
+| M0-2 | Ngoại tuyến | 20 lần ngắt/khôi phục mạng liên tiếp: 0 bản ghi mất, 0 trùng (T6 đầy đủ là 100 chu kỳ) | Kiểm thử tự động |
+| M0-3 | Tìm bệnh nhân | 4 số cuối và tên không dấu đúng, p95 ≤ 200 ms trên 20.000 bệnh nhân | Script `experiments/` |
+| M0-4 | Cách ly phòng khám | 0 lỗi mỗi lần chạy bộ kiểm thử đọc/tìm/sửa chéo | `smoke-test.mjs` và kiểm thử của ứng dụng |
+| M0-5 | Trung thực | Mọi phần mô phỏng có nhãn trên màn hình; có trang "đã thật / mô phỏng / chưa làm" | Rà soát trước buổi trình diễn |
+| M0-6 | Ổn định khi trình diễn | Có bản dự phòng: video quay sẵn và máy dự phòng | Diễn tập hai lần |
+
+Phân công [Đề xuất], dựa trên đội Giai đoạn 0 của TL34 E.6 (PO/BA 1, kiến trúc sư 1, kỹ sư backend TypeScript 2, frontend 2, DevOps/SRE 1, UX 1, an toàn thông tin 0,5, cố vấn y khoa 2). Hai luồng chạy song song và không rút người của nhau:
+
+- **Luồng M0 (xây dựng):** frontend 2, backend 1, UX, PO; kiến trúc sư dành khoảng một phần ba thời gian.
+- **Luồng kiểm chứng (PoC, T1–T10):** backend 1, DevOps/SRE, kiến trúc sư, an toàn thông tin, PO (phỏng vấn, pháp lý).
+
+Như vậy năng lực xây dựng của M0 chỉ bằng khoảng một nửa đội đầy đủ; đây là giả định dùng ở mục 6.
+
+M0 chia thành ba sprint hai tuần (M0-S1: 05–16/10, M0-S2: 19–30/10, M0-S3: 02–13/11), xem bảng từng tuần ở 5.5.
+
+### 5.4 Tiêu chí "đi / không đi"
 
 TL34 E.2 đã có 5 tiêu chí; tôi giữ nguyên chúng (T1–T5), làm cho T4 đo được, và bổ sung T6–T10 từ các phát hiện. **Ngưỡng bổ sung là đề xuất, cần nhà đầu tư chốt trước ngày bắt đầu (Q1).**
 
@@ -216,56 +304,70 @@ Quyết định: **Đi** khi T1–T8 đạt và T9–T10 đạt hoặc có kế 
 Theo TL34, tiêu chí kỹ thuật nào không đạt mà không khắc phục được trong 2 tuần thì **chuyển sang phương án B (.NET + PostgreSQL)**, kèm ước lượng lại (Q2 mục 9).
 T1, T9, T10 trượt là rủi ro thị trường/pháp lý chứ không phải của Medplum, và đổi phương án B không giải quyết được; khi đó là quyết định đầu tư.
 
-### 5.2 Kế hoạch từng tuần (hợp nhất TL34 E.2 và các phép thử mới)
+Tiêu chí M0-1 đến M0-6 (mục 5.3) là điều kiện để cuộc họp 13/11 có một demo đáng tin; chúng không thay thế T1–T10.
 
-| Tuần | Công việc | Sản phẩm bàn giao |
-|---|---|---|
-| 1 (05–09/10) | Khởi động; chốt tiêu chí T1–T10 và giải quyết con số chi phí (Q1); gửi thư xin tài liệu API cổng đơn thuốc + sandbox (TL34 Q1) và hỏi Cục QLKCB về độ trễ khi mất mạng và mã đơn cấp trước (Q4); xin tài khoản thử của 2–3 nhà cung cấp cloud trong nước và 2–3 nhà cung cấp ký số; lên lịch phỏng vấn, quan sát; xử lý T-SEC0 cho staging | Thư đã gửi; lịch phỏng vấn; tài khoản thử; staging 1 |
-| 2 (12–16/10) | Phỏng vấn/quan sát; đọc toàn văn NĐ 90/2026 (TL34 Q2); PoC Medplum trên K8s nhà cung cấp A; khung BFF; bộ sinh dữ liệu 500 × 5.000 (kiểm tra từng phần tử, F5); thiết kế T-IDP; bắt đầu ADR | Ghi chép quan sát; PoC v0; dữ liệu giả lập |
-| 3 (19–23/10) | Hạn Q1, Q7, Q8; spike ngoại tuyến (T-OFF-0) và idempotency (A1); quyết định T-NAME; tải vòng 1 (T2) trên nhà cung cấp A | Prototype ngoại tuyến; số đo T2 vòng 1 |
-| 4 (26–30/10) | Hạn Q3, Q4, Q6, Q9; spike bộ nối cổng đơn thuốc (T1) và ký số nhà cung cấp 1; tải trên nhà cung cấp B; spike mã hóa cấp trường + chỉ số mù (A6); kiểm tra khối lượng nhật ký (A3) | Số đo T1 sơ bộ; so sánh A/B |
-| 5 (02–06/11) | Hạn Q5; ký số nhà cung cấp 2; diễn tập nâng cấp + PITR (T3); 100 chu kỳ ngoại tuyến (T6); quy trình rời tenant (T7); prototype giao diện thử với 5 bác sĩ | Biên bản T3; kết quả T6, T7; phản hồi giao diện |
-| 6 (09–13/11) | Tổng hợp; mô hình chi phí (T5); báo cáo T4; hạn Q10; backlog MVP, tuyển dụng bổ sung, repo/CI/IaC; **họp quyết định đi/không đi 13/11** | Biên bản quyết định; ngân sách chốt lại (±30% → ±15%) |
+### 5.5 Kế hoạch từng tuần (hợp nhất TL34 E.2, các phép thử mới và luồng M0)
+
+"TL34 Qn" là câu hỏi mở của TL34 (mục 3.4); "Qn" là câu hỏi của mục 9.
+
+| Tuần | Luồng kiểm chứng và nghiên cứu | Luồng M0 (xây dựng) | Bàn giao |
+|---|---|---|---|
+| 1 (05–09/10) | Khởi động; chốt T1–T10 và con số chi phí (Q1); xác nhận phạm vi M0 (Q14–Q16); gửi thư xin tài liệu API cổng đơn thuốc và sandbox (TL34 Q1); hỏi Cục QLKCB về độ trễ khi mất mạng và mã đơn cấp trước (TL34 Q4); xin tài khoản thử của 2–3 nhà cung cấp cloud và 2–3 nhà cung cấp ký số; lên lịch phỏng vấn, quan sát; T-SEC0 cho staging | **M0-S1 bắt đầu**: repo, CI, khung BFF và PWA, dữ liệu demo cho hai phòng khám (T-DEMO) | Thư đã gửi; tài khoản thử; staging 1; repo và CI chạy |
+| 2 (12–16/10) | Phỏng vấn, quan sát; đọc toàn văn NĐ 90/2026 (TL34 Q2); PoC Medplum trên K8s nhà cung cấp A; bộ sinh dữ liệu 500 × 5.000 (kiểm tra từng phần tử, F5); thiết kế T-IDP; ADR | Tìm bệnh nhân theo số điện thoại, 4 số cuối, CCCD, tên không dấu (T-NAME); ghi idempotent (T-IDEM); nhật ký truy cập ở BFF (T-AUD); prototype giao diện thử với bác sĩ | Ghi chép quan sát; PoC v0; dữ liệu giả lập; tìm bệnh nhân chạy |
+| 3 (19–23/10) | Hạn TL34 Q1, Q7, Q8; spike ngoại tuyến (T-OFF-0); quyết định T-NAME; tải vòng 1 (T2) trên nhà cung cấp A | **M0-S2 bắt đầu**: tiếp đón, hàng chờ, màn hình chờ; khám một trang; danh mục ICD-10 (T-CAT) | Số đo T2 vòng 1; luồng tiếp đón chạy |
+| 4 (26–30/10) | Hạn TL34 Q3, Q4, Q6, Q9; spike bộ nối cổng (T1) và ký số nhà cung cấp 1; tải trên nhà cung cấp B; spike mã hóa cấp trường + chỉ số mù (A6); kiểm tra khối lượng nhật ký (A3) | Kê đơn: đơn mẫu, kê lại một nút, quy tắc trùng/dị ứng/số ngày (T-RULE); in A5 + QR (T-PRINT); cổng mô phỏng + hàng đợi gửi (T-SIM); đồng hồ phiên khám (T-TELE) | Số đo T1 sơ bộ; so sánh A/B; luồng khám → kê đơn → in chạy online |
+| 5 (02–06/11) | Hạn TL34 Q5; ký số nhà cung cấp 2; diễn tập nâng cấp + PITR (T3); quy trình rời tenant (T7) | **M0-S3 bắt đầu**: ngoại tuyến (outbox, đồng bộ); màn hình nhật ký truy cập cho quản trị; **phiên thử với 3 bác sĩ** (đo M0-1) | Biên bản T3, T7; số đo M0-1; phản hồi giao diện |
+| 6 (09–13/11) | Tổng hợp; mô hình chi phí (T5); báo cáo T4; hạn TL34 Q10; backlog M1, tuyển bổ sung; gói bằng chứng | Ngoại tuyến hoàn chỉnh theo phạm vi M0 (M0-2); kịch bản 10 phút; nhãn "mô phỏng"; bản dự phòng; diễn tập hai lần; **họp quyết định đi/không đi 13/11** | Gói bằng chứng; biên bản quyết định; ngân sách chốt lại (±30% → ±15%) |
 
 Suốt giai đoạn: theo dõi văn bản pháp luật hàng tuần (rủi ro số một của cả hai tài liệu).
 
 ---
 
-## 6. Giai đoạn 1 — Sản phẩm đầu tiên (12/2026 – 03/2027)
+## 6. Giai đoạn 1 — MVP pilot, M1 (11/2026 – 03/2027)
 
-Mục tiêu thoát giai đoạn theo TL34: ≥ 80% phiên khám thường quy dưới 90 giây, NPS bác sĩ ≥ 40, ≥ 98% đơn gửi cổng trong 5 phút và 0 đơn mất,
-0 lỗi bảo mật mức cao, kiểm thử cách ly đạt, DPIA và DPA ký với 100% phòng khám pilot, uptime luồng lõi ≥ 99,5% trong 2 tháng pilot.
+Quyết định 02/10/2026: **làm sớm và cắt phạm vi** (mục 5.1). Mục tiêu thoát giai đoạn theo TL34: ≥ 80% phiên khám thường quy dưới 90 giây, NPS bác sĩ ≥ 40,
+≥ 98% đơn gửi cổng trong 5 phút và 0 đơn mất, 0 lỗi bảo mật mức cao, kiểm thử cách ly đạt, DPIA và DPA ký với 100% phòng khám pilot, uptime luồng lõi ≥ 99,5% trong 2 tháng pilot.
 
-**Vấn đề**: TL34 có 12 sprint (24 tuần) cho khoảng 17 tuần, trừ Tết còn khoảng 16 tuần, tức khoảng 8 sprint (mục 3.3 dòng 1). Hai cách xử lý, có thể kết hợp:
+### 6.1 Phép tính lịch sau khi bắt đầu xây từ 05/10 [Phân tích]
 
-| Cách | Hệ quả |
+- Từ 05/10/2026 đến 31/03/2027 là khoảng 25,4 tuần. Trừ Tết (giả định nghỉ 06–14/02/2027, khoảng 1,3 tuần) còn khoảng 24,1 tuần, tức khoảng 12 sprint lịch: **vừa bằng 12 sprint của TL34** (mục 3.3 dòng 1), thay vì thiếu 3–4 sprint như khi chỉ bắt đầu từ 12/2026.
+- Nhưng 6 tuần đầu đội chỉ dành khoảng một nửa năng lực cho xây dựng (nửa kia làm PoC, nghiên cứu, pháp lý; mục 5.3). Ba sprint M0 tương đương khoảng 1,5 sprint của đội đầy đủ. Tổng năng lực ≈ 1,5 + 9 = **10,5 sprint** so với 12 cần: thiếu khoảng 1,5 sprint (≈ 12%).
+- Tỷ lệ "một nửa" là giả định của tôi; PO điều chỉnh khi chốt phân công. Phần thiếu được bù bằng danh sách cắt ở 6.2.
+
+### 6.2 Danh sách cắt
+
+Giữ nguyên các mục bắt buộc: tiếp đón, khám, kê đơn, ký số, gửi cổng, in, nhập Excel (thị trường thay thế cần), ngoại tuyến mức tối thiểu, cách ly phòng khám, DPIA/DPA, nhật ký truy cập.
+
+| Hoãn sang Giai đoạn 2 | Giữ lại ở M1 |
 |---|---|
-| **A. Bắt đầu sớm 2 tuần (16/11), chỉ khi quyết định "đi" ngày 13/11** | Được khoảng 9 sprint; việc dựng repo/CI/IaC của tuần 5–6 giai đoạn 0 (TL34) tạo đà. Vẫn thiếu 3 sprint |
-| **B. Cắt phạm vi khoảng một phần tư** | Xem danh sách đề xuất bên dưới; PO và nhà đầu tư chốt |
-| C. Lùi thoát pilot đến khoảng 05/2027 | Giữ phạm vi; kéo theo ra mắt thương mại (05–06/2027) và mốc 100 tenant |
+| Nhắc lịch, hẹn tái khám qua ZNS | ZNS gửi đơn thuốc |
+| Báo cáo doanh thu | Sổ thu ngày |
+| Onboarding tự phục vụ dưới 30 phút | Onboarding trực tiếp cho 15–20 phòng pilot |
+| Diễn tập DR đầy đủ (vùng thứ hai vốn thuộc Giai đoạn 2 theo TL34) | Kiểm thử khôi phục sao lưu hàng tháng |
 
-Đề xuất [Đề xuất]: **A + B**. Giữ nguyên các mục bắt buộc: tiếp đón, khám, kê đơn, ký số, gửi cổng, in, nhập Excel (thị trường thay thế cần), ngoại tuyến mức tối thiểu,
-cách ly tenant, DPIA/DPA, nhật ký truy cập. Hoãn sang Giai đoạn 2:
+Các mục trên cộng lại khoảng 1,5–2 sprint theo ước lượng thô của tôi; PO ước lượng lại khi chia nhỏ backlog ở M0-S1. Nếu M0-S2 trượt, cắt thêm theo thứ tự: ảnh đính kèm, ký phiếu khám, chuyên khoa thứ hai.
 
-- nhắc lịch/hẹn tái khám qua ZNS (giữ ZNS gửi đơn thuốc);
-- báo cáo doanh thu (giữ sổ thu ngày);
-- onboarding tự phục vụ dưới 30 phút (pilot 15–20 phòng được hỗ trợ trực tiếp);
-- diễn tập DR đầy đủ (vùng 2 vốn thuộc Giai đoạn 2 theo TL34; Giai đoạn 1 chỉ kiểm thử khôi phục sao lưu hàng tháng).
+### 6.3 Lịch 9 sprint M1
 
-Lịch 9 sprint, giả định nghỉ Tết **06–14/02/2027** (xác nhận lịch nghỉ chính thức):
+Bắt đầu 16/11, **chỉ khi quyết định "đi" ngày 13/11**. M1 dùng lại ứng dụng M0, nên nền móng, tiếp đón, khám và kê đơn online đã có; thời gian dồn vào kết nối thật, ngoại tuyến đầy đủ, thu tiền và cứng hóa.
+Giả định nghỉ Tết **06–14/02/2027** (xác nhận lịch nghỉ chính thức).
 
 | Sprint | Thời gian | Nội dung | Công việc |
 |---|---|---|---|
-| S1 | 16–29/11 | Nền móng | Repo, CI/CD, IaC, staging (T-IAC); cấp phòng khám tự động (T-TEN); hồ sơ FHIR (T-FHIR); hạn mức (T-QUOTA); T-SEC0 |
-| S2 | 30/11–13/12 | Tiếp đón 1 | Tìm/tạo bệnh nhân + chuẩn hóa tên (T-NAME); đồng ý điện tử (T-CONSENT); khung PWA, outbox ngoại tuyến (T-OFF-1); idempotency (T-IDEM); nhật ký ở BFF (T-AUD) |
-| S3 | 14–27/12 | Tiếp đón 2 + khám 1 | Hàng chờ, màn hình chờ, quy tắc ưu tiên; nhập Excel (T-MIG); màn hình khám một trang |
-| S4 | 28/12–10/01 | Khám 2 | Mẫu khám theo chuyên khoa, ICD-10, ảnh đính kèm, ký phiếu khám; danh mục thuốc và đơn mẫu (A5) |
-| S5 | 11–24/01 | Kê đơn | Kê lại một nút; kiểm tra trùng thuốc/dị ứng/số ngày; in A5/A4; bộ nối cổng trên sandbox (T-RX) |
-| S6 | 25/01–05/02 | Ký số và gửi | Ký số tích hợp (T-SIGN); outbox, thử lại, hàng đợi lỗi, bộ quét đối soát (T-OUTBOX); màn hình "đơn chưa gửi được" |
+| S1 | 16–29/11 | Từ M0 sang sản phẩm | Sửa theo phản hồi nhà đầu tư và bác sĩ; cấp phòng khám thật (T-TEN); hạ tầng dạng mã trên nhà cung cấp đã chọn (T-IAC); T-SEC0 hoàn chỉnh; đồng ý điện tử (T-CONSENT); bắt đầu nhập Excel (T-MIG) |
+| S2 | 30/11–13/12 | Cổng và ký số 1 | Bộ nối cổng trên sandbox thật thay cổng mô phỏng, nếu có tài liệu (TL34 Q1) (T-RX); ký số tích hợp nhà cung cấp 1 (T-SIGN); outbox và bộ quét đối soát (T-OUTBOX) |
+| S3 | 14–27/12 | Cổng và ký số 2 | Vòng ký → gửi → trạng thái đầy đủ; hàng đợi lỗi, thử lại; đo T1 trên dữ liệu thật |
+| S4 | 28/12–10/01 | Khám đầy đủ | Mẫu khám theo chuyên khoa, ảnh đính kèm, ký phiếu khám; danh mục ICD-10 và thuốc từ nguồn chính thức đã xác nhận giấy phép (T-CAT); quy tắc kê đơn theo TT 26/2025 (T-RULE) |
+| S5 | 11–24/01 | Ngoại tuyến và dữ liệu | Ngoại tuyến mức tối thiểu hoàn chỉnh: chờ ký, ký hàng loạt khi có mạng (T-OFF-2); nhập Excel xong (T-MIG); nhật ký bất biến ngoài Medplum (T-AUD) |
+| S6 | 25/01–05/02 | Thu tiền và Zalo | QR động tự xác nhận, sổ thu ngày (T-PAY); ZNS gửi đơn (T-ZALO) |
 | — | 06–14/02 | Nghỉ Tết | Kiểm thử nội bộ nhẹ nếu cần |
-| S7 | 15–28/02 | Thu tiền và Zalo | QR động tự xác nhận, sổ thu ngày (T-PAY); ZNS gửi đơn (T-ZALO); ngoại tuyến mức tối thiểu hoàn chỉnh (T-OFF-2) |
-| S8 | 01–14/03 | Cứng hóa | Kiểm thử bảo mật nội bộ, cách ly tenant, tải; kiểm thử ngoại tuyến tự động; DPIA/DPA; quy trình rời tenant (T-OFFB); bộ tài liệu cài đặt; pilot đợt 1 (5 phòng) |
-| S9 | 15–31/03 | Pilot | 15–20 phòng, chạy song song hai tuần với phần mềm cũ; đo KPI; sửa lỗi; báo cáo pilot, quyết định ra mắt thương mại |
+| S7 | 15–28/02 | Cứng hóa | Kiểm thử bảo mật nội bộ, cách ly, tải; DPIA/DPA; rời tenant (T-OFFB); tài liệu cài đặt |
+| S8 | 01–14/03 | Pilot đợt 1 | 5 phòng mạch; sửa lỗi; KPI |
+| S9 | 15–31/03 | Pilot đợt 2 | 15–20 phòng, chạy song song hai tuần với phần mềm cũ; báo cáo pilot; quyết định ra mắt thương mại |
+
+Ánh xạ với TL34 E.3: S1–S2 (nền móng) ≈ M0-S1; S3–S6 (tiếp đón, khám) ≈ M0-S2, M0-S3 và M1 S4; S7–S8 (kê đơn, ký số, cổng) ≈ M0-S2 (online, mô phỏng) và M1 S2–S3; S9 (thu phí) ≈ M1 S6; S10 (cứng hóa) ≈ M1 S7; S11–S12 (pilot) ≈ M1 S8–S9.
+
+Điểm phụ thuộc quan trọng nhất: **tài liệu API và sandbox của cổng đơn thuốc (TL34 Q1, hạn tuần 3)**. Nếu chưa có khi S2 bắt đầu, giữ cổng mô phỏng sau cùng giao diện và dời bộ nối thật; đây là rủi ro lịch lớn nhất của M1.
 
 ---
 
@@ -280,27 +382,36 @@ Lịch 9 sprint, giả định nghỉ Tết **06–14/02/2027** (xác nhận l�
 
 ## 8. Danh mục công việc kỹ thuật
 
-Cỡ: S ≤ 1 tuần-người, M 1–3, L 3–8, XL > 8 (ước lượng thô, chuẩn hóa sau Giai đoạn 0). Mục "Mới" là việc phát sinh từ thử nghiệm.
+Cỡ: S ≤ 1 tuần-người, M 1–3, L 3–8, XL > 8 (ước lượng thô, chuẩn hóa sau Giai đoạn 0). Cột GĐ: M0 = MVP trình nhà đầu tư (mục 5), 0 = kiểm chứng, 1 = M1 (mục 6), 2 = Giai đoạn 2.
+Mục "Mới" là việc phát sinh từ thử nghiệm hoặc từ quyết định MVP-first; các việc xây sản phẩm (T-APP, T-BFF, …) trước đây chưa có dòng riêng.
 
 | Mã | Công việc | Chi tiết | Cỡ | GĐ | Mới |
 |---|---|---|---|---|---|
+| T-APP | Ứng dụng phòng khám (PWA) | Tiếp đón, hàng chờ, màn hình chờ, khám một trang, kê đơn, in; React + TypeScript + Vite; ngoại tuyến theo T-OFF | XL | M0, 1 | ✓ |
+| T-BFF | BFF / Domain API | Lớp duy nhất gọi Medplum; ngữ cảnh tenant; ghi idempotent (T-IDEM); nhật ký truy cập; gom patient-summary | L | M0, 1 | ✓ |
+| T-RULE | Quy tắc kê đơn | Trùng hoạt chất, dị ứng, số ngày tối đa (30 ngày, bệnh mạn tính 90 ngày), trường bắt buộc (CCCD, chẩn đoán); cấu hình được, không lập trình cứng | M | M0, 1 | ✓ |
+| T-CAT | Danh mục và đơn mẫu | ICD-10, thuốc, đơn mẫu. M0 dùng tập con minh họa; M1 dùng nguồn chính thức đã xác nhận giấy phép | M | M0, 1 | ✓ |
+| T-PRINT | In đơn thuốc A5/A4 + QR | Mẫu in theo TT 26/2025; in nhanh từ trình duyệt | S | M0, 1 | ✓ |
+| T-TELE | Đo thời gian phiên khám | Đồng hồ từ mở hồ sơ đến in đơn, theo bác sĩ và phòng khám; KPI số 1 của sản phẩm | S | M0, 1 | ✓ |
+| T-SIM | Cổng đơn thuốc mô phỏng | Bộ nối giả lập có nút chèn lỗi, cùng giao diện với bộ nối thật (T-RX) để thay không đổi ứng dụng | S | M0 | ✓ |
+| T-DEMO | Dữ liệu và kịch bản trình diễn | Dữ liệu giả hoàn toàn, hai phòng khám, kịch bản 10 phút, bản dự phòng, nhãn "mô phỏng" | S | M0 | ✓ |
 | T-SEC0 | Vô hiệu tài khoản mặc định, quản lý bí mật | Xóa/đổi `admin@example.com`; đổi mật khẩu qua API cần egress HIBP (F2) nên cần quy trình thay thế được duyệt; khóa ký trong kho bí mật; tắt tự đăng ký | M | 0, 1 | |
 | T-IDP | Xác thực nhân viên | Người dùng Medplum (TOTP, dính F2) hay IdP riêng; xác thực hai lớp cho người ký | M | 0 | |
 | T-EGR | Kiểm soát egress | Danh sách host được phép, chặn mặc định; xác định host của kiểm tra phiên bản (F7); proxy hay thay thế cho HIBP | S | 0, 1 | |
-| T-TEN | Cấp phòng khám | Dịch vụ tạo `Project`, `ClientApplication`, `AccessPolicy`, hạn mức, `Project.link` tới danh mục; tạo/tạm khóa/xóa; không dùng quyền siêu quản trị cho vận hành thường xuyên | L | 1 | |
+| T-TEN | Cấp phòng khám | Dịch vụ tạo `Project`, `ClientApplication`, `AccessPolicy`, hạn mức, `Project.link` tới danh mục; tạo/tạm khóa/xóa; không dùng quyền siêu quản trị cho vận hành thường xuyên. M0: mức tối thiểu cho hai phòng khám demo | L | M0, 1 | |
 | T-QUOTA | Hạn mức | `userFhirQuota`/`totalFhirQuota` từng project; tài khoản nhập dữ liệu hạn mức cao; proxy chuyển IP thật để hạn mức đăng nhập không gộp phòng khám | S | 1 | |
-| T-AUD | Nhật ký truy cập | Kiến trúc hai tầng (A3); nhật ký BFF cho mở hồ sơ/tìm kiếm/xuất; kho bất biến; phân vùng và lưu giữ AuditEvent; cảnh báo truy cập bất thường | L | 0, 1 | |
-| T-NAME | Tìm tên không dấu | Hai hướng ở A7; gồm xếp hạng kết quả theo 4 số cuối | M | 0, 1 | |
+| T-AUD | Nhật ký truy cập | Kiến trúc hai tầng (A3); nhật ký BFF cho mở hồ sơ/tìm kiếm/xuất; kho bất biến; phân vùng và lưu giữ AuditEvent; cảnh báo truy cập bất thường. M0: nhật ký ở BFF và màn hình xem | L | M0, 1 | |
+| T-NAME | Tìm tên không dấu | Hai hướng ở A7; gồm xếp hạng kết quả theo 4 số cuối | M | M0, 1 | |
 | T-FHIR | Hồ sơ FHIR và định danh | `StructureDefinition` cho CCCD, mã đơn, ICD-10; định danh chuẩn thay URN tạm | M | 1 | |
-| T-IDEM | Ghi lặp lại được | A1: identifier + `If-None-Exist`, `urn:uuid:` trong transaction, kiểm thử gửi lại | M | 1 | ✓ |
+| T-IDEM | Ghi lặp lại được | A1: identifier + `If-None-Exist`, `urn:uuid:` trong transaction, kiểm thử gửi lại | M | M0, 1 | ✓ |
 | T-OUTBOX | Gửi cổng không mất đơn | A2: outbox ý định, đối soát, gửi idempotent theo mã đơn; gộp với T-RX khi thiết kế | L | 1 | ✓ |
 | T-ENC | Mã hóa cấp trường | A6: trường nào, khóa theo tenant (KMS/Vault), chỉ số mù cho CCCD | L | 0 (spike), 1 | ✓ |
 | T-OFFB | Rời tenant | A4: export tự viết, lưu nhật ký ngoài, xóa Binary + file, `$expunge`, quyền | M | 0 (spike), 1 | ✓ |
 | T-MIG | Công cụ chuyển dữ liệu | Excel và phần mềm cũ; kiểm tra từng phần tử `batch`, tự giảm tốc theo hạn mức, chạy lại được, báo cáo từng dòng | L | 1 | |
 | T-CONSENT | Đồng ý xử lý dữ liệu | Thu thập, bằng chứng, rút lại; xuất/xóa theo yêu cầu bệnh nhân (dùng lại T-OFFB cho Binary) | M | 1 | |
-| T-RX | Bộ nối Cổng Đơn thuốc QG | Sinh mã đơn, gửi, thử lại, theo dõi; bộ nối thay được (QĐ 1867/QĐ-BYT) | XL | 0 (spike), 1 | |
+| T-RX | Bộ nối Cổng Đơn thuốc QG | Sinh mã đơn, gửi, thử lại, theo dõi; bộ nối thay được (QĐ 1867/QĐ-BYT). M0 dùng cổng mô phỏng (T-SIM) | XL | 0 (spike), 1 | |
 | T-SIGN | Ký số từ xa | Ký 1 đơn và ký lô; USB cho máy bàn; đo thời gian | L | 0 (spike), 1 | |
-| T-OFF | Ngoại tuyến | 0: spike; 1: khung + outbox + idempotency + thử ngắt mạng tự động; 2: tối thiểu hoàn chỉnh; 3: đầy đủ | XL | 0–2 | |
+| T-OFF | Ngoại tuyến | T-OFF-0: spike; T-OFF-1: khung + outbox + idempotency + thử ngắt mạng tự động (M0, phạm vi mục 5.2); T-OFF-2: mức tối thiểu hoàn chỉnh gồm chờ ký (M1); T-OFF-3: đầy đủ (Giai đoạn 2) | XL | 0 (spike), M0, 1–2 | |
 | T-PAY | Thanh toán QR | payOS/Casso hoặc tương đương; tự xác nhận; sổ thu | M | 1 | |
 | T-ZALO | Zalo ZNS | Gửi đơn; (GĐ2) nhắc lịch; theo dõi chi phí tin | M | 1 | |
 | T-INV | Hóa đơn điện tử | Theo NĐ 70/2025; bảng kê cho kế toán | L | 2 | |
@@ -310,7 +421,7 @@ Cỡ: S ≤ 1 tuần-người, M 1–3, L 3–8, XL > 8 (ước lượng thô, c
 | T-DR | Sao lưu liên tục và dự phòng | WAL/PITR, vùng thứ hai; mất ≤ 15 phút, khôi phục ≤ 1 giờ; diễn tập | L | 0 (T3), 2 | |
 | T-UPG | Nâng cấp và chính sách phiên bản | Chốt "LTS" (Q12); ghim; staging bắt buộc; theo dõi phát hành hàng tuần; 20% thời gian đội cho bảo trì | M | 0, liên tục | |
 | T-OBS | Quan sát | OpenTelemetry (đã có móc), thời gian từng thao tác theo phòng khám, cảnh báo | M | 1 | |
-| T-IAC | Hạ tầng dạng mã | Dựng lại trong < 1 giờ (cam kết báo cáo) | L | 1 | |
+| T-IAC | Hạ tầng dạng mã | Dựng lại trong < 1 giờ (cam kết báo cáo). M0: staging | L | M0, 1 | |
 | T-COST | Mô hình chi phí | Một mô hình duy nhất, từ số đo; giải quyết 15/25/60 triệu | S | 0 | |
 | T-LEGAL | Hồ sơ mẫu cho phòng khám | DPIA, quy chế, hợp đồng, DPA; bảo hiểm trách nhiệm; quy trình sự cố 72 giờ | L | 0–2 | |
 
@@ -331,7 +442,7 @@ Cỡ: S ≤ 1 tuần-người, M 1–3, L 3–8, XL > 8 (ước lượng thô, c
 
 | # | Câu hỏi | Vì sao quan trọng |
 |---|---|---|
-| Q1 | Nhà đầu tư chấp thuận T1–T10 và ngày bắt đầu 05/10/2026? Con số chi phí nào đúng (15/25/60 triệu)? | TL34 chỉ có 5 tiêu chí, bổ sung của tôi là đề xuất. Tiêu chí chi phí của TL34 thấp hơn ngân sách của chính nó |
+| Q1 | Nhà đầu tư chấp thuận T1–T10 và ngày bắt đầu 05/10/2026? Con số chi phí nào đúng (15/25/60 triệu)? **Đội Giai đoạn 0 (TL34 E.6) có sẵn từ thứ Hai tới?** | TL34 chỉ có 5 tiêu chí, bổ sung của tôi là đề xuất. Tiêu chí chi phí của TL34 thấp hơn ngân sách của chính nó |
 | Q2 | Ước lượng lại phương án B, giả định lớp tích hợp là dịch vụ REST độc lập? | "+6 tuần" của TL34 có thể lạc quan (mục 3.3 dòng 4) |
 | Q3 | Đơn kê khi mất mạng có hợp lệ không, và nhà thuốc có bán được thuốc trước khi đơn lên cổng không? Cổng có cho cấp trước mã đơn? | Ký số và gửi cổng đều cần mạng; nếu nhà thuốc tra mã trên cổng thì bệnh nhân chưa mua được thuốc cho đến khi đồng bộ. Cần trước khi bán lời hứa "không dừng buổi khám khi mất mạng" |
 | Q4 | Hạn bệnh án điện tử 31/12/2026 nằm trước pilot (03/2027). Chấp nhận mốc trôi qua, hay đưa bệnh án tối thiểu hợp lệ vào bản có thể dùng sớm hơn? Gói Khởi đầu không có bệnh án điện tử có đủ pháp lý? | Mục 3.3 dòng 6 |
@@ -341,9 +452,12 @@ Cỡ: S ≤ 1 tuần-người, M 1–3, L 3–8, XL > 8 (ước lượng thô, c
 | Q8 | Ngân sách Giai đoạn 0: "12% (khoảng 0,8–1,1 tỷ)" hay "dưới 1 tỷ"? | 12% × 9,0 tỷ = 1,08 tỷ; hai chỗ trong báo cáo không khớp ở cận trên |
 | Q9 | Tên miền/định danh chuẩn cho hồ sơ FHIR của UNIGIS? | Đang dùng URN tạm (`urn:phongmach:…`); đổi sau khi có dữ liệu thật rất tốn |
 | Q10 | Nhà cung cấp cloud nào, có hai trung tâm ở hai thành phố? | T2, T-DR, chi phí; cần tài khoản thử từ tuần 1 |
-| Q11 | **Phạm vi Giai đoạn 1**: A + B (bắt đầu sớm, cắt các mục ở mục 6), hay lùi pilot (C)? | 12 sprint không vừa khoảng 8–9 sprint |
+| Q11 | ~~Phạm vi Giai đoạn 1~~ **Đã chốt 02/10/2026**: làm sớm (xây từ 05/10) và cắt phạm vi (mục 6.2) | Cần 12 sprint so với khoảng 10,5 sprint năng lực; thiếu khoảng 1,5 sprint, bù bằng danh sách cắt |
 | Q12 | "Nhánh LTS" là gì: dòng 3.x (npm `backport`, 3.3.1) hay bám 5.x? | Đã cài 5.2.0; không có tag LTS; dữ liệu và migration không hạ cấp được, nên chọn sớm; chạy lại smoke test trên 3.3.1 trước khi quyết |
 | Q13 | Mức chi tiết và lưu giữ của nhật ký truy cập (từng lần đọc hay "mở hồ sơ")? | Ước tính 1–13 TB/năm ở 300 tenant nếu lưu mọi thao tác trong Medplum |
+| Q14 | Xác nhận định nghĩa MVP trình nhà đầu tư (M0, mục 5): khán giả và ngày (họp đi/không đi 13/11), và chấp nhận cổng đơn thuốc, ký số, Zalo mô phỏng có ghi rõ? | Tôi giả định "thuyết phục nhà đầu tư" là cuộc họp 13/11. Nếu cần demo sớm hơn, hoặc cần tích hợp thật, phạm vi và lịch phải đổi |
+| Q15 | Hai chuyên khoa cho M0? Đề xuất nội tổng quát và nhi | Quyết định danh mục ICD-10, đơn mẫu và bác sĩ dùng thử; cần cố vấn y khoa của hai chuyên khoa |
+| Q16 | M0 chạy ở đâu khi trình diễn: hạ tầng nhà cung cấp trong nước (đề xuất, nếu có tài khoản thử từ tuần 2) hay máy cục bộ? | Nhà đầu tư thấy "dữ liệu trong nước" chạy thật; gắn với Q10 |
 
 ---
 
@@ -351,7 +465,7 @@ Cỡ: S ≤ 1 tuần-người, M 1–3, L 3–8, XL > 8 (ước lượng thô, c
 
 | Rủi ro | Mức | Kiểm soát |
 |---|---|---|
-| Phạm vi Giai đoạn 1 vượt thời gian khả dụng (12 sprint vs ≈ 8–9) | Cao | Q11; theo dõi tốc độ từ S3; giữ danh sách "hoãn" sẵn sàng |
+| Phạm vi vượt năng lực (cần 12 sprint, có ≈ 10,5) dù đã bắt đầu sớm | Trung bình–cao | Danh sách cắt (mục 6.2); theo dõi tốc độ từ M0-S2; cắt thêm theo thứ tự đã định |
 | Đơn đã ký nhưng không được gửi do ghi kép Medplum/outbox | Cao | A2, T-OUTBOX, bộ quét đối soát; kiểm thử mất điện giữa hai bước |
 | Lời hứa ngoại tuyến vượt thực tế pháp lý/kỹ thuật (Q3) | Cao | Chốt Q3 trước khi đưa vào tài liệu bán hàng |
 | Tenant rời đi mà ảnh, PDF vẫn nằm trên hệ thống; export lộ `secret` | Cao | A4, T-OFFB, T7 |
@@ -361,3 +475,7 @@ Cỡ: S ≤ 1 tuần-người, M 1–3, L 3–8, XL > 8 (ước lượng thô, c
 | Nhiều phòng khám sau cùng một IP chạm hạn mức đăng nhập (F5) | Trung bình | T-QUOTA, proxy chuyển IP thật |
 | Mã hóa cấp trường làm hỏng tìm kiếm và `If-None-Exist` theo CCCD | Trung bình | A6, T-ENC, T8 |
 | Tiêu chí "đi" tự mâu thuẫn (chi phí) khiến quyết định ngày 13/11 bị tranh cãi | Trung bình | Q1 trước tuần 1 |
+| Demo bị hiểu là đã tích hợp thật; nhà đầu tư thẩm định phát hiện phần mô phỏng | Cao | Nhãn "mô phỏng" trên màn hình; trang "đã thật / mô phỏng / chưa làm"; tiêu chí M0-5 |
+| Chia năng lực giữa M0 và kiểm chứng làm cả hai chậm | Trung bình–cao | Hai luồng phân công riêng (mục 5.3), không rút người của nhau; cắt thêm M0 nếu M0-S2 trượt |
+| Tài liệu API cổng quốc gia đến muộn (TL34 Q1, hạn tuần 3) | Cao | Cổng mô phỏng sau giao diện chuẩn (T-SIM); bộ nối thật bắt đầu khi có tài liệu; T1 phản ánh tình trạng này |
+| M0 trông hoàn thiện hơn thực tế, kéo kỳ vọng về thời gian ra pilot | Trung bình | Trình bày M0 cùng danh sách cắt và lịch M1 (mục 6) |
