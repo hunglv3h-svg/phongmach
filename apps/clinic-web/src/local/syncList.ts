@@ -149,7 +149,28 @@ export function holderFromMessage(message: string | undefined): string | undefin
 }
 
 /**
- * Dựng các dòng của danh sách "Chờ đồng bộ": mọi mục chưa xong, theo thứ tự hàng đợi.
+ * Thứ tự hiện: theo thứ tự hàng đợi, nhưng mục trước luôn đứng trên mục phụ thuộc nó. (Mục ghi nhận in được xếp vào hàng đợi
+ * trước mục ký của chính nó vì hai mục ghi trong cùng một giao dịch; bộ máy gửi theo phụ thuộc nên thứ tự đó không sai, chỉ khó đọc.)
+ */
+function displayOrder(ops: AnyOp[]): AnyOp[] {
+  const byId = new Map(ops.map((o) => [o.id, o]));
+  const seen = new Set<string>();
+  const out: AnyOp[] = [];
+  const place = (op: AnyOp): void => {
+    if (seen.has(op.id)) return;
+    seen.add(op.id);
+    for (const dep of op.meta.deps) {
+      const before = byId.get(dep);
+      if (before) place(before);
+    }
+    out.push(op);
+  };
+  for (const op of [...ops].sort((a, b) => a.meta.seq - b.meta.seq)) place(op);
+  return out;
+}
+
+/**
+ * Dựng các dòng của danh sách "Chờ đồng bộ": mọi mục chưa xong, theo thứ tự hàng đợi (mục trước đứng trên mục phụ thuộc nó).
  * Mục cần xử lý (409, 422, lỗi khác) và mục bị chúng giữ luôn có mặt: không có đầu vào nào làm chúng biến mất ngoài việc máy chủ nhận.
  */
 export function buildSyncRows(data: SyncData, ctx: ViewContext): SyncRow[] {
@@ -160,10 +181,7 @@ export function buildSyncRows(data: SyncData, ctx: ViewContext): SyncRow[] {
     return op ? labelOf(op, whoOf.get(id)!) : 'mục trước';
   };
 
-  return data.ops
-    .filter((o) => o.meta.status !== 'done')
-    .sort((a, b) => a.meta.seq - b.meta.seq)
-    .map((op): SyncRow => {
+  return displayOrder(data.ops.filter((o) => o.meta.status !== 'done')).map((op): SyncRow => {
       const who = whoOf.get(op.id)!;
       const { status: stored, attempts, nextAt } = op.meta;
       const err = op.body.error;
@@ -232,7 +250,7 @@ export interface SyncNotice {
  */
 export function buildNotices(data: SyncData, ctx: Pick<ViewContext, 'me'>): SyncNotice[] {
   const out: SyncNotice[] = [];
-  for (const op of [...data.ops].sort((a, b) => a.meta.seq - b.meta.seq)) {
+  for (const op of displayOrder(data.ops)) {
     const who = describe(op, data, ctx.me);
     const label = labelOf(op, who);
     const err = op.body.error;
@@ -263,6 +281,11 @@ export function buildNotices(data: SyncData, ctx: Pick<ViewContext, 'me'>): Sync
     }
   }
   return out;
+}
+
+/** Thông báo còn hiện: bỏ những cái người dùng đã tắt. Tắt thông báo không đụng tới hàng đợi và không đụng tới huy hiệu. */
+export function visibleNotices(notices: SyncNotice[], dismissed: ReadonlySet<string>): SyncNotice[] {
+  return notices.filter((n) => !dismissed.has(n.id));
 }
 
 // ------------------------------------------------------------------------------------------------- chỉ báo
@@ -297,5 +320,28 @@ export function indicatorView(sync: SyncState, online: boolean): IndicatorView {
     summary: pending === undefined ? 'Đang đếm mục chờ…' : pending === 0 ? 'Đã đồng bộ hết' : `${pending} mục chờ đồng bộ`,
     ...(sync.paused === 'unauthorized' ? { expired: expiredText(pending) } : {}),
     ...(sync.lastSyncAt ? { lastSync: `Gửi lần cuối ${vnClock(sync.lastSyncAt)}` } : {}),
+  };
+}
+
+// ------------------------------------------------------------------------------------------------- toàn cảnh
+
+export interface SyncOverview {
+  view: IndicatorView;
+  /** undefined: chưa đọc xong kho trên máy. */
+  rows: SyncRow[] | undefined;
+  /** Thông báo chưa tắt. */
+  notices: SyncNotice[];
+}
+
+/**
+ * Những gì thanh trên và danh sách hiện ra. `dismissed` (thông báo đã tắt) CHỈ lọc thông báo: chỉ báo, huy hiệu "cần xử lý" và các dòng
+ * của danh sách tính từ hàng đợi, không phụ thuộc việc người dùng đã tắt thông báo hay chưa (N3).
+ */
+export function overviewOf(data: SyncData | undefined, sync: SyncState, online: boolean, me: string, dismissed: ReadonlySet<string>, now: number): SyncOverview {
+  const ctx: ViewContext = { now, online, paused: sync.paused, me, ...(sync.sending ? { sending: sync.sending } : {}) };
+  return {
+    view: indicatorView(sync, online),
+    rows: data && buildSyncRows(data, ctx),
+    notices: data ? visibleNotices(buildNotices(data, ctx), dismissed) : [],
   };
 }

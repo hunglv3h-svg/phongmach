@@ -133,7 +133,10 @@ export interface LocalStore {
   pendingCount(): Promise<number>;
   /** Tên nhân viên ở dạng rõ, để màn hình đăng nhập báo "máy này còn N mục chưa đồng bộ của …" (OFF-6). */
   setOwnerName(userName: string): Promise<void>;
-  /** Dọn bộ đệm của các ngày trước `day` và mục đã đồng bộ xong của các ngày đó. Không bao giờ dọn mục chưa xong. */
+  /**
+   * Dọn bộ đệm của các ngày trước `day` và mục đã đồng bộ xong của các ngày đó. Không bao giờ dọn mục chưa xong;
+   * còn mục cũ chưa xong thì giữ cả đơn đã ký khi mất mạng của ngày cũ (để in lại).
+   */
   purgeBefore(day: string): Promise<void>;
   /** Đóng kho, không xóa (hết phiên, chuyển người dùng). */
   close(): void;
@@ -297,10 +300,14 @@ class EncryptedStore implements LocalStore {
   purgeBefore(day: string): Promise<void> {
     return this.serial(async () => {
       await this.db.transaction('rw', [this.db.ops, this.db.ids, this.db.patients, this.db.snapshots, this.db.signed], async () => {
-        for (const t of [this.db.patients, this.db.snapshots, this.db.signed]) await t.where('day').below(day).delete();
+        for (const t of [this.db.patients, this.db.snapshots]) await t.where('day').below(day).delete();
         await this.db.ops.where('day').below(day).and((r) => r['status'] === 'done').delete();
-        // Ánh xạ id cũ chỉ còn cần khi còn mục cũ chưa xong (mục đó có thể tham chiếu id tạm của ngày cũ).
-        if ((await this.db.ops.where('day').below(day).count()) === 0) await this.db.ids.where('day').below(day).delete();
+        // Ánh xạ id cũ và đơn đã ký khi mất mạng chỉ còn cần khi còn mục cũ chưa xong: mục đó có thể tham chiếu id tạm của ngày cũ,
+        // và bản khám của một mục đang xung đột hoặc chờ xác nhận phải in lại được cho tới khi xử lý xong (OFF-7).
+        if ((await this.db.ops.where('day').below(day).count()) === 0) {
+          await this.db.ids.where('day').below(day).delete();
+          await this.db.signed.where('day').below(day).delete();
+        }
       });
     });
   }
@@ -363,8 +370,11 @@ export class MemoryStore implements LocalStore {
   }
   async setOwnerName() {}
   async purgeBefore(day: string) {
-    for (const t of ['patients', 'snapshots', 'signed'] as const) for (const [id, r] of this.table(t)) if ((r.plain as DayMeta).day < day) this.table(t).delete(id);
+    for (const t of ['patients', 'snapshots'] as const) for (const [id, r] of this.table(t)) if ((r.plain as DayMeta).day < day) this.table(t).delete(id);
     for (const [id, r] of this.table('ops')) if ((r.plain as OpMeta).day < day && (r.plain as OpMeta).status === 'done') this.table('ops').delete(id);
+    if (![...this.table('ops').values()].some((r) => (r.plain as OpMeta).day < day)) {
+      for (const [id, r] of this.table('signed')) if ((r.plain as DayMeta).day < day) this.table('signed').delete(id);
+    }
   }
   close() {}
   async destroy() {

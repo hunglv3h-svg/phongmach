@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { AuthState } from '../api';
 import type { Opened } from '../local/client';
 import { useOffline } from '../local/OfflineProvider';
 import type { LocalStore } from '../local/store';
+import { syncListActions } from '../local/syncActions';
 import { useSyncOverview } from '../local/useSyncOverview';
 import { ROLE_LABEL } from '../format';
 import { Visit } from '../visit/Visit';
@@ -14,7 +15,7 @@ import { Queue } from './Queue';
 import { Reception } from './Reception';
 import { Scope } from './Scope';
 import { SyncBar } from './SyncBar';
-import { SyncPanel } from './SyncPanel';
+import { SyncNotices, SyncPanel } from './SyncPanel';
 
 type Screen = 'reception' | 'queue' | 'visit' | 'display' | 'gateway' | 'metrics' | 'audit' | 'scope';
 
@@ -22,7 +23,8 @@ export function Shell({ auth, store, onLogout }: { auth: AuthState; store: Local
   const { client } = useOffline();
   const overview = useSyncOverview();
   const [listOpen, setListOpen] = useState(false);
-  const syncNow = () => void client.engine.syncNow();
+  // Danh sách chỉ được làm ba việc: đồng bộ ngay, xác nhận lại, in lại. Không có việc bỏ mục.
+  const actions = useMemo(() => syncListActions(client), [client]);
   const [screen, setScreen] = useState<Screen>('reception');
   const [visit, setVisit] = useState<Opened>();
   const [confirm, setConfirm] = useState<number>();
@@ -59,7 +61,7 @@ export function Shell({ auth, store, onLogout }: { auth: AuthState; store: Local
             <button key={t.id} className={screen === t.id ? 'tab active' : 'tab'} onClick={() => setScreen(t.id)} data-testid={`tab-${t.id}`}>{t.label}</button>
           ))}
         </nav>
-        <SyncBar view={overview.view} open={listOpen} onToggle={() => setListOpen((o) => !o)} onSyncNow={syncNow} />
+        <SyncBar view={overview.view} open={listOpen} onToggle={() => setListOpen((o) => !o)} onSyncNow={() => void actions.syncNow()} />
         <button className="ghost" onClick={() => void logout()}>Đăng xuất</button>
       </header>
       {confirm !== undefined && (
@@ -75,7 +77,8 @@ export function Shell({ auth, store, onLogout }: { auth: AuthState; store: Local
           </section>
         </div>
       )}
-      {listOpen && <SyncPanel view={overview.view} rows={overview.rows} onSyncNow={syncNow} onClose={() => setListOpen(false)} />}
+      <SyncNotices notices={overview.notices} onDismiss={overview.dismiss} onOpenList={() => setListOpen(true)} />
+      {listOpen && <SyncPanel view={overview.view} rows={overview.rows} actions={actions} onClose={() => setListOpen(false)} />}
       {screen === 'reception' && <Reception token={auth.token} />}
       {screen === 'queue' && <Queue auth={auth} onOpenVisit={(opened) => { setVisit(opened); setScreen('visit'); }} />}
       {screen === 'visit' && visit && <Visit key={visit.context.visit.id} auth={auth} store={store} opened={visit} onDone={() => { setVisit(undefined); setScreen('queue'); }} />}

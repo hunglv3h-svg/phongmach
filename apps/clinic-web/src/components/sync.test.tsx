@@ -3,15 +3,17 @@
 import type { Finding } from '@phongmach/rules';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { indicatorView, type IndicatorView, type SyncRow } from '../local/syncList';
+import type { SyncListActions } from '../local/syncActions';
+import { indicatorView, type IndicatorView, type SyncNotice, type SyncRow } from '../local/syncList';
 import { Login } from './Login';
 import { SyncBar } from './SyncBar';
-import { SyncPanel } from './SyncPanel';
+import { SyncNotices, SyncPanel } from './SyncPanel';
 
 const noop = () => undefined;
 const state = { online: true, paused: false as const, counted: true, pending: 0, attention: 0, version: 1 };
 const bar = (view: IndicatorView) => renderToStaticMarkup(<SyncBar view={view} open={false} onToggle={noop} onSyncNow={noop} />);
-const panel = (view: IndicatorView, rows: SyncRow[] | undefined) => renderToStaticMarkup(<SyncPanel view={view} rows={rows} onSyncNow={noop} onClose={noop} />);
+const actions: SyncListActions = { syncNow: async () => undefined, acknowledge: async () => undefined, reprint: async () => undefined };
+const panel = (view: IndicatorView, rows: SyncRow[] | undefined) => renderToStaticMarkup(<SyncPanel view={view} rows={rows} actions={actions} onClose={noop} />);
 /** data-testid của mọi nút bấm trong HTML. */
 const buttons = (html: string) => [...html.matchAll(/<button\b[^>]*>/g)].map((m) => /data-testid="([^"]+)"/.exec(m[0])?.[1] ?? m[0]);
 const attr = (html: string, name: string) => new RegExp(`data-testid="sync-status"[^>]*\\b${name}="([^"]*)"`).exec(html)?.[1];
@@ -93,19 +95,58 @@ describe('danh sách chờ đồng bộ', () => {
     expect(html).toContain('6 mục chờ đồng bộ · 4 cần xử lý');
   });
 
-  it('không có nút xóa hay hủy: ngoài "Đồng bộ ngay" và "Đóng", danh sách không có nút nào khác, ở mọi trạng thái của mục', () => {
-    const allowed = new Set(['sync-list-close', 'sync-list-now']);
-    for (const html of [panel(view, rows), panel(view, []), panel(view, undefined), ...rows.map((r) => panel(view, [r]))]) {
-      expect(buttons(html).filter((b) => !allowed.has(b))).toEqual([]);
+  it('không có nút xóa hay hủy: mỗi dòng chỉ có đúng các nút của trạng thái đó ("Xác nhận và gửi lại" cho 422, "In lại đơn" khi máy còn giữ đơn)', () => {
+    const frame = ['sync-list-close', 'sync-list-now'];
+    const perRow: string[][] = [[], ['sync-reprint'], ['sync-ack-submit'], [], [], []];
+    expect(perRow).toHaveLength(rows.length);
+    for (const [i, r] of rows.entries()) expect(buttons(panel(view, [r])), `${r.kind}/${r.status}`).toEqual([...frame, ...perRow[i]!]);
+    expect(buttons(panel(view, rows))).toEqual([...frame, ...perRow.flat()]);
+    for (const html of [panel(view, rows), panel(view, []), panel(view, undefined)]) {
       expect(html).not.toMatch(/>\s*(Xóa|Hủy|Bỏ|Gỡ)(?=[\s<])/);
+      expect(html).not.toMatch(/data-testid="[^"]*(delete|discard|remove|cancel)[^"]*"/);
     }
-    expect(buttons(panel(view, rows))).toEqual(['sync-list-close', 'sync-list-now']);
+  });
+
+  it('422: mỗi phát hiện một ô lý do; "Xác nhận và gửi lại" bị khóa khi chưa ghi lý do; ghi rõ đơn đã in', () => {
+    const second: Finding = { ...finding, key: 'allergy:class:penicillin:other', message: 'Phát hiện thứ hai' };
+    const html = panel(view, [row({ status: 'rules', statusLabel: 'Chờ bác sĩ xác nhận', attention: true, rules: { unacknowledged: [finding, second], blocking: [] } })]);
+    expect(html.match(/data-testid="sync-ack-reason"/g)).toHaveLength(2);
+    expect(html).toContain('ít nhất 5 ký tự');
+    expect(html).toMatch(/<button[^>]*\bdisabled=""[^>]*data-testid="sync-ack-submit"[^>]*>Xác nhận và gửi lại</);
+    expect(html).toContain('đơn đã in: liên hệ bệnh nhân nếu cần đổi thuốc');
+  });
+
+  it('422 có lỗi chặn: hiện lỗi, không có ô lý do và không có nút gửi lại', () => {
+    const block: Finding = { ...finding, key: 'max-days', rule: 'max-days', severity: 'block', message: 'Vượt số ngày tối đa' };
+    const html = panel(view, [row({ status: 'rules', statusLabel: 'Chờ bác sĩ xác nhận', attention: true, rules: { unacknowledged: [finding], blocking: [block] } })]);
+    expect(html).toContain('Vượt số ngày tối đa');
+    expect(html).toContain(finding.message);
+    expect(html).not.toContain('sync-ack-reason');
+    expect(buttons(html)).toEqual(['sync-list-close', 'sync-list-now']);
+    expect(html).toContain('không gửi lại được bằng cách xác nhận');
   });
 
   it('chưa đọc xong kho thì ghi "đang đọc", không ghi "không có mục nào"', () => {
     expect(panel(view, undefined)).toContain('Đang đọc dữ liệu trên máy…');
     expect(panel(view, undefined)).not.toContain('sync-list-empty');
     expect(panel(indicatorView(state, true), [])).toContain('data-testid="sync-list-empty"');
+  });
+});
+
+describe('thông báo đồng bộ', () => {
+  const notices: SyncNotice[] = [
+    { id: 'conflict:a:1', kind: 'conflict', opId: 'a', text: 'Lượt khám 005 đã do BS. B mở hoặc kết thúc khi bạn mất mạng; kết quả khám của bạn chưa được lưu lên hệ thống.' },
+    { id: 'renumbered:b', kind: 'renumbered', opId: 'b', text: 'Số 007 (cấp khi mất mạng) của Zq Số Tạm đã đổi thành 009: máy khác đã cấp số đó trước.' },
+    { id: 'code-mismatch:c', kind: 'code-mismatch', opId: 'c', text: 'Mã đơn trên máy chủ (X) khác mã đã in (Y): hãy in lại đơn.' },
+  ];
+  const render = (list: SyncNotice[]) => renderToStaticMarkup(<SyncNotices notices={list} onDismiss={noop} onOpenList={noop} />);
+
+  it('mỗi thông báo có nội dung và nút tắt; không có thông báo thì không dựng gì', () => {
+    const html = render(notices);
+    expect([...html.matchAll(/data-testid="sync-notice" data-kind="([\w-]+)"/g)].map((m) => m[1])).toEqual(['conflict', 'renumbered', 'code-mismatch']);
+    for (const n of notices) expect(html).toContain(n.text);
+    expect(buttons(html)).toEqual(['sync-notice-open', 'sync-notice-dismiss', 'sync-notice-dismiss', 'sync-notice-dismiss']);
+    expect(render([])).toBe('');
   });
 });
 

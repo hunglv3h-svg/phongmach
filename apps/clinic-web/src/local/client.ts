@@ -480,6 +480,17 @@ export class OfflineClient {
     void this.engine.run();
   }
 
+  /**
+   * In lại một đơn đã ký khi mất mạng mà máy chủ chưa nhận (đang chờ, xung đột, chờ xác nhận): in từ bản giữ trên máy, có nhãn
+   * "ký khi mất mạng", rồi ghi mục ghi nhận in (mục này chờ mục hoàn tất như mọi lần in ngoại tuyến).
+   */
+  async reprintSigned(rxTmpId: string): Promise<void> {
+    const signed = await this.signedOffline(rxTmpId);
+    if (!signed) throw new Error('Máy này không còn giữ bản đơn đó để in lại');
+    await this.print(signed.detail, signed.clinicName, true);
+    await this.recordLocalPrint(rxTmpId, signed.completeOpId, { patientName: signed.detail.patient.fullName, code: signed.detail.prescription.code });
+  }
+
   /** Đơn ký khi mất mạng (để in lại) và mục hoàn tất của nó. */
   async signedOffline(rxTmpId: string): Promise<SignedOffline | undefined> {
     return (await this.store.get<'signed', SignedOffline>('signed', rxTmpId))?.value;

@@ -413,6 +413,7 @@ Mục này viết cho người (hoặc phiên làm việc) tiếp nhận M0-S3 m
 
 - **F11:** `transaction` của Medplum không nguyên tử; luôn kiểm tra từng mục bằng `failedEntries`; không dựa vào `If-Match` trong gói; `PUT` với id tự chọn trả 404 (dùng `ifNoneExist`).
 - **F12: không gọi `print()` khi còn yêu cầu IndexedDB đang dở.** Mọi lần in đi qua `printHtml`, hàm này chờ kho yên (`whileLocalStoreQuiet`). Đừng gọi `window.print()` thẳng. Bài `e2e:offline` đếm yêu cầu IndexedDB đang dở lúc gọi `print()`; bỏ hàng rào thì bài này đỏ (2/2 lần), còn các bước khác vẫn có thể xanh vì việc mất sự kiện tùy thời điểm.
+- **Không dùng `page.waitForFunction` với hàm `async` trong bài e2e**: Playwright coi lời hứa trả về là "đúng" và xong ngay, nên bước chờ đó không chờ gì cả [Đã đo, playwright-core 1.63]. Thăm dò bằng `eventually(() => page.evaluate(async () => …))`. Bài e2e chỉ xanh trên bản dev mà đỏ trên bản build thường là dấu hiệu của một bước chờ như vậy (bản build nhanh hơn).
 - **Hạn mức đăng nhập 5 lần/phút theo IP (F5).** Mỗi file kiểm thử tích hợp đăng nhập quản trị một lần, nên chạy bộ tích hợp ba lần liền sẽ gặp 429 ở khâu dựng dữ liệu; đó không phải lỗi mã. Thêm file kiểm thử mới thì tính lại. Nếu gặp, chờ một phút.
 - **Kiểm thử hẹn giờ phải dùng thời gian ảo, không `sleep`**: CI chậm hơn máy dev (một bài thử lại hạn 40 ms đã làm đỏ CI). Bài hỏng giữa chừng không được để lại trạng thái chung cho các bài sau (đặt lại trong `beforeEach`).
 - **Không thăm dò trên phòng khám demo**: các lần thử ban đầu đã làm sai số thứ tự và lịch sử. Tạo phòng khám tạm như các kiểm thử tích hợp (`createTenantProject`). Bài e2e `visit.mjs` tự dọn hàng chờ ở đầu và cuối để chạy lại được kể cả sau lần hỏng.
@@ -682,6 +683,48 @@ Lát 4 tách làm hai commit. **Lát 4-1 xong** (hàm thuần, chỉ báo, danh 
   3. Thuộc tính `data-pending` của chỉ báo là `counting` cho tới khi đếm xong, không còn là `0`. Bài e2e chờ `data-pending="0"` vì thế không còn đúng sớm.
   4. "Gửi lần cuối" tính theo mục đã xong còn trong kho. Mục đã xong của ngày cũ bị dọn khi mở ứng dụng, nên đầu ngày chỉ báo không có dòng này cho tới lần gửi đầu tiên.
 - Gói JS 494 → 506 KB, nén 159 → 162 KB [Đã đo, bản build].
+
+**Lát 4-2 xong** (xử lý mục bị từ chối, thông báo, e2e hai máy):
+- `local/syncActions.ts`: danh sách chỉ làm được ba việc, "Đồng bộ ngay", "Xác nhận và gửi lại", "In lại đơn". Giao diện danh sách nhận đối tượng này, không nhận bộ máy đồng bộ. Không có việc bỏ hay sửa mục.
+- 422 `rules-not-satisfied`:
+  - Dòng của mục hiện các phát hiện của máy chủ, mỗi phát hiện một ô lý do (ít nhất `MIN_ACK_REASON_LENGTH` ký tự), ghi rõ "đơn đã in: liên hệ bệnh nhân nếu cần đổi thuốc".
+  - "Xác nhận và gửi lại" bị khóa cho tới khi đủ lý do, rồi gọi `acknowledge`: cùng mục, cùng `clientUuid`, kèm lý do.
+  - Máy chủ trả cả lỗi chặn (`blocking`) thì không có ô lý do và không có nút gửi lại; dòng ghi "liên hệ bệnh nhân và kê lại đơn".
+- 409: dòng của mục mở hồ sơ hoặc hoàn tất hiện câu của OFF-7 kèm số lượt khám và tên người giữ. Mục phụ thuộc ghi "Bị giữ: mục «…» đang xung đột". Bản khám giữ nguyên trên máy; nút "In lại đơn (từ máy này)" in từ bản đã ký, có nhãn "ký khi mất mạng", và thêm một mục ghi nhận in (mục này cũng bị giữ).
+- Lỗi khác: hiện nguyên thông điệp của máy chủ kèm mã HTTP.
+- Thông báo (N3) ở đầu trang, mỗi sự việc một thông báo: mục chuyển sang xung đột, chờ xác nhận hoặc cần xử lý; máy chủ đổi số tạm; mã đơn trên máy chủ khác mã đã in. Mục bị giữ không có thông báo riêng. Tắt được từng thông báo ("Đã xem"); danh sách đã tắt giữ trong `sessionStorage` (chỉ có UUID của mục). Huy hiệu "N cần xử lý" tính từ hàng đợi, không phụ thuộc thông báo: tắt hết thông báo thì huy hiệu vẫn còn.
+- Kho: lần dọn đầu ngày giữ lại đơn đã ký khi mất mạng của ngày cũ chừng nào còn mục cũ chưa xong, để mục đang xung đột hoặc chờ xác nhận vẫn in lại được qua đêm. Trước đây đơn của ngày cũ bị dọn dù mục của nó chưa lên máy chủ.
+- Danh sách xếp mục trước lên trên mục phụ thuộc nó. Mục ghi nhận in được xếp vào hàng đợi trước mục ký của chính nó (hai mục ghi cùng một giao dịch); bộ máy gửi theo phụ thuộc nên không sai, nhưng hiện theo thứ tự hàng đợi thì khó đọc.
+- Kiểm thử đơn vị: thêm 12 bài (333 → 345).
+  - Xác nhận 422 từ danh sách: đúng 2 yêu cầu cùng `clientUuid`, lần hai kèm lý do; lý do thiếu hoặc quá ngắn thì không gửi gì.
+  - 409: "Đồng bộ ngay" và thời gian trôi không gửi lại, không làm mục biến mất; in lại được.
+  - Không có đường nào xóa mục: gọi mọi thao tác của danh sách trên mọi dòng ở mọi trạng thái, không mục nào rời hàng đợi. Thêm một bài đọc mã nguồn của danh sách: không có lời gọi `discard`, không ghi thẳng vào kho.
+  - Tắt hết thông báo: huy hiệu, số mục chờ và các dòng giữ nguyên.
+  - Giữ đơn đã ký của ngày cũ, trên cả kho mã hóa và kho trong bộ nhớ.
+- e2e mới `e2e/offline-conflict.mjs` (`pnpm --filter @phongmach/clinic-web e2e:conflict`), 12 bước, hai máy bằng hai `browser.newContext()`, ngắt mạng thật. Đạt trên bản dev và bản build; đã thêm vào `pnpm e2e` và job e2e của CI.
+  - **409:** bác sĩ mất mạng mở một lượt đã nạp trước, ký và in; chủ phòng khám mở cùng lượt ở máy kia. Có mạng lại: thông báo và danh sách báo xung đột kèm tên chủ phòng khám, mục ký và mục ghi nhận in bị giữ; "Đồng bộ ngay" không gửi lại; in lại được; máy chủ không nhận lần hoàn tất nào của bác sĩ và lượt khám vẫn do chủ phòng khám giữ; không có nút xóa hay hủy; tắt thông báo thì huy hiệu "4 cần xử lý" vẫn còn; tải lại trang các mục vẫn còn.
+  - **401:** giả lập phản hồi 401. Màn hình đăng nhập ghi "Phiên đã hết hạn: đăng nhập lại để đồng bộ 4 mục" và "Máy này còn 4 mục…"; đăng nhập lại thì các mục còn nguyên.
+  - **422:** bác sĩ mất mạng ký đơn có amoxicillin; phụ tá ở máy kia ghi dị ứng Penicillin qua giao diện. Có mạng lại: danh sách hiện cảnh báo dị ứng của máy chủ; lý do ngắn thì nút vẫn khóa; ghi lý do rồi gửi lại. Máy chủ có đúng một lượt khám, mã đơn trùng mã đã in, đơn lưu kèm lý do; đúng 2 yêu cầu hoàn tất mang cùng `clientUuid`.
+  - Đọc thẳng IndexedDB ở cả hai kịch bản: không có tên bệnh nhân, thuốc, thông điệp lỗi của máy chủ hay lý do xác nhận ở dạng rõ. Bất biến của hàng rào in (F12) đúng cho cả lần in lại từ danh sách.
+- Đột biến thử lát 4 trên mã cuối:
+  - 45 đột biến qua kiểm thử đơn vị (23 của lát 4-1 chạy lại, 22 mới), mỗi cái làm ít nhất một bài đỏ. Nhóm mới: xác nhận sinh `clientUuid` mới (2 cách); xác nhận không kèm lý do; gửi lại khi lý do chưa đủ; xác nhận cả đơn có lỗi chặn; gọi `discard` từ danh sách (3 cách); thêm nút "Bỏ qua"; nút gửi lại không khóa; mất dòng "đơn đã in"; huy hiệu ẩn khi tắt thông báo; tắt thông báo làm mất dòng; tắt một tắt hết; in lại không ghi nhận, không nhãn, không phụ thuộc mục ký; dọn đơn ngày cũ (3 cách); thứ tự hiện; thông báo không có nút tắt.
+  - 9 đột biến qua bài e2e hai máy (bản dev), mỗi cái làm bài đỏ ở một bước: huy hiệu ẩn khi tắt thông báo (đột biến ở khung ứng dụng, nơi kiểm thử đơn vị không tới; đỏ ở bước 6); xác nhận sinh `clientUuid` mới (bước 11); thêm nút xóa (bước 4); mất dòng "Phiên đã hết hạn" (bước 7); không hiện "bị giữ" (bước 4); 409 được gửi lại (bước 3); "Đồng bộ ngay" xóa thẳng mục xung đột khỏi kho (bước 5); 409 biến mất khỏi danh sách (bước 4); nhãn hiển thị ghi ra đĩa ở dạng rõ (bước 6).
+  - Hai đột biến lúc đầu không đỏ, cả hai do chính đột biến:
+    - Một cái viết sai cú pháp JSX (tệp không dịch được, 0 bài chạy). Script đột biến coi đó là "không đỏ"; đã viết lại và chạy lại.
+    - Đột biến e2e "Đồng bộ ngay gọi `discard` cho mọi mục" qua cả 12 bước. Lý do: `discard` của bộ máy từ chối bỏ mục còn có mục phụ thuộc, mà trong kịch bản e2e mục bị từ chối nào cũng có mục phụ thuộc, nên đột biến không đổi hành vi. Kiểm thử đơn vị vẫn bắt được nó (ở đó có một mục lỗi không có mục phụ thuộc). Đã thay bằng đột biến xóa thẳng khỏi kho, đỏ ở bước 5.
+- **Phát hiện ở bài e2e có sẵn, đã sửa:** `page.waitForFunction` với hàm `async` coi lời hứa trả về là "đúng" và xong ngay, tức là không chờ gì cả [Đã đo, playwright-core 1.63: hàm async trả `false` vẫn xong sau 61 ms]. Bước "nạp trước xong" của `e2e/offline-sign.mjs` dùng đúng mẫu này nên từ lát 3b-2 nó không chờ gì; bài vẫn xanh vì các bước sau đủ chậm. Bài e2e mới dùng lại mẫu đó và đỏ trên bản build (xanh trên bản dev): máy mở hồ sơ khi mất mạng trước khi bộ đệm ghi xong, nên đòi xác nhận "chưa rõ dị ứng". Cả hai bài nay thăm dò bằng `page.evaluate`, có chờ kết quả.
+- **Đi khác thiết kế, hoặc chi tiết thêm:**
+  1. Nút in lại ở danh sách chỉ có ở mục ký mà máy còn giữ bản đơn. Mỗi lần in lại thêm một mục ghi nhận in, nên con số "cần xử lý" tăng theo số lần in lại khi mục ký đang bị giữ.
+  2. Kịch bản 401 của e2e giả lập phản hồi 401 bằng `page.route`; token thật vẫn còn hạn. Hết hạn thật sau 480 phút [Chưa đo].
+  3. Thông báo đã tắt giữ theo phiên trình duyệt (`sessionStorage`): mở tab mới thì thông báo hiện lại. Mục bị từ chối lần nữa là sự việc mới và được báo lại.
+  4. Đơn 422 có lỗi chặn không có đường xử lý trong M0 ngoài việc liên hệ bệnh nhân và kê lại; mục nằm lại trong danh sách. Cùng loại với giải quyết xung đột: ngoài phạm vi M0.
+  5. Lát này không sửa BFF.
+- Gói JS 506 → 510 KB, nén 162 → 163 KB [Đã đo, bản build].
+- Máy dev lần này là Windows (Git Bash), không phải sandbox Linux như các lát trước:
+  - `infra/dev-up.sh` không chạy được nguyên trạng (không có `setsid`); đã dựng tay theo đúng các bước của script.
+  - Cổng 5173 bị một dự án khác chiếm, nên giao diện dev chạy ở 5183 với `E2E_URL` tương ứng.
+  - Chromium là bản `chrome-headless-shell` của Playwright, đặt qua `CHROMIUM_PATH`.
+  - Số đo trên máy này: kiểu đạt 7 gói, 345 kiểm thử đơn vị, 41 tích hợp, e2e 13 + 24 + 13 + 12 bước trên cả bản dev và bản build.
 
 **Quyết định của chủ dự án (02/10/2026):**
 

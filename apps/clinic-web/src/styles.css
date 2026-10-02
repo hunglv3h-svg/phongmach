@@ -305,3 +305,13 @@ tr.total td { background: var(--primary-soft); }
 .sync-status { font-size: .875rem; row-gap: .1rem; justify-content: flex-end; }
 .sync-status button { min-height: 2.25rem; }
 .topbar > button.ghost { white-space: nowrap; }
+.sync-rules { display: flex; flex-direction: column; gap: .4rem; }
+.sync-rules p { margin: 0; }
+.sync-rules .ack { display: flex; flex-direction: column; gap: .2rem; margin: .3rem 0; color: var(--text); }
+.sync-row .actions { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+.sync-notices { display: flex; flex-direction: column; gap: .4rem; padding: .5rem 1rem 0; }
+.sync-notice { display: flex; gap: .5rem; align-items: center; padding: .4rem .8rem; border-radius: var(--radius); }
+.sync-notice p { margin: 0; flex: 1 1 auto; }
+.sync-notice.bad { background: var(--bad-bg); color: var(--danger); }
+.sync-notice.warn { background: var(--warn-bg); color: var(--warn-ink); }
+.sync-notice button { white-space: nowrap; }

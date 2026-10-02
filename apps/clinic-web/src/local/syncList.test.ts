@@ -1,5 +1,6 @@
 import 'fake-indexeddb/auto';
 import type { QueueItem } from '@phongmach/clinical';
+import type { PrescriptionDetail } from '@phongmach/clinical';
 import type { Finding } from '@phongmach/rules';
 import Dexie from 'dexie';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,7 +11,14 @@ import { FakeBff, FakeClock } from './fakeBff';
 import { newTmpId, type AnyOp, type NewOp, type OpBody, type Payloads } from './ops';
 import { openEncryptedStore, type LocalStore, type OpKind, type OpMeta } from './store';
 import { SyncEngine } from './sync';
-import { ackList, buildNotices, buildSyncRows, conflictText, expiredText, holderFromMessage, indicatorView, type SyncData, type ViewContext } from './syncList';
+import { syncListActions } from './syncActions';
+import syncActionsSource from './syncActions.ts?raw';
+import { ackList, buildNotices, buildSyncRows, conflictText, expiredText, holderFromMessage, indicatorView, overviewOf, visibleNotices, type SyncData, type SyncRow, type ViewContext } from './syncList';
+import syncListSource from './syncList.ts?raw';
+import useSyncOverviewSource from './useSyncOverview.ts?raw';
+import shellSource from '../components/Shell.tsx?raw';
+import syncBarSource from '../components/SyncBar.tsx?raw';
+import syncPanelSource from '../components/SyncPanel.tsx?raw';
 
 // 10:00:00 giờ Việt Nam.
 const T0 = Date.parse('2026-10-20T03:00:00Z');
@@ -99,6 +107,15 @@ describe('dựng dòng danh sách chờ đồng bộ (hàm thuần)', () => {
     // Bản khám vẫn trên máy: in lại được từ mục ký.
     expect(rows[1]).toMatchObject({ kindLabel: 'Ký đơn', code: 'PM-261020-ABC123', reprint: 'tmp-rx' });
     expect(rows[0]!.reprint).toBeUndefined();
+  });
+
+  it('thứ tự hiện: mục trước luôn đứng trên mục phụ thuộc nó, kể cả khi nó được xếp vào hàng đợi sau (mục ghi nhận in xếp trước mục ký)', () => {
+    const complete = op('complete', { visitId: 'v1', rxTmpId: 'tmp-rx', body: exam, display: { patientName: 'Zq Thứ Tự', number: 5 } }, { seq: 30 });
+    const printed = op('printed', { prescriptionId: 'tmp-rx', printedAt: '2026-10-20T03:02:05.000Z' }, { seq: 20, deps: [complete.id] });
+    const open = op('open', { visitId: 'v1' }, { seq: 10 });
+    complete.meta.deps = [open.id];
+    const other = op('patient', { tmpId: 'tmp-p', input: { clientUuid: 'u', fullName: 'Zq Khác' } }, { seq: 25 });
+    expect(buildSyncRows(data([printed, other, complete, open]), ctx()).map((r) => r.kind)).toEqual(['open', 'complete', 'printed', 'patient']);
   });
 
   it('409: tên người giữ lượt khám lấy từ hàng chờ của máy chủ khi có (không gọi chính mình là người khác); không có tên thì ghi "người khác"', () => {
@@ -237,6 +254,33 @@ describe('thông báo không âm thầm (N3)', () => {
   });
 });
 
+describe('tắt thông báo không tắt được huy hiệu (N3)', () => {
+  const sync = { online: true, paused: false as const, counted: true, pending: 4, attention: 4, version: 1 };
+
+  it('tắt hết thông báo: thông báo biến mất, nhưng huy hiệu "cần xử lý", số mục chờ và các dòng của danh sách giữ nguyên', () => {
+    const c = visitChain({ status: 'conflict' }, { error: { status: 409, code: 'taken', message: 'Hồ sơ đang do BS. B khám' } });
+    const d = data(c.all);
+    const before = overviewOf(d, sync, true, 'doc', new Set(), T0);
+    expect(before.notices.map((n) => n.kind)).toEqual(['conflict']);
+    expect(before.view).toMatchObject({ pending: 4, attention: 4 });
+
+    const after = overviewOf(d, sync, true, 'doc', new Set(before.notices.map((n) => n.id)), T0);
+    expect(after.notices).toEqual([]);
+    expect(after.view).toEqual(before.view);
+    expect(after.view.attention).toBe(4);
+    expect(after.rows).toEqual(before.rows);
+    expect(after.rows!.filter((r) => r.attention)).toHaveLength(4);
+  });
+
+  it('tắt một thông báo không tắt thông báo khác; chưa đọc xong kho thì chưa có dòng và chưa có thông báo', () => {
+    const a = op('patient', { tmpId: 'tmp-a', input: { clientUuid: 'a', fullName: 'Zq A' } }, { status: 'error' }, { error: { status: 400, code: 'x', message: 'Sai A' } });
+    const b = op('patient', { tmpId: 'tmp-b', input: { clientUuid: 'b', fullName: 'Zq B' } }, { status: 'error' }, { error: { status: 400, code: 'x', message: 'Sai B' } });
+    const all = buildNotices(data([a, b]), ctx());
+    expect(visibleNotices(all, new Set([all[0]!.id])).map((n) => n.opId)).toEqual([b.id]);
+    expect(overviewOf(undefined, sync, true, 'doc', new Set(), T0)).toMatchObject({ rows: undefined, notices: [], view: { attention: 4 } });
+  });
+});
+
 describe('chỉ báo mạng và đồng bộ', () => {
   const state = { online: true, paused: false as const, counted: true, pending: 0, attention: 0, version: 1 };
 
@@ -279,6 +323,7 @@ describe('danh sách dựng từ hàng đợi thật', () => {
   let store: LocalStore;
   let engine: SyncEngine;
   let client: OfflineClient;
+  let printed: Array<{ detail: PrescriptionDetail; pendingSync: boolean }>;
   const engines: SyncEngine[] = [];
 
   const newEngine = (s: LocalStore) => {
@@ -295,7 +340,8 @@ describe('danh sách dựng từ hàng đợi thật', () => {
     vi.stubGlobal('fetch', bff.fetch);
     store = await openEncryptedStore(owner);
     engine = newEngine(store);
-    client = new OfflineClient({ store, engine, auth: () => auth, now: clock.now, printLocal: async () => undefined });
+    printed = [];
+    client = new OfflineClient({ store, engine, auth: () => auth, now: clock.now, printLocal: async (detail, _clinic, pendingSync) => void printed.push({ detail, pendingSync }) });
   });
 
   afterEach(async () => {
@@ -420,6 +466,138 @@ describe('danh sách dựng từ hàng đợi thật', () => {
     await fresh.start();
     expect(fresh.state).toMatchObject({ counted: true, pending: 2 });
     expect(indicatorView(fresh.state, false)).toMatchObject({ pending: 2, summary: '2 mục chờ đồng bộ' });
+  });
+
+  /** Đơn đã ký khi mất mạng, giữ trên máy để in lại (như `OfflineClient.complete` ghi cùng giao dịch với mục hoàn tất). */
+  async function keepSigned(o: { complete: NewOp }, patientName: string, day = '2026-10-20'): Promise<string> {
+    const rxTmpId = (o.complete.payload as Payloads['complete']).rxTmpId!;
+    const detail = { prescription: { id: rxTmpId, code: 'PM-261020-ABC123' }, patient: { id: 'p', fullName: patientName }, diagnoses: [], encounterId: 'v' } as unknown as PrescriptionDetail;
+    await store.commit([{ table: 'signed', id: rxTmpId, plain: { day }, value: { detail, clinicName: 'Phòng khám Nội (thử)', completeOpId: o.complete.id } }]);
+    return rxTmpId;
+  }
+  const actions = () => syncListActions(client);
+  const rowOf = async (id: string): Promise<SyncRow> => (await rows()).find((r) => r.id === id)!;
+  const completeRequests = (uuid: string) => bff.requests.filter((r) => r.path.endsWith('/complete') && r.body?.['clientUuid'] === uuid);
+
+  it('xác nhận 422 từ danh sách: gửi lại CÙNG clientUuid kèm lý do; máy chủ có đúng một lượt hoàn tất; thiếu hoặc quá ngắn thì không gửi gì', async () => {
+    const item = await serverVisit('Zq Dị Ứng', 6);
+    const o = offlineVisitOps(item);
+    await keepSigned(o, 'Zq Dị Ứng');
+    bff.rulesRequire = ['allergy:class:penicillin'];
+    await engine.enqueue([o.open, o.complete, o.printed]);
+    await engine.run();
+    const row = await rowOf(o.complete.id);
+    expect(row.status).toBe('rules');
+    expect(completeRequests(o.complete.id)).toHaveLength(1);
+
+    await expect(actions().acknowledge(row, {})).rejects.toThrow(/lý do/);
+    await expect(actions().acknowledge(row, { 'allergy:class:penicillin': 'ok' })).rejects.toThrow(/lý do/);
+    expect(completeRequests(o.complete.id)).toHaveLength(1);
+    expect((await rowOf(o.complete.id)).status).toBe('rules');
+
+    await actions().acknowledge(row, { 'allergy:class:penicillin': '  Đã gọi bệnh nhân: từng dùng amoxicillin, không phản ứng ' });
+    await engine.idle();
+    const sent = completeRequests(o.complete.id);
+    expect(sent).toHaveLength(2);
+    expect(bff.requests.filter((r) => r.path.endsWith('/complete'))).toHaveLength(2);
+    expect((sent[1]!.body!['prescription'] as { acknowledgements: unknown[] }).acknowledgements).toEqual([{ key: 'allergy:class:penicillin', reason: 'Đã gọi bệnh nhân: từng dùng amoxicillin, không phản ứng' }]);
+    expect(bff.completions.size).toBe(1);
+    expect([...bff.completions.keys()]).toEqual([o.complete.id]);
+    // Máy chủ nhận rồi: mục ký và mục ghi nhận in rời danh sách.
+    expect(await rows()).toEqual([]);
+    expect(bff.printed).toHaveLength(1);
+  });
+
+  it('xác nhận chỉ dùng được cho mục đang chờ xác nhận; đơn có lỗi chặn thì không gửi lại được bằng xác nhận', async () => {
+    const item = await serverVisit('Zq Xung Đột', 5);
+    const o = offlineVisitOps(item);
+    bff.fault(/\/open$/, { status: 409, body: { error: 'taken', message: 'Hồ sơ đang do BS. B khám' } });
+    await engine.enqueue([o.open, o.complete, o.printed]);
+    await engine.run();
+    const sent = bff.requests.length;
+    for (const row of await rows()) await expect(actions().acknowledge(row, { any: 'Lý do đủ dài' })).rejects.toThrow();
+    const blocked: SyncRow = { ...(await rowOf(o.complete.id)), status: 'rules', rules: { unacknowledged: [finding('a', 'A')], blocking: [finding('b', 'B', 'block')] } };
+    await expect(actions().acknowledge(blocked, { a: 'Lý do đủ dài' })).rejects.toThrow(/không xác nhận được/);
+    expect(bff.requests.length).toBe(sent);
+    expect((await rows()).map((r) => r.status)).toEqual(['conflict', 'held', 'held']);
+  });
+
+  it('409 từ danh sách: in lại được từ bản giữ trên máy (nhãn "ký khi mất mạng"); lần in lại thành một mục bị giữ; máy chủ không nhận gì thêm', async () => {
+    const item = await serverVisit('Zq Xung Đột', 5);
+    const o = offlineVisitOps(item);
+    const rxTmpId = await keepSigned(o, 'Zq Xung Đột');
+    bff.fault(/\/open$/, { status: 409, body: { error: 'taken', message: 'Hồ sơ đang do BS. B khám' } });
+    await engine.enqueue([o.open, o.complete, o.printed]);
+    await engine.run();
+    const sent = bff.requests.length;
+
+    const row = await rowOf(o.complete.id);
+    expect(row).toMatchObject({ status: 'held', reprint: rxTmpId });
+    await actions().reprint(row);
+    await engine.idle();
+    expect(printed).toHaveLength(1);
+    expect(printed[0]).toMatchObject({ pendingSync: true, detail: { prescription: { code: 'PM-261020-ABC123' } } });
+    expect((await rows()).map((r) => [r.kind, r.status, r.patientName, r.code])).toEqual([
+      ['open', 'conflict', 'Zq Xung Đột', undefined],
+      ['complete', 'held', 'Zq Xung Đột', 'PM-261020-ABC123'],
+      ['printed', 'held', 'Zq Xung Đột', 'PM-261020-ABC123'],
+      ['printed', 'held', 'Zq Xung Đột', 'PM-261020-ABC123'],
+    ]);
+    expect(bff.requests.length).toBe(sent);
+    // Mục không có đơn giữ trên máy thì không in lại được.
+    await expect(actions().reprint(await rowOf(o.open.id))).rejects.toThrow();
+    expect(printed).toHaveLength(1);
+  });
+
+  it('không có đường nào xóa mục khỏi danh sách: gọi mọi thao tác của danh sách trên mọi dòng, ở mọi trạng thái, không mục nào rời hàng đợi', async () => {
+    // Ba chuỗi: xung đột (và hai mục bị giữ), chờ xác nhận (và một mục bị giữ), lỗi khác; cộng một mục đang thử lại.
+    const conflictItem = await serverVisit('Zq Xung Đột', 5);
+    const conflict = offlineVisitOps(conflictItem);
+    const rules = offlineVisitOps(await serverVisit('Zq Dị Ứng', 6));
+    await keepSigned(conflict, 'Zq Xung Đột');
+    await keepSigned(rules, 'Zq Dị Ứng');
+    const bad: NewOp = { id: crypto.randomUUID(), kind: 'patient', payload: { tmpId: newTmpId(), input: { clientUuid: 'bad', fullName: 'Zq Sai Số' } } };
+    const flaky: NewOp = { id: crypto.randomUUID(), kind: 'patient', payload: { tmpId: newTmpId(), input: { clientUuid: 'flaky', fullName: 'Zq Thử Lại' } } };
+    bff.rulesRequire = ['allergy:class:penicillin'];
+    bff.fault(new RegExp(`${conflictItem.id}/open$`), { status: 409, body: { error: 'taken', message: 'Hồ sơ đang do BS. B khám' } });
+    bff.fault(/POST \/api\/patients/, { status: 422, body: { error: 'invalid-phone', message: 'Số điện thoại không hợp lệ' } });
+    for (let i = 0; i < 40; i++) bff.fault(/POST \/api\/patients/, { status: 503, body: { error: 'incomplete', message: 'Lưu chưa trọn vẹn' } });
+    await engine.enqueue([conflict.open, conflict.complete, conflict.printed, rules.open, rules.complete, rules.printed, bad, flaky]);
+    await engine.run();
+    const before = await rows();
+    expect(before.map((r) => r.status).sort()).toEqual(['conflict', 'error', 'held', 'held', 'held', 'retry', 'rules']);
+    const ids = before.map((r) => r.id).sort();
+
+    const a = actions();
+    expect(Object.keys(a).sort()).toEqual(['acknowledge', 'reprint', 'syncNow']);
+    for (const row of before) {
+      await a.syncNow();
+      await a.acknowledge(row, {}).catch(() => undefined);
+      await a.acknowledge(row, { other: 'Lý do cho khóa khác' }).catch(() => undefined);
+      await a.reprint(row).catch(() => undefined);
+      clock.advance(60_000);
+      await engine.idle();
+    }
+    await a.syncNow();
+    const after = await rows();
+    // Mọi mục ban đầu còn nguyên (in lại chỉ thêm mục ghi nhận in, không bỏ mục nào).
+    expect(after.map((r) => r.id).filter((id) => ids.includes(id)).sort()).toEqual(ids);
+    expect(after.length).toBeGreaterThanOrEqual(before.length);
+    const statusOf = (list: SyncRow[], id: string) => list.find((r) => r.id === id)!.status;
+    for (const id of [conflict.open.id, conflict.complete.id, conflict.printed.id, rules.complete.id, rules.printed.id, bad.id]) expect(statusOf(after, id)).toBe(statusOf(before, id));
+    expect(bff.completions.size).toBe(0);
+    expect(bff.requests.filter((r) => r.path.endsWith('/complete'))).toHaveLength(1);
+  });
+
+  it('mã của danh sách không nhắc tới việc bỏ mục (`discard`): danh sách chỉ nhận `SyncListActions`, không nhận bộ máy đồng bộ', () => {
+    for (const [name, source] of Object.entries({ syncActionsSource, syncListSource, useSyncOverviewSource, syncPanelSource, syncBarSource })) {
+      expect(source.length, name).toBeGreaterThan(500);
+      expect(/\.discard\s*\(|\bdelete:\s*true|store\.commit\(/.test(source), `${name} không được bỏ mục hay ghi thẳng vào kho`).toBe(false);
+    }
+    // Khung ứng dụng chỉ gọi bộ máy qua `syncListActions` và nút "Chờ đồng bộ" của hộp thoại đăng xuất.
+    expect(shellSource).toContain('syncListActions(client)');
+    expect(/\.discard\s*\(/.test(shellSource)).toBe(false);
+    expect(shellSource.match(/client\.engine\.\w+/g)).toEqual(['client.engine.syncNow']);
   });
 
   it('nhãn hiển thị của mục (tên, số, mã đơn) không bao giờ lên máy chủ', async () => {

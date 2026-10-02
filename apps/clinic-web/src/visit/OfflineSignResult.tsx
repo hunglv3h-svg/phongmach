@@ -51,7 +51,7 @@ export function OfflineSignResult({ result, onBack }: { result: Extract<SignOutc
         if (via === 'local') await client.recordLocalPrint(serverRx.id);
       } else {
         await printLocal(detail, client.clinicName(), !serverRx);
-        await client.recordLocalPrint(detail.prescription.id, opId);
+        await client.recordLocalPrint(detail.prescription.id, opId, { patientName: detail.patient.fullName, code: detail.prescription.code });
       }
       setReprinted(true);
     } catch (e) {
@@ -94,6 +94,7 @@ export function OfflineSignResult({ result, onBack }: { result: Extract<SignOutc
           <div className="error" role="alert" data-testid="sync-rules">
             Máy chủ kiểm tra lại và cần bác sĩ xác nhận trước khi lưu đơn (đơn đã in: liên hệ bệnh nhân nếu cần đổi thuốc):
             <ul>{((error?.body as RulesRejected | undefined)?.unacknowledged ?? []).map((f) => <li key={f.key}>{f.message}</li>)}</ul>
+            Mở "Chờ đồng bộ" ở thanh trên để ghi lý do và gửi lại.
           </div>
         )}
         {view.status === 'error' && <p className="error" role="alert">{error?.message}</p>}
