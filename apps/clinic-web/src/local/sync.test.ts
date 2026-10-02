@@ -465,3 +465,180 @@ describe('nhiều tab', () => {
     expect(bff.patients.size).toBe(1);
   });
 });
+
+describe('hẹn lượt sau', () => {
+  // Mỗi lượt chạy xin khóa đúng một lần: đếm số lần xin khóa là đếm số lượt.
+  let runs: number;
+  const counting: Locks = { request: (name, fn) => (runs++, inTabLocks.request(name, fn)) };
+  beforeEach(() => {
+    runs = 0;
+  });
+
+  /** Chặn các yêu cầu tới BFF giả từ lúc này; trả về hàm thả những yêu cầu đang bị chặn. */
+  function hold(): () => void {
+    let release!: () => void;
+    bff.gate = new Promise((r) => (release = r));
+    return release;
+  }
+
+  /**
+   * Mục `a` lỗi tạm (503), còn 100 ms nữa mới hết thời gian chờ thì một lượt khác bắt đầu: lượt đó bỏ qua `a` (chưa tới hạn),
+   * gửi `b`, và yêu cầu của `b` bị chặn ở máy chủ. Trả về hàm thả `b` và lời hứa của lượt đang chạy.
+   */
+  async function retryWaitingBehindSlowRun(e: SyncEngine) {
+    const a = patientOp();
+    const b = patientOp('Trần Thị Bình');
+    bff.fault(/POST \/api\/patients/, { status: 503 });
+    await e.enqueue([a]);
+    await e.run();
+    expect(await statuses(e)).toEqual({ [a.id]: 'retry' });
+    clock.advance(900);
+    await e.enqueue([b]);
+    const release = hold();
+    const run = e.run();
+    await vi.waitFor(() => expect(bff.inFlight).toBe(1));
+    expect(bff.sent(a.id)).toBe(1);
+    return { a, b, run, release: () => (release(), (bff.gate = undefined)) };
+  }
+
+  it('mục thử lại hết thời gian chờ trong lúc một lượt khác đang gửi: được gửi ngay sau lượt đó, không chờ hết chu kỳ 30 giây', async () => {
+    const e = engine(await openStore());
+    const { a, b, run, release } = await retryWaitingBehindSlowRun(e);
+    clock.advance(200); // `a` hết thời gian chờ trong lúc `b` còn đang gửi
+    release();
+    await run;
+    expect(await statuses(e)).toEqual({ [a.id]: 'retry', [b.id]: 'done' });
+    expect(clock.pending()).toEqual([0]);
+
+    clock.advance(5);
+    await e.idle();
+    expect(bff.sent(a.id)).toBe(2);
+    expect(await statuses(e)).toEqual({ [a.id]: 'done', [b.id]: 'done' });
+    expect(clock.pending()).toEqual([]);
+  });
+
+  it('mục lỗi tạm ngay trong lượt đang chạy, hết thời gian chờ trước khi lượt đó xong: cũng được gửi ngay sau lượt đó', async () => {
+    const e = engine(await openStore());
+    const a = patientOp();
+    const b = patientOp('Trần Thị Bình');
+    bff.fault(/POST \/api\/patients/, { status: 503 });
+    await e.enqueue([a, b]);
+    const releaseA = hold();
+    const run = e.run();
+    await vi.waitFor(() => expect(bff.inFlight).toBe(1));
+    const releaseB = hold();
+    releaseA(); // `a` nhận 503 (chờ 1000 ms); `b` được gửi tiếp và bị chặn
+    await vi.waitFor(() => expect(bff.sent(b.id)).toBe(1));
+    clock.advance(1500);
+    releaseB();
+    bff.gate = undefined;
+    await run;
+    expect(await statuses(e)).toEqual({ [a.id]: 'retry', [b.id]: 'done' });
+
+    clock.advance(5);
+    await e.idle();
+    expect(bff.sent(a.id)).toBe(2);
+    expect(await statuses(e)).toEqual({ [a.id]: 'done', [b.id]: 'done' });
+  });
+
+  it('mục chờ mục trước (mục trước đang thử lại): chỉ hẹn theo thời gian chờ của mục trước, không tự chạy lại ngay', async () => {
+    const e = engine(await openStore(), { locks: counting });
+    const chain = offlineChain();
+    bff.fault(/POST \/api\/queue/, { status: 500 });
+    await e.enqueue(chain.all);
+    await e.run();
+    expect(Object.values(await statuses(e))).toEqual(['done', 'retry', 'pending', 'pending', 'pending']);
+    expect(clock.pending()).toEqual([1000]);
+    clock.advance(5);
+    await e.idle();
+    expect(runs).toBe(1);
+    expect(bff.requests).toHaveLength(2);
+  });
+
+  it('mục bị giữ (mục trước xung đột): chỉ hẹn theo chu kỳ, không tự chạy lại ngay', async () => {
+    const e = engine(await openStore(), { locks: counting });
+    const chain = offlineChain();
+    bff.fault(/\/open$/, { status: 409, body: { error: 'taken', message: 'Hồ sơ đang do BS. B khám' } });
+    await e.enqueue(chain.all);
+    await e.run();
+    expect(Object.values(await statuses(e))).toEqual(['done', 'done', 'conflict', 'pending', 'pending']);
+    expect(clock.pending()).toEqual([30_000]);
+    clock.advance(5);
+    await e.idle();
+    expect(runs).toBe(1);
+    expect(bff.requests).toHaveLength(3);
+  });
+
+  it('trình duyệt báo mất mạng: mục thử lại đã hết thời gian chờ không làm bộ máy tự chạy lại ngay, chỉ hẹn theo chu kỳ', async () => {
+    const e = engine(await openStore(), { locks: counting });
+    const { a, run, release } = await retryWaitingBehindSlowRun(e);
+    clock.advance(200);
+    online = false; // phản hồi của `b` vẫn về kịp, rồi trình duyệt báo mất mạng
+    release();
+    await run;
+    expect(clock.pending()).toEqual([30_000]);
+    clock.advance(5);
+    await e.idle();
+    expect(runs).toBe(2);
+    expect(bff.sent(a.id)).toBe(1);
+
+    // Có mạng lại: sự kiện `online` đánh thức, mục được gửi.
+    online = true;
+    await e.wake();
+    expect(await statuses(e)).toMatchObject({ [a.id]: 'done' });
+  });
+
+  it('đang tạm dừng (401): mục thử lại đã hết thời gian chờ không làm bộ máy tự chạy lại, không hẹn giờ nào', async () => {
+    let session: Session = docSession;
+    const e = engine(await openStore(), { locks: counting, session: () => session });
+    const a = patientOp();
+    const b = patientOp('Trần Thị Bình');
+    bff.fault(/POST \/api\/patients/, { status: 503 });
+    await e.enqueue([a]);
+    await e.run();
+    clock.advance(900);
+    session = { ...docSession, token: 'tok-expired' };
+    await e.enqueue([b]);
+    const release = hold();
+    const run = e.run();
+    await vi.waitFor(() => expect(bff.inFlight).toBe(1));
+    clock.advance(200);
+    release();
+    bff.gate = undefined;
+    await run;
+    expect(e.state.paused).toBe('unauthorized');
+    expect(clock.pending()).toEqual([]);
+    clock.advance(60_000);
+    await e.idle();
+    expect(runs).toBe(2);
+    expect(await statuses(e)).toEqual({ [a.id]: 'retry', [b.id]: 'pending' });
+    expect(bff.requests).toHaveLength(2);
+  });
+
+  it('lượt dừng vì lỗi mạng trước khi tới một mục thử lại đã quá hạn từ đầu lượt: mục đó chờ lượt hẹn kế tiếp, không tự chạy lại ngay', async () => {
+    const e = engine(await openStore(), { locks: counting });
+    const a = patientOp();
+    const b = patientOp('Trần Thị Bình');
+    bff.fault(/POST \/api\/patients/, { status: 503 });
+    bff.fault(/POST \/api\/patients/, { status: 503 });
+    await e.enqueue([a, b]);
+    await e.run();
+    expect(await statuses(e)).toEqual({ [a.id]: 'retry', [b.id]: 'retry' });
+
+    // Cả hai hết thời gian chờ cùng lúc; lượt hẹn gửi `a`, gặp lỗi mạng và dừng, chưa tới `b`.
+    bff.fault(/POST \/api\/patients/, 'network');
+    clock.advance(1000);
+    await e.idle();
+    expect(runs).toBe(2);
+    expect([bff.sent(a.id), bff.sent(b.id)]).toEqual([2, 1]);
+    expect(clock.pending()).toEqual([2000]); // thời gian chờ mới của `a`; `b` (đã quá hạn) không kéo lượt sau về ngay
+    clock.advance(5);
+    await e.idle();
+    expect(runs).toBe(2);
+    expect(bff.sent(b.id)).toBe(1);
+
+    clock.advance(1995);
+    await e.idle();
+    expect(await statuses(e)).toEqual({ [a.id]: 'done', [b.id]: 'done' });
+  });
+});
