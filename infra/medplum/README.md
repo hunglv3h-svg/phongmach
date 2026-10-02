@@ -18,6 +18,8 @@ Lần khởi động đầu mất khoảng 1 phút (chạy ~100 migration). Serv
 
 Dừng và xóa dữ liệu: `docker compose -f infra/medplum/docker-compose.yml down -v`.
 
+Thử nghiệm hiệu năng và vòng đời phòng khám: xem [`experiments/`](experiments/README.md) (cần `setup.mjs --no-rate-limits`).
+
 ## Điều cần biết
 
 - **Medplum không có trên npm dưới dạng `@medplum/server`.** Server được phát hành dưới dạng image Docker
@@ -33,6 +35,9 @@ Dừng và xóa dữ liệu: `docker compose -f infra/medplum/docker-compose.yml
   tức khoảng 500 lần ghi/phút), mỗi project gấp 10 lần. Nhập dữ liệu hàng loạt sẽ chạm hạn mức; `batch` vẫn trả
   HTTP 200 còn từng phần tử bên trong trả 429, nên phải kiểm tra từng phần tử.
 - `saveAuditEvents: true` được bật. Đọc và ghi sinh `AuditEvent` được lưu; **tìm kiếm thì không**.
+- `Project/{id}/$expunge` xóa dữ liệu của project (kể cả `AuditEvent`) nhưng **không xóa `Binary`** (ảnh, PDF) lẫn file trên đĩa.
+  Export cấp project (`$export`) không có `Binary` hay `AuditEvent` và có file `ClientApplication` chứa `secret`.
+- `PUT /fhir/R4/Patient/{id}` với id do client chọn trả 404; ghi lặp lại được bằng `If-None-Exist` theo identifier.
 
 ## Smoke test kiểm tra gì
 

@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 // Sinh bí mật và cấu hình cho backend Medplum cục bộ (môi trường dev/thử nghiệm).
 //
-//   node infra/medplum/setup.mjs [--force]
+//   node infra/medplum/setup.mjs [--force] [--no-rate-limits]
 //
 // Tạo ra (cả hai đã nằm trong .gitignore, KHÔNG commit):
 //   .env                         mật khẩu Postgres / Redis, dùng bởi docker-compose.yml
 //   config/medplum.config.json   cấu hình server Medplum, gồm khóa ký JWT
 //
 // Không ghi đè nếu file đã có (đổi mật khẩu sẽ làm hỏng volume Postgres cũ) trừ khi có --force.
+// --no-rate-limits tắt hạn mức FHIR và đăng nhập, chỉ để đo hiệu năng / nạp dữ liệu thử (xem experiments/).
 // Chỉ cần Node >= 18 và openssl; không cần cài gói nào.
 
 import { execFileSync } from 'node:child_process';
@@ -18,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 
 const dir = dirname(fileURLToPath(import.meta.url));
 const force = process.argv.includes('--force');
+const noRateLimits = process.argv.includes('--no-rate-limits');
 const envPath = join(dir, '.env');
 const configPath = join(dir, 'config', 'medplum.config.json');
 
@@ -64,6 +66,7 @@ const config = {
   // Không cho tự đăng ký project mới: phòng khám được tạo bởi lớp cung cấp (provisioning) của UNIGIS.
   registerEnabled: false,
   logLevel: 'INFO',
+  ...(noRateLimits ? { rateLimitsEnabled: false } : {}),
 };
 
 mkdirSync(join(dir, 'config'), { recursive: true });
