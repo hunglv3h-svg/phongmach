@@ -371,7 +371,7 @@ M0-S2 (19–30/10) được làm trước lịch vì M0-S1 xong sớm. Bảng d�
 | Dữ liệu demo cho kịch bản | Xong | Seed thêm dị ứng, tiền sử và 4 lượt khám cũ có đơn; chạy lại không tạo trùng |
 | Ngoại tuyến | Chưa (M0-S3) | |
 
-Kiểm thử đã chạy: 16 (danh mục) + 25 (quy tắc) + 34 (mô hình) + 30 (clinical) + 76 (BFF đơn vị) + 36 (web) kiểm thử đơn vị; 35 kiểm thử tích hợp với Medplum thật (gồm 21 mới về luồng khám); 13 + 21 bước đầu-cuối trên Chromium thật, cũng chạy được trên bản build production. Các kiểm thử an toàn quan trọng (phân quyền, quy tắc kê đơn ở server, thoát ký tự HTML) đã được xác nhận thất bại khi gỡ biện pháp tương ứng. CI có thêm job e2e (chưa chạy trên GitHub tại thời điểm viết).
+Kiểm thử đã chạy: 16 (danh mục) + 25 (quy tắc) + 34 (mô hình) + 30 (clinical) + 76 (BFF đơn vị) + 36 (web) kiểm thử đơn vị; 35 kiểm thử tích hợp với Medplum thật (gồm 21 mới về luồng khám); 13 + 21 bước đầu-cuối trên Chromium thật, cũng chạy được trên bản build production. Các kiểm thử an toàn quan trọng (phân quyền, quy tắc kê đơn ở server, thoát ký tự HTML) đã được xác nhận thất bại khi gỡ biện pháp tương ứng. CI có thêm job e2e (Chromium trên Medplum thật); cả ba job (kiểu + đơn vị + build, tích hợp, e2e) đã đạt trên GitHub ở commit `7a8c626`. Lần đầu job tích hợp đỏ vì một bài thử lại dựa vào thời gian thật (hạn 40 ms) trên runner chậm và để cổng mô phỏng ở trạng thái lỗi cho các bài sau; đã đổi sang thời gian ảo và đặt lại cổng trước mỗi bài.
 
 Bài học từ M0-S2:
 
