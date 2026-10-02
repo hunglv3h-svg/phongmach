@@ -91,7 +91,7 @@ Thông lượng bão hòa quanh 700 req/s; ở lần đo đầu là 758 req/s v�
 Giao diện web Medplum, Bot, Subscription (webhook), xác thực hai lớp, chạy nhiều bản server, nâng cấp phiên bản, PITR, ảnh Docker 3.x, mã hóa cấp trường,
 lưu trữ S3/MinIO, mọi bộ nối (Cổng Đơn thuốc, ký số, Zalo, thanh toán, hóa đơn điện tử), ngoại tuyến, phương án B.
 
-### Phát hiện từ việc cài đặt (F1–F10)
+### Phát hiện từ việc cài đặt và xây dựng (F1–F11)
 
 | # | Phát hiện | Mức | Tác động | Công việc |
 |---|---|---|---|---|
@@ -105,6 +105,7 @@ lưu trữ S3/MinIO, mọi bộ nối (Cổng Đơn thuốc, ký số, Zalo, tha
 | F8 | Image không có shell; có sẵn móc OpenTelemetry trong lệnh khởi động | [Đã đo] | Quan sát bằng OTel; gỡ lỗi trong container cần công cụ ngoài | T-OBS |
 | F9 | Migration chạy khi server khởi động (hơn 100 bước tiền triển khai, cộng hàng đợi hậu triển khai) | [Đã đo] qua log | Nâng cấp cuốn chiếu nhiều bản phải được kiểm chứng | T-UPG |
 | F10 | Dev dùng lưu trữ tệp cục bộ (`binaryStorage: file:`) | [Đã đo] | Không dùng được khi chạy nhiều bản server; production cần S3/MinIO [Chưa kiểm chứng] | T-HA |
+| F11 | `Bundle` loại `transaction` của Medplum 5.2.0 **không nguyên tử**: một mục lỗi (412 do `If-Match` cũ, 400, 404) được báo riêng trong phản hồi **HTTP 200**, còn các mục khác vẫn được ghi. Tạo có điều kiện (`ifNoneExist`) trong gói hoạt động: mục đã có trả 200 và tham chiếu `urn:uuid:` nối vào bản ghi đã có | [Đã đo] 5 ca trên server thật: `PUT` id lạ (201,400), `GET` id lạ (201,404), `If-Match` cũ (201,201,412 và 2 bản ghi vẫn được tạo), tạo có điều kiện trùng (201,200); chạy lại cùng gói sau lỗi 412 cho toàn 200, không bản ghi trùng, mọi tham chiếu đúng | Không được dựa vào hoàn tác hay vào `If-Match` trong gói để chặn ghi đồng thời. Mọi gói ghi nhiều bản ghi phải **chạy lại được** (định danh xác định + `ifNoneExist`), có một mục "điểm chốt" đứng cuối, và người gọi phải kiểm tra từng mục của phản hồi | T-IDEM, T-OUTBOX |
 
 ---
 
@@ -126,7 +127,7 @@ Phần dưới chỉ nêu những chỗ **đã kiểm chứng bằng thực nghi
 | 4 | Nhật ký "bất biến (WORM), lưu ≥ 2 năm" (D.1) | Xóa tenant xóa luôn nhật ký của tenant (dòng 3). Ngoài ra project admin được phép `$expunge` chính project của mình | [Đã đo]; [Đã đọc mã] quyền | Lưu bản sao nhật ký ngoài Medplum trước khi xóa; AccessPolicy không cho tenant admin gọi `$expunge` (T-AUD, T-OFFB) |
 | 5 | "AuditEvent cho mọi đọc/ghi PHI" và "cảnh báo truy cập bất thường (đọc > N hồ sơ/phút)" (D.1) | Có điều kiện (F3). Truy cập bất thường thường là quét danh sách/tìm kiếm, mà tìm kiếm **không** sinh sự kiện. Phải ghi nhật ký ở BFF | [Đã đo] | T-AUD |
 | 6 | Idempotency theo UUID client cho mọi lệnh ghi (A.4, C.1, C.5) | `PUT /Patient/{uuid do client chọn}` khi chưa tồn tại → **404**: không dùng được id làm khóa. **`If-None-Exist` theo identifier hoạt động**: POST 2 lần → 201 rồi 200, 1 bản ghi; transaction bundle gửi lại → 201 rồi 200, 1 bản ghi | [Đã đo] | Lưu UUID client thành `identifier`, dùng create có điều kiện (T-IDEM) |
-| 7 | "Transactional outbox": ghi MedicationRequest vào Medplum và outbox "GửiĐơnQuốcGia" **cùng giao dịch** (C.5 bước 4) | Không khả thi như mô tả: ghi vào Medplum đi qua API của nó, ghi outbox nằm ở DB của BFF, **không có giao dịch chung** (ghi kép). Mất điện giữa hai bước làm đơn đã ký mà không được gửi, hoặc ngược lại | [Phân tích] | Ghi ý định gửi trước, ghi FHIR idempotent theo mã đơn, và có bộ quét đối soát định kỳ tìm đơn đã ký chưa có trạng thái liên thông (T-OUTBOX) |
+| 7 | "Transactional outbox": ghi MedicationRequest vào Medplum và outbox "GửiĐơnQuốcGia" **cùng giao dịch** (C.5 bước 4) | Không khả thi như mô tả: ghi vào Medplum đi qua API của nó, ghi outbox nằm ở DB của BFF, **không có giao dịch chung** (ghi kép). Mất điện giữa hai bước làm đơn đã ký mà không được gửi, hoặc ngược lại | [Phân tích] | Ghi ý định gửi trước, ghi FHIR idempotent theo mã đơn, và có bộ quét đối soát định kỳ tìm đơn đã ký chưa có trạng thái liên thông (T-OUTBOX) Đã làm ở M0-S2 (xem A2, F11 và mục 5.6) |
 | 8 | Tìm 4 số cuối điện thoại dưới 200 ms (D.5) | 6–7 ms ở 20.000 bệnh nhân/project. Tìm không dấu thì hỏng (F4). TL34 tìm trong cache client trước nên không dấu phải được chuẩn hóa ở client, còn phía server vẫn cần T-NAME | [Đã đo] | Giữ ngân sách; thêm kiểm tra ở quy mô 500 tenant (T2) |
 | 9 | Patient-summary p95 < 300 ms ở 500 tenant, 200 người dùng đồng thời (E.2) | Một node chia sẻ 4 vCPU đạt p95 = 294 ms ở 128 đồng thời và 477 ms ở 200 (mục 2). Khả thi nhưng **cần nhiều bản server và DB riêng**; một node dùng chung không đủ | [Đã đo] | T-CAP; chạy T2 trên triển khai nhiều node |
 | 10 | Mã hóa cấp trường theo khóa từng tenant (C.1, D.1): đây là nghĩa của "khóa riêng" | Hợp lý, nhưng trường đã mã hóa **không tìm kiếm được ở server**. CCCD là khóa tìm bệnh nhân và là khóa của `If-None-Exist` | [Phân tích] | Chỉ số mù (HMAC có khóa theo tenant) cho CCCD, quyết định trường nào mã hóa (T-ENC) |
@@ -186,7 +187,7 @@ Kubernetes hai vùng. Những điều chỉnh bên dưới đều có bằng ch�
 | # | Điều chỉnh | Lý do |
 |---|---|---|
 | A1 | **Idempotency**: UUID do client sinh lưu thành `identifier` (ví dụ `urn:phongmach:client-uuid`), ghi bằng create có điều kiện (`If-None-Exist`), dùng transaction bundle có `urn:uuid:` để nối tham chiếu giữa các bản ghi tạo khi ngoại tuyến. Không dùng `PUT` theo id | Medplum từ chối `PUT` tạo mới theo id client (404); `If-None-Exist` đã thử, không tạo trùng, kể cả khi 6 yêu cầu cùng `clientUuid` đến đồng thời qua BFF (9 lần chạy) |
-| A2 | **Gửi cổng không dựa vào "cùng giao dịch"**: ghi ý định gửi (outbox) trước → transaction bundle idempotent → worker gửi cổng idempotent theo mã đơn → **bộ quét đối soát** tìm MedicationRequest đã ký chưa có trạng thái liên thông. Subscription của Medplum chỉ là tín hiệu phụ, chưa kiểm chứng | Ghi kép giữa Medplum và DB của BFF |
+| A2 | **Gửi cổng không dựa vào "cùng giao dịch"**: ghi ý định gửi (outbox) trước → transaction bundle idempotent → worker gửi cổng idempotent theo mã đơn → **bộ quét đối soát** tìm MedicationRequest đã ký chưa có trạng thái liên thông. Subscription của Medplum chỉ là tín hiệu phụ, chưa kiểm chứng | Ghi kép giữa Medplum và DB của BFF. **Đã làm ở M0-S2**: outbox là `Task` `send-prescription` nằm trong Medplum, ghi cùng gói với đơn (nên không còn ghi kép giữa hai kho). Vì gói không nguyên tử (F11): mọi mục có định danh xác định theo `clientUuid` (chạy lại hội tụ), mục đóng lượt khám đứng cuối làm điểm chốt, worker chỉ gửi đơn của lượt khám đã đóng, gửi idempotent theo mã đơn. Bộ quét đối soát vẫn là việc của M1 |
 | A3 | **Nhật ký hai tầng**: (a) nhật ký truy cập ở BFF, ghi đồng bộ, chi tiết theo "mở hồ sơ / tìm kiếm / xuất", lưu ra kho bất biến ngoài Medplum; (b) `saveAuditEvents` của Medplum chỉ cho ghi/sửa/xóa lâm sàng. Quyết định cuối sau khi đo ở T2 | Khối lượng đọc, tìm kiếm không có sự kiện, ghi không đợi, xóa tenant xóa nhật ký |
 | A4 | **Quy trình rời tenant** riêng: export tự viết (gồm Binary, loại bỏ `secret`), lưu nhật ký ra ngoài, xóa Binary và file riêng, rồi mới `$expunge`; tenant admin không có quyền `$expunge` | Mục 3.2 dòng 3–4 |
 | A5 | **Danh mục dùng chung** (ICD-10, thuốc, dịch vụ mẫu) trong một project riêng, các phòng khám `Project.link` tới | Q7 |
@@ -349,6 +350,36 @@ Bài học từ M0-S1, đã đưa vào mã và kiểm thử:
 6. **Công cụ**: pnpm 12 coi script build của `esbuild` là lỗi cứng, phải khai báo `allowBuilds` trong `pnpm-workspace.yaml`; shim `corepack` của pnpm hỏng trong môi trường này nên cài pnpm trực tiếp.
 
 Chế độ demo: BFF chưa có xác thực thật (T-IDP) nên chỉ khởi động khi đặt `DEMO_AUTH=1` và chỉ lắng nghe trên localhost; điều này giữ nguyên cho đến khi chốt Q7.
+
+### 5.7 Trạng thái M0-S2 (cập nhật 02/10/2026)
+
+M0-S2 (19–30/10) được làm trước lịch vì M0-S1 xong sớm. Bảng dưới là hạng mục của kế hoạch tuần 3–4 (mục 5.5) và bằng chứng. Mọi con số chỉ nói về một máy dev, dữ liệu giả, **chưa có bác sĩ thật dùng thử**.
+
+| Hạng mục | Trạng thái | Bằng chứng |
+|---|---|---|
+| Hàng chờ, cấp số, ưu tiên người đã hẹn/cấp cứu, hủy lượt chờ | Xong | Số thứ tự không dùng bộ đếm chung: lấy số kế tiếp rồi tạo có điều kiện theo mã lượt khám, ba lễ tân cùng lúc không trùng số (kiểm thử tích hợp) |
+| Màn hình chờ | Xong | Chỉ có số thứ tự và chữ cái đầu ("N.V.A"), không có họ tên; có kiểm thử ở BFF, tích hợp và e2e |
+| Khám một trang: sinh hiệu, triệu chứng, chẩn đoán ICD-10 gõ tắt, dị ứng, tiền sử, lịch sử khám | Xong | Gõ `viem hong` ra J02.9 bằng bàn phím; dấu phẩy thập phân ("38,5"); nháp giữ qua tải lại trang |
+| Danh mục ICD-10, thuốc, đơn mẫu (T-CAT) | Xong ở mức **minh họa** | 103 mã ICD-10, 95 thuốc, 13 đơn mẫu (10 nội, 3 nhi) tự soạn; **chưa duyệt y khoa, chưa phải danh mục chính thức**, nguồn và giấy phép vẫn là việc cần xác nhận (Q9). Nhãn rõ trong mã và trên giao diện |
+| Quy tắc kê đơn (T-RULE) | Xong | Trùng hoạt chất (kể cả thuốc phối hợp), dị ứng theo nhóm hoặc hoạt chất, số ngày tối đa 30/90, thiếu liều, số lượng, chẩn đoán, CCCD, ngày sinh, cân nặng và dạng bào chế cho trẻ em. Ngưỡng nằm trong cấu hình, không lập trình cứng. Chạy ở trình duyệt để cảnh báo ngay và **chạy lại ở BFF khi ký** (không tin client) |
+| "Kê lại" một nút | Xong | Sao chép thuốc, chẩn đoán, lời dặn từ lượt cũ; xác nhận cũ không mang sang; quy tắc chạy lại với dị ứng hiện tại |
+| In A5 có mã QR (T-PRINT) | Xong | Xuất PDF từ Chromium: đúng 1 trang, khổ A5 (419,5 × 595,3 pt); mọi chuỗi từ dữ liệu được thoát ký tự và trang in mang CSP `default-src 'none'` |
+| Ký số | **Mô phỏng** | Băm SHA-256 nội dung đơn lưu trong `Provenance.signature`, gắn nhãn "mô phỏng" ở mọi nơi hiển thị |
+| Liên thông: hộp thư đi, trạng thái từng đơn, thử lại, màn hình "đơn chưa gửi" (T-SIM) | Xong, cổng **mô phỏng** | Đã ký → đang gửi → chờ gửi lại → đã gửi / lỗi; thử lại theo lũy thừa 2 có trần; quá số lần thì "lỗi" và gửi lại thủ công; cổng gửi idempotent theo mã đơn; trạng thái cổng tách riêng từng phòng khám |
+| Đồng hồ phiên khám (T-TELE) | Xong phần đo | Máy chủ đo từ lúc mở hồ sơ đến lúc ký; p50/p90 theo bác sĩ so với 60/120 giây; phiên dài hơn 30 phút được đếm riêng, không giấu. **M0-1 chưa đo được** vì cần 3 bác sĩ thật |
+| Trang "Phạm vi" (M0-5) | Xong | Liệt kê đã thật / mô phỏng / chưa làm, có kiểm tra trong e2e |
+| Dữ liệu demo cho kịch bản | Xong | Seed thêm dị ứng, tiền sử và 4 lượt khám cũ có đơn; chạy lại không tạo trùng |
+| Ngoại tuyến | Chưa (M0-S3) | |
+
+Kiểm thử đã chạy: 16 (danh mục) + 25 (quy tắc) + 34 (mô hình) + 30 (clinical) + 76 (BFF đơn vị) + 36 (web) kiểm thử đơn vị; 35 kiểm thử tích hợp với Medplum thật (gồm 21 mới về luồng khám); 13 + 21 bước đầu-cuối trên Chromium thật, cũng chạy được trên bản build production. Các kiểm thử an toàn quan trọng (phân quyền, quy tắc kê đơn ở server, thoát ký tự HTML) đã được xác nhận thất bại khi gỡ biện pháp tương ứng. CI có thêm job e2e (chưa chạy trên GitHub tại thời điểm viết).
+
+Bài học từ M0-S2:
+
+1. **Medplum không hoàn tác `transaction` (F11).** Phát hiện khi kiểm tra `If-Match`: lần ghi bị 412 vẫn để lại các bản ghi khác. Thiết kế "đóng lượt khám + đơn + outbox trong một giao dịch" phải đổi thành gói chạy lại được với điểm chốt đứng cuối (xem A2). Có kiểm thử tích hợp tạo đúng tình huống này (chèn một lần sửa vào giữa), xác nhận đơn **không** được gửi khi lượt khám chưa đóng, rồi chạy lại cùng `clientUuid` hội tụ không trùng.
+2. **Thiếu ngày sinh làm quy tắc theo tuổi im lặng bỏ qua** (trẻ em, CCCD). Đã thêm quy tắc "chưa có ngày sinh" buộc bác sĩ xác nhận, và cho phụ tá bổ sung CCCD và ngày sinh ngay ở màn hình tiếp đón.
+3. **Chạy lại sau khi đã ký không được bị quy tắc từ chối.** Nếu phụ tá thêm dị ứng sau khi đơn đã ký, bấm lại "Ký" (mất mạng, bấm đúp) phải trả lại đơn cũ chứ không báo lỗi quy tắc. Có kiểm thử.
+4. **Dữ liệu thăm dò làm bẩn dữ liệu demo**: các lần thử ban đầu tạo lượt khám số 7xx–9xx trong phòng khám demo làm sai số thứ tự và lịch sử. Đã dọn; bài e2e nay tự dọn hàng chờ ở đầu và cuối để chạy lại được kể cả sau lần hỏng.
+5. **Giới hạn đã biết, cần quyết định cho M1**: (a) hộp thư đi hỏi Medplum theo chu kỳ, mỗi phòng khám mỗi lần 20 điểm hạn mức; đủ cho M0, nhưng 300 phòng khám mỗi 2 giây là 3.000 lần tìm mỗi phút nên M1 phải chuyển sang Subscription hoặc hàng đợi; (b) bản nháp lượt khám tạm lưu ở `sessionStorage` (có dữ liệu lâm sàng, xóa khi đăng xuất, chưa mã hóa), M0-S3 chuyển sang kho cục bộ có mã hóa cùng với ngoại tuyến; (c) màn hình chờ dùng chung phiên của máy lễ tân, M1 cần thiết bị màn hình có mã ghép riêng; (d) mã đơn nội bộ (`PM-YYMMDD-XXXXXX`, sinh xác định từ `clientUuid`) là giả định tạm cho đến khi có tài liệu cổng (TL34 Q1); (e) giới hạn 30/90 ngày và danh sách bệnh mạn tính là dữ liệu minh họa, cần cố vấn y khoa và pháp chế xác nhận trước M1.
 
 ---
 
