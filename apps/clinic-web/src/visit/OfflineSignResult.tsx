@@ -2,13 +2,12 @@ import { useEffect, useState } from 'react';
 import type { CompleteResponse, RulesRejected } from '../api';
 import { clock } from '../format';
 import type { SignOutcome } from '../local/client';
+import { depState, needsAttention } from '../local/deps';
 import type { AnyOp } from '../local/ops';
 import { useOffline } from '../local/OfflineProvider';
 import { printLocal, printSaved } from '../print';
 
 type SyncView = { status: 'pending' | 'done' | 'conflict' | 'rules' | 'error' | 'held'; op?: AnyOp };
-
-const ATTENTION = new Set(['conflict', 'rules', 'error']);
 
 /**
  * Kết quả ký khi mất mạng: đơn đã lưu bền trên máy và đã in từ dữ liệu trên máy (nhãn "KÝ KHI MẤT MẠNG").
@@ -27,9 +26,10 @@ export function OfflineSignResult({ result, onBack }: { result: Extract<SignOutc
       const op = ops.find((o) => o.id === opId);
       if (!live) return;
       if (!op) return setView({ status: 'pending' });
-      if (op.meta.status === 'done' || ATTENTION.has(op.meta.status)) return setView({ status: op.meta.status as SyncView['status'], op });
-      // Mục hoàn tất bị giữ vì một mục trước nó (cấp số, mở hồ sơ) đang cần xử lý.
-      const blocker = ops.find((o) => op.meta.deps.includes(o.id) && ATTENTION.has(o.meta.status));
+      if (op.meta.status === 'done' || needsAttention(op.meta.status)) return setView({ status: op.meta.status as SyncView['status'], op });
+      // Mục hoàn tất bị giữ vì một mục trước nó (cấp số, mở hồ sơ, kể cả qua nhiều bậc) đang cần xử lý: cùng cách tính với danh sách chờ đồng bộ.
+      const dep = depState(op, new Map(ops.map((o) => [o.id, o])));
+      const blocker = dep.kind === 'held' ? ops.find((o) => o.id === dep.by) : undefined;
       setView(blocker ? { status: 'held', op: blocker } : { status: 'pending', op });
     });
     return () => {
@@ -51,7 +51,7 @@ export function OfflineSignResult({ result, onBack }: { result: Extract<SignOutc
         if (via === 'local') await client.recordLocalPrint(serverRx.id);
       } else {
         await printLocal(detail, client.clinicName(), !serverRx);
-        await client.recordLocalPrint(detail.prescription.id, opId);
+        await client.recordLocalPrint(detail.prescription.id, opId, { patientName: detail.patient.fullName, code: detail.prescription.code });
       }
       setReprinted(true);
     } catch (e) {
@@ -94,6 +94,7 @@ export function OfflineSignResult({ result, onBack }: { result: Extract<SignOutc
           <div className="error" role="alert" data-testid="sync-rules">
             Máy chủ kiểm tra lại và cần bác sĩ xác nhận trước khi lưu đơn (đơn đã in: liên hệ bệnh nhân nếu cần đổi thuốc):
             <ul>{((error?.body as RulesRejected | undefined)?.unacknowledged ?? []).map((f) => <li key={f.key}>{f.message}</li>)}</ul>
+            Mở "Chờ đồng bộ" ở thanh trên để ghi lý do và gửi lại.
           </div>
         )}
         {view.status === 'error' && <p className="error" role="alert">{error?.message}</p>}

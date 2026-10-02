@@ -85,3 +85,8 @@ export function formatClock(iso: string): string {
 }
 
 export const pad3 = (n: number): string => String(n).padStart(3, '0');
+
+/** Giờ Việt Nam "14:05" hoặc "14:05:09", không phụ thuộc múi giờ của máy (dùng cho chỗ cần kết quả xác định: danh sách chờ đồng bộ). */
+export function vnClock(ms: number, seconds = false): string {
+  return new Date(ms).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', ...(seconds ? { second: '2-digit' } : {}), hour12: false });
+}

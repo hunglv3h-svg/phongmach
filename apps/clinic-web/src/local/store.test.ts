@@ -252,6 +252,27 @@ describe('kho version 2: hàng đợi đồng bộ và bộ đệm ngoại tuy�
     expect(await s.getDraft('v1')).toBeDefined();
   });
 
+  it('đơn đã ký khi mất mạng của ngày cũ được giữ để in lại chừng nào còn mục cũ chưa xong (xung đột, chờ xác nhận); hết mục cũ thì dọn', async () => {
+    for (const make of [() => open(), async () => new MemoryStore() as LocalStore]) {
+      const s = await make();
+      const meta = (status: OpMeta['status'], day: string): OpMeta => opMeta({ status, day });
+      await s.commit([
+        { table: 'ops', id: 'old-conflict', plain: meta('conflict', '2026-10-19'), value: { payload: 'bản khám ngày cũ' } },
+        { table: 'signed', id: 'tmp-old-rx', plain: { day: '2026-10-19' }, value: { detail: 'đơn ngày cũ' } },
+        { table: 'signed', id: 'tmp-today-rx', plain: { day: '2026-10-20' }, value: { detail: 'đơn hôm nay' } },
+      ]);
+      await s.purgeBefore('2026-10-20');
+      expect((await s.list('signed')).map((r) => r.id).sort()).toEqual(['tmp-old-rx', 'tmp-today-rx']);
+      expect(await s.pendingCount()).toBe(1);
+
+      // Máy chủ nhận mục cũ: lần dọn sau bỏ cả mục đã xong lẫn đơn của ngày cũ.
+      await s.commit([{ table: 'ops', id: 'old-conflict', plain: meta('done', '2026-10-19'), value: { payload: 'bản khám ngày cũ' } }]);
+      await s.purgeBefore('2026-10-20');
+      expect((await s.list('signed')).map((r) => r.id)).toEqual(['tmp-today-rx']);
+      expect(await s.list('ops')).toEqual([]);
+    }
+  });
+
   it('dọn bộ đệm ngày cũ; mục chưa đồng bộ của ngày cũ không bao giờ bị dọn (kèm ánh xạ id nó cần)', async () => {
     const s = await open();
     const day = (d: string) => ({ day: d });
@@ -268,7 +289,8 @@ describe('kho version 2: hàng đợi đồng bộ và bộ đệm ngoại tuy�
     await s.purgeBefore('2026-10-20');
     expect((await s.list('patients')).map((r) => r.id)).toEqual(['today']);
     expect(await s.list('snapshots')).toEqual([]);
-    expect(await s.list('signed')).toEqual([]);
+    // Còn mục cũ chưa xong: đơn đã ký của ngày cũ được giữ để in lại (bài ngay trên).
+    expect((await s.list('signed')).map((r) => r.id)).toEqual(['r-old']);
     expect((await s.list('ops')).map((r) => r.id).sort()).toEqual(['old-conflict', 'old-pending']);
     expect((await s.ids()).get('tmp-old')).toBe('srv');
     expect(await s.pendingCount()).toBe(2);

@@ -177,16 +177,21 @@ try {
   const anNumber = Number(/số (\d+)/.exec(await page.getByTestId('notice').filter({ hasText: /Đã cấp số/ }).innerText())[1]);
   await page.getByTestId('tab-queue').click();
   await page.getByTestId('waiting').getByTestId('queue-row').filter({ hasText: 'Nguyễn Văn An' }).waitFor();
-  // Nạp trước xong: kho trên máy có bộ đệm bệnh nhân và ảnh chụp hàng chờ.
-  await page.waitForFunction(async () => {
-    const dbs = (await indexedDB.databases()).filter((d) => d.name?.startsWith('phongmach:'));
-    if (!dbs.length) return false;
-    const db = await new Promise((r) => (indexedDB.open(dbs[0].name).onsuccess = (e) => r(e.target.result)));
-    const count = (s) => new Promise((r) => (db.transaction(s).objectStore(s).count().onsuccess = (e) => r(e.target.result)));
-    const ok = (await count('patients')) > 0 && (await count('snapshots')) > 0;
-    db.close();
-    return ok;
-  });
+  // Nạp trước xong: kho trên máy có bộ đệm bệnh nhân và ảnh chụp hàng chờ. Thăm dò bằng `evaluate`, không dùng
+  // `page.waitForFunction` với hàm async: nó coi lời hứa trả về là "đúng" và xong ngay, tức là không chờ gì cả.
+  await eventually(
+    () =>
+      page.evaluate(async () => {
+        const dbs = (await indexedDB.databases()).filter((d) => d.name?.startsWith('phongmach:'));
+        if (!dbs.length) return false;
+        const db = await new Promise((r) => (indexedDB.open(dbs[0].name).onsuccess = (e) => r(e.target.result)));
+        const count = (s) => new Promise((r) => (db.transaction(s).objectStore(s).count().onsuccess = (e) => r(e.target.result)));
+        const done = (await count('patients')) > 0 && (await count('snapshots')) > 0;
+        db.close();
+        return done;
+      }),
+    'máy nạp trước hàng chờ và hồ sơ'
+  );
   ok(`có mạng: cấp số ${anNumber} cho Nguyễn Văn An; máy đã nạp trước hàng chờ và hồ sơ (bộ đệm mã hóa)`);
 
   // ============================================================ Mất mạng: tìm trên máy

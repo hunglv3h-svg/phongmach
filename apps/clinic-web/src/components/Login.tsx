@@ -2,14 +2,25 @@ import { useEffect, useState } from 'react';
 import { api, type AuthState, type DemoTenant } from '../api';
 import { ROLE_LABEL } from '../format';
 import { pendingOnDevice, type DevicePending } from '../local/store';
+import { expiredText } from '../local/syncList';
 
-export function Login({ onLogin, notice }: { onLogin: (auth: AuthState) => void; notice?: string }) {
+export function Login({
+  onLogin,
+  notice,
+  expired,
+}: {
+  onLogin: (auth: AuthState) => void;
+  notice?: string;
+  /** Phiên của người này vừa hết hạn (401): báo số mục của họ còn chờ đồng bộ trên máy (OFF-6). */
+  expired?: { tenant: string; userId: string };
+}) {
   const [tenants, setTenants] = useState<DemoTenant[]>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
 
   // Mục chưa đồng bộ còn trên máy (OFF-6): chỉ đọc số đếm và tên nhân viên, không đọc dữ liệu bệnh nhân.
-  const [pending, setPending] = useState<DevicePending[]>([]);
+  // undefined: chưa đếm xong (không báo "0 mục" khi chưa biết).
+  const [pending, setPending] = useState<DevicePending[]>();
 
   useEffect(() => {
     api.demoUsers().then((r) => setTenants(r.tenants), (e: Error) => setError(e.message));
@@ -32,7 +43,12 @@ export function Login({ onLogin, notice }: { onLogin: (auth: AuthState) => void;
       <h1>Chọn phòng khám và người dùng</h1>
       <p className="muted">Hai phòng khám demo dùng hai kho dữ liệu tách biệt. Chưa có mật khẩu: đây là bản trình diễn.</p>
       {notice && <p className="error" role="alert" data-testid="login-notice">{notice}</p>}
-      {pending.map((p) => (
+      {expired && (
+        <p className="error" role="alert" data-testid="session-expired">
+          {expiredText(pending && (pending.find((p) => p.tenant === expired.tenant && p.userId === expired.userId)?.count ?? 0))}. Dữ liệu trên máy này không mất.
+        </p>
+      )}
+      {(pending ?? []).map((p) => (
         <p key={`${p.tenant}:${p.userId}`} className="offline-note" role="status" data-testid="device-pending" data-user={p.userId} data-count={p.count}>
           Máy này còn {p.count} mục chưa đồng bộ của {p.userName ?? p.userId}
           {tenants && tenants.length > 1 ? ` (${tenants.find((t) => t.slug === p.tenant)?.name ?? p.tenant})` : ''}. Người đó đăng nhập lại trên máy này thì các mục được gửi tiếp.

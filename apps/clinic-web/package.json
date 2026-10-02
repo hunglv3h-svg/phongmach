@@ -12,7 +12,8 @@
     "test": "vitest run",
     "e2e": "node e2e/smoke.mjs",
     "e2e:visit": "node e2e/visit.mjs",
-    "e2e:offline": "node e2e/offline-sign.mjs"
+    "e2e:offline": "node e2e/offline-sign.mjs",
+    "e2e:conflict": "node e2e/offline-conflict.mjs"
   },
   "dependencies": {
     "@phongmach/catalogs": "workspace:*",

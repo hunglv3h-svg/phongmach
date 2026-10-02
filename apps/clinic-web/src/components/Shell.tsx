@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { AuthState } from '../api';
 import type { Opened } from '../local/client';
 import { useOffline } from '../local/OfflineProvider';
 import type { LocalStore } from '../local/store';
+import { syncListActions } from '../local/syncActions';
+import { useSyncOverview } from '../local/useSyncOverview';
 import { ROLE_LABEL } from '../format';
 import { Visit } from '../visit/Visit';
 import { AuditLog } from './AuditLog';
@@ -12,30 +14,17 @@ import { Metrics } from './Metrics';
 import { Queue } from './Queue';
 import { Reception } from './Reception';
 import { Scope } from './Scope';
+import { SyncBar } from './SyncBar';
+import { SyncNotices, SyncPanel } from './SyncPanel';
 
 type Screen = 'reception' | 'queue' | 'visit' | 'display' | 'gateway' | 'metrics' | 'audit' | 'scope';
 
-/** Trạng thái mạng và hàng đợi đồng bộ (bản tối thiểu; danh sách chờ đồng bộ đầy đủ là lát 4). */
-function SyncStatus() {
-  const { client, sync, online } = useOffline();
-  return (
-    <div className="sync-status" data-testid="sync-status" data-online={String(online)} data-pending={sync.pending} data-attention={sync.attention} aria-live="polite">
-      {!online && <span className="badge bad" data-testid="offline-badge">Mất mạng</span>}
-      {sync.paused === 'unauthorized' && <span className="badge bad">Phiên hết hạn: đăng nhập lại để đồng bộ</span>}
-      {sync.pending > 0 && (
-        <>
-          <span className={`badge ${sync.attention > 0 ? 'bad' : 'warn'}`}>
-            {sync.pending} mục chờ đồng bộ{sync.attention > 0 ? ` (${sync.attention} cần xử lý)` : ''}
-          </span>
-          <button className="ghost" disabled={!online} onClick={() => void client.engine.syncNow()} data-testid="sync-now">Đồng bộ ngay</button>
-        </>
-      )}
-    </div>
-  );
-}
-
 export function Shell({ auth, store, onLogout }: { auth: AuthState; store: LocalStore; onLogout: (keepData: boolean) => void }) {
   const { client } = useOffline();
+  const overview = useSyncOverview();
+  const [listOpen, setListOpen] = useState(false);
+  // Danh sách chỉ được làm ba việc: đồng bộ ngay, xác nhận lại, in lại. Không có việc bỏ mục.
+  const actions = useMemo(() => syncListActions(client), [client]);
   const [screen, setScreen] = useState<Screen>('reception');
   const [visit, setVisit] = useState<Opened>();
   const [confirm, setConfirm] = useState<number>();
@@ -72,7 +61,7 @@ export function Shell({ auth, store, onLogout }: { auth: AuthState; store: Local
             <button key={t.id} className={screen === t.id ? 'tab active' : 'tab'} onClick={() => setScreen(t.id)} data-testid={`tab-${t.id}`}>{t.label}</button>
           ))}
         </nav>
-        <SyncStatus />
+        <SyncBar view={overview.view} open={listOpen} onToggle={() => setListOpen((o) => !o)} onSyncNow={() => void actions.syncNow()} />
         <button className="ghost" onClick={() => void logout()}>Đăng xuất</button>
       </header>
       {confirm !== undefined && (
@@ -88,6 +77,9 @@ export function Shell({ auth, store, onLogout }: { auth: AuthState; store: Local
           </section>
         </div>
       )}
+      {/* Màn hình chờ đặt ở nơi công cộng và chỉ có số thứ tự với chữ cái đầu: không hiện thông báo (có họ tên bệnh nhân) ở đó. Huy hiệu ở thanh trên vẫn còn. */}
+      {screen !== 'display' && <SyncNotices notices={overview.notices} onDismiss={overview.dismiss} onOpenList={() => setListOpen(true)} />}
+      {listOpen && <SyncPanel view={overview.view} rows={overview.rows} actions={actions} onClose={() => setListOpen(false)} />}
       {screen === 'reception' && <Reception token={auth.token} />}
       {screen === 'queue' && <Queue auth={auth} onOpenVisit={(opened) => { setVisit(opened); setScreen('visit'); }} />}
       {screen === 'visit' && visit && <Visit key={visit.context.visit.id} auth={auth} store={store} opened={visit} onDone={() => { setVisit(undefined); setScreen('queue'); }} />}

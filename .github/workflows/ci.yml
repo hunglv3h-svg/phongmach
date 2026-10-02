@@ -85,6 +85,8 @@ jobs:
       - run: pnpm --filter @phongmach/clinic-web e2e:visit
       - name: Ngoại tuyến (ngắt mạng thật, ký khi mất mạng, mất phản hồi, đồng bộ)
         run: pnpm --filter @phongmach/clinic-web e2e:offline
+      - name: Ngoại tuyến, hai máy (xung đột 409, quy tắc 422 xác nhận lại, hết phiên 401)
+        run: pnpm --filter @phongmach/clinic-web e2e:conflict
       - name: Ảnh chụp màn hình
         if: always()
         uses: actions/upload-artifact@v4

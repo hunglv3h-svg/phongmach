@@ -8,9 +8,10 @@ import { ApiError, api, type AuthState, type CompleteRequest, type CompleteRespo
 import { localPrescriptionCode, printLocal } from '../print';
 import { parseNum, toCompleteRequest, toLineInput, type Draft } from '../visit/draft';
 import { mergeQueue, nextLocalNumber, searchLocal, type CachedPatient, type LocalQueueItem, type QueueSnapshot, type SignedOffline } from './cache';
-import { isTmp, newTmpId, type AnyOp, type NewOp, type Op, type Payloads } from './ops';
+import { isTmp, newTmpId, type AnyOp, type NewOp, type Op, type OpDisplay, type Payloads } from './ops';
 import type { Change, LocalStore } from './store';
 import type { Outcome, SyncEngine } from './sync';
+import type { SyncData } from './syncList';
 
 export interface OfflineClientOptions {
   store: LocalStore;
@@ -161,6 +162,21 @@ export class OfflineClient {
     const ops = (await this.engine.ops()).filter((o) => o.meta.day === day);
     const { user } = this.auth();
     return mergeQueue(items, ops, await this.store.ids(), { id: user.id, name: user.name });
+  }
+
+  /**
+   * Dữ liệu cho danh sách chờ đồng bộ và thông báo: hàng đợi, ánh xạ id, hàng chờ trên máy và đơn đã ký khi mất mạng.
+   * Chỉ đọc kho trên máy và giải mã trong bộ nhớ: không gọi máy chủ, không ghi gì.
+   */
+  async syncData(): Promise<SyncData> {
+    const day = this.today();
+    const ops = await this.engine.ops();
+    const ids = await this.store.ids();
+    const snapshot = (await this.snapshot())?.items ?? [];
+    const { user } = this.auth();
+    const queue = mergeQueue(snapshot, ops.filter((o) => o.meta.day === day), ids, { id: user.id, name: user.name });
+    const signed = new Map((await this.store.list<'signed', SignedOffline>('signed')).map((r) => [r.id, r.value]));
+    return { ops, ids, queue, signed };
   }
 
   /** Nạp trước (OFF-4 a): tóm tắt và dị ứng của người mới vào hàng chờ mà máy chưa có. Lần gọi trùng lúc dùng chung một lần nạp. */
@@ -314,9 +330,10 @@ export class OfflineClient {
     const { ops } = await this.opsFor(item.id);
     const pendingOpen = ops.find((o) => o.meta.kind === 'open' && o.meta.status !== 'done') as Op<'open'> | undefined;
     const deps = ops.filter((o) => o.meta.kind === 'checkin' && o.meta.status !== 'done').map((o) => o.id);
+    const display: OpDisplay = { patientName: item.patientName, number: item.number };
 
     if (this.online && !pendingOpen) {
-      const op: NewOp = { id: crypto.randomUUID(), kind: 'open', deps, payload: { visitId: item.id } };
+      const op: NewOp = { id: crypto.randomUUID(), kind: 'open', deps, payload: { visitId: item.id, display } };
       await this.engine.enqueue([op]);
       const out: Outcome = await this.engine.submit(op.id, (p) => ({ payload: { ...(p as Payloads['open']), openedAt: clickAt } }));
       if (out.kind === 'done') {
@@ -327,11 +344,11 @@ export class OfflineClient {
         await this.engine.discard(op.id);
         throw new RejectedError(out.error.message, out.error.status, out.error.code);
       }
-      if (out.kind !== 'offline') await this.engine.enqueue([{ ...op, payload: { visitId: item.id, openedAt: clickAt } }]);
+      if (out.kind !== 'offline') await this.engine.enqueue([{ ...op, payload: { visitId: item.id, openedAt: clickAt, display } }]);
       return this.offlineOpen(item, clickAt);
     }
     if (pendingOpen) return this.offlineOpen(item, pendingOpen.body.payload.openedAt ?? clickAt);
-    await this.engine.enqueue([{ id: crypto.randomUUID(), kind: 'open', deps, payload: { visitId: item.id, openedAt: clickAt } }]);
+    await this.engine.enqueue([{ id: crypto.randomUUID(), kind: 'open', deps, payload: { visitId: item.id, openedAt: clickAt, display } }]);
     void this.engine.run();
     return this.offlineOpen(item, clickAt);
   }
@@ -370,6 +387,7 @@ export class OfflineClient {
     const unknown = withRx && !allergiesKnown ? { allergiesUnknown: true } : {};
     const clientTimes = { openedAt: draft.openedAt ?? signedAt, signedAt };
     const deps = await this.visitDeps(visit.id);
+    const display: OpDisplay = { patientName: patient.fullName, number: visit.number };
 
     const offlinePart = async () => {
       const rxTmpId = withRx ? newTmpId() : undefined;
@@ -392,9 +410,14 @@ export class OfflineClient {
       const changes: Change[] = (await this.aliases(visit.id)).map((id) => ({ table: 'drafts' as const, id, delete: true as const }));
       if (rxTmpId && detail) {
         changes.push({ table: 'signed', id: rxTmpId, plain: { day: this.today() }, value: { detail, clinicName: tenant.name, completeOpId: opId } satisfies SignedOffline });
-        changes.push(this.engine.newOpChange({ id: crypto.randomUUID(), kind: 'printed', deps: [opId], payload: { prescriptionId: rxTmpId, printedAt: signedAt } }));
+        changes.push(this.engine.newOpChange({ id: crypto.randomUUID(), kind: 'printed', deps: [opId], payload: { prescriptionId: rxTmpId, printedAt: signedAt, display: { ...display, code: detail.prescription.code } } }));
       }
-      const payload: Payloads['complete'] = { visitId: visit.id, ...(rxTmpId ? { rxTmpId } : {}), body: { ...base, ...unknown, clientTimes } };
+      const payload: Payloads['complete'] = {
+        visitId: visit.id,
+        ...(rxTmpId ? { rxTmpId } : {}),
+        body: { ...base, ...unknown, clientTimes },
+        display: { ...display, ...(detail ? { code: detail.prescription.code } : {}) },
+      };
       return { payload, changes, detail };
     };
     const printOffline = async (detail: PrescriptionDetail | undefined): Promise<SignOutcome> => {
@@ -416,7 +439,7 @@ export class OfflineClient {
 
     const body: CompleteRequest = { ...base, ...unknown, ...(draft.openedOffline ? { clientTimes } : {}) };
     try {
-      await this.engine.enqueue([{ id: opId, kind: 'complete', deps, payload: { visitId: visit.id, body } }]);
+      await this.engine.enqueue([{ id: opId, kind: 'complete', deps, payload: { visitId: visit.id, body, display } }]);
     } catch {
       return notSaved;
     }
@@ -450,11 +473,22 @@ export class OfflineClient {
   }
 
   /** In (lại) một đơn từ dữ liệu trên máy khi mất mạng: ghi mục ghi nhận in để máy chủ có dòng nhật ký khi có mạng (OFF-1). */
-  async recordLocalPrint(prescriptionId: string, completeOpId?: string): Promise<void> {
+  async recordLocalPrint(prescriptionId: string, completeOpId?: string, display?: OpDisplay): Promise<void> {
     const ops = await this.engine.ops();
     const dep = completeOpId && ops.some((o) => o.id === completeOpId && o.meta.status !== 'done') ? [completeOpId] : [];
-    await this.engine.enqueue([{ id: crypto.randomUUID(), kind: 'printed', deps: dep, payload: { prescriptionId, printedAt: iso(this.now()) } }]);
+    await this.engine.enqueue([{ id: crypto.randomUUID(), kind: 'printed', deps: dep, payload: { prescriptionId, printedAt: iso(this.now()), ...(display ? { display } : {}) } }]);
     void this.engine.run();
+  }
+
+  /**
+   * In lại một đơn đã ký khi mất mạng mà máy chủ chưa nhận (đang chờ, xung đột, chờ xác nhận): in từ bản giữ trên máy, có nhãn
+   * "ký khi mất mạng", rồi ghi mục ghi nhận in (mục này chờ mục hoàn tất như mọi lần in ngoại tuyến).
+   */
+  async reprintSigned(rxTmpId: string): Promise<void> {
+    const signed = await this.signedOffline(rxTmpId);
+    if (!signed) throw new Error('Máy này không còn giữ bản đơn đó để in lại');
+    await this.print(signed.detail, signed.clinicName, true);
+    await this.recordLocalPrint(rxTmpId, signed.completeOpId, { patientName: signed.detail.patient.fullName, code: signed.detail.prescription.code });
   }
 
   /** Đơn ký khi mất mạng (để in lại) và mục hoàn tất của nó. */
