@@ -1,0 +1,30 @@
+{
+  "name": "@phongmach/clinic-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Ứng dụng phòng khám (PWA): tiếp đón, tìm bệnh nhân. Khám và kê đơn: M0-S2.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "e2e": "node e2e/smoke.mjs"
+  },
+  "dependencies": {
+    "@phongmach/fhir-vn-model": "workspace:*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "playwright-core": "^1.50.0",
+    "typescript": "^6.0.0",
+    "vite": "^7.0.0",
+    "vite-plugin-pwa": "^1.0.0",
+    "vitest": "^5.0.0"
+  }
+}

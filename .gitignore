@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+*.log
+.DS_Store
+
+# Dữ liệu và bí mật sinh ra khi chạy cục bộ
+services/bff/.demo-tenants.json
+services/bff/.data/
+apps/clinic-web/e2e/screenshots/

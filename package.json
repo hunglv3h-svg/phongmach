@@ -1,0 +1,19 @@
+{
+  "name": "phongmach",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.8.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r --workspace-concurrency=1 test",
+    "build": "pnpm -r build",
+    "stack:up": "node infra/medplum/setup.mjs 2>/dev/null; docker compose -f infra/medplum/docker-compose.yml up -d",
+    "stack:down": "docker compose -f infra/medplum/docker-compose.yml down",
+    "seed": "pnpm --filter @phongmach/bff seed",
+    "dev:bff": "pnpm --filter @phongmach/bff dev",
+    "dev:web": "pnpm --filter @phongmach/clinic-web dev"
+  }
+}

@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Kiểu, kiểm thử đơn vị, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+  integration:
+    name: Kiểm thử tích hợp với Medplum thật
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Dựng Medplum (PostgreSQL, Redis, server)
+        run: |
+          node infra/medplum/setup.mjs
+          docker compose -f infra/medplum/docker-compose.yml up -d
+      - name: Chờ Medplum sẵn sàng
+        run: curl --silent --fail --retry 60 --retry-delay 3 --retry-connrefused --retry-all-errors http://localhost:8103/healthcheck
+      - run: pnpm --filter @phongmach/bff test:integration
+      - name: Nhật ký Medplum khi lỗi
+        if: failure()
+        run: docker compose -f infra/medplum/docker-compose.yml logs --tail 200 medplum-server
