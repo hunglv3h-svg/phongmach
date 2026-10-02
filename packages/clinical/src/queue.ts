@@ -57,6 +57,12 @@ export const priorityOf = (e: Encounter): QueuePriority => {
   return PRIORITIES.find((p) => p === code) ?? 'normal';
 };
 
+/**
+ * `clientUuid` của lần cấp số. Lượt đã ký còn mang một định danh cùng hệ của lần hoàn tất ("<uuid>:complete", xem visit.ts):
+ * chỉ lấy định danh không có hậu tố.
+ */
+export const checkInUuidOf = (e: Encounter): string | undefined => e.identifier?.find((i) => i.system === SYSTEMS.clientUuid && !!i.value && !i.value.includes(':'))?.value;
+
 export function toQueueItem(e: Encounter, patient: Patient | undefined): QueueItem | undefined {
   const number = queueNumberOf(e);
   const code = e.identifier?.find((i) => i.system === SYSTEMS.visitCode)?.value;
@@ -67,6 +73,7 @@ export function toQueueItem(e: Encounter, patient: Patient | undefined): QueueIt
   const doctor = e.participant?.[0]?.individual?.display;
   const doctorUserId = e.participant?.[0]?.individual?.identifier?.value;
   const reason = e.reasonCode?.[0]?.text;
+  const clientUuid = checkInUuidOf(e);
   return {
     id: e.id,
     number,
@@ -82,6 +89,7 @@ export function toQueueItem(e: Encounter, patient: Patient | undefined): QueueIt
     ...(doctor ? { doctorName: doctor } : {}),
     ...(doctorUserId ? { doctorUserId } : {}),
     ...(reason ? { reason } : {}),
+    ...(clientUuid ? { clientUuid } : {}),
   };
 }
 
