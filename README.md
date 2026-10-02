@@ -25,6 +25,8 @@ Cần Node >= 22, pnpm 12, Docker (có `docker compose`). Cách nhanh nhất, ch
 infra/dev-up.sh               # --stop để dừng BFF và giao diện; log ở /tmp/phongmach-dev/
 ```
 
+Script in ra địa chỉ giao diện và dòng `E2E_URL=…` để chạy e2e. Giao diện mặc định ở cổng 5173; nếu cổng đó đang do tiến trình khác giữ (dự án khác trên cùng máy) thì script không đụng tới nó mà tự chọn cổng trống đầu tiên từ 5183. Muốn cố định cổng: `WEB_PORT=5190 infra/dev-up.sh`. Trên Windows xem thêm mục [Chạy trên Windows](#chạy-trên-windows).
+
 Hoặc từng bước:
 
 ```bash
@@ -42,6 +44,25 @@ pnpm dev:web                  # giao diện ở http://127.0.0.1:5173
 pnpm --filter @phongmach/clinic-web build && pnpm --filter @phongmach/clinic-web preview   # http://127.0.0.1:4173
 ```
 
+## Chạy trên Windows
+
+Đã chạy được trên Windows 11 với Git Bash (Git for Windows), Docker Desktop đang mở và Node 22. Gõ lệnh trong Git Bash, không phải PowerShell hay cmd:
+
+```bash
+infra/dev-up.sh                                 # dựng và chạy như trên Linux; in ra địa chỉ giao diện và E2E_URL
+pnpm test
+pnpm --filter @phongmach/bff test:integration
+E2E_URL=http://127.0.0.1:5183 pnpm e2e          # dùng đúng E2E_URL mà dev-up.sh vừa in ra
+infra/dev-up.sh --stop
+```
+
+- **Cổng.** Script không bao giờ dừng tiến trình không phải do nó chạy. Cổng 5173 đang do dự án khác giữ thì giao diện chạy ở cổng mới (từ 5183), nên e2e cần `E2E_URL`. Cổng 8110 (BFF) bị giữ thì script dừng và báo.
+- **Chromium cho e2e.** `e2e/browser.mjs` tự tìm `chrome-headless-shell` của Playwright trong `%LOCALAPPDATA%\ms-playwright`, và không bao giờ dùng Chrome của hệ thống (nó mở vào phiên Chrome đang dùng). Chưa có thì cài: `pnpm --filter @phongmach/clinic-web exec playwright-core install chromium-headless-shell`. Muốn chỉ định tệp khác: đặt `CHROMIUM_PATH`.
+- **Log và tệp PID** nằm ở `/tmp/phongmach-dev` của Git Bash, tức `%TEMP%\phongmach-dev`. BFF và giao diện chạy tiếp sau khi đóng cửa sổ Git Bash; dừng bằng `infra/dev-up.sh --stop` từ cửa sổ Git Bash nào cũng được.
+- **Medplum dùng chung cho cả máy**, còn bí mật của nó (`infra/medplum/.env`, `config/`) nằm trong thư mục đã dựng stack và không commit. Chạy `dev-up.sh` ở thư mục khác (ví dụ một git worktree mới) thì script dùng lại stack đang chạy, không sinh mật khẩu mới. Nếu stack đang dừng, script báo cách bật lại; không xóa volume khi chưa hỏi chủ dự án.
+- Thư mục chưa có `services/bff/.demo-tenants.json` thì `dev-up.sh` nạp thêm một cặp phòng khám demo mới vào Medplum. Muốn dùng lại cặp đã có, chép tệp đó từ thư mục cũ sang trước khi chạy.
+- Tự gõ `pnpm` lần đầu mà Corepack hỏi xác nhận tải: `export COREPACK_ENABLE_DOWNLOAD_PROMPT=0` (`dev-up.sh` đã tự đặt).
+
 ## Đi qua kịch bản trình diễn
 
 1. Đăng nhập **Phụ tá Nguyễn Thị Lan** (phòng khám Nội) → Tiếp đón → gõ `nguyen van an` → thấy dị ứng Penicillin → "Cấp số". Thêm "Trần Thị Bình" với ưu tiên "Đã hẹn": Bình được gọi trước. Mở "Màn hình chờ".
@@ -58,7 +79,7 @@ pnpm --filter @phongmach/bff test:integration   # BFF với Medplum thật (cầ
 pnpm e2e                                        # Chromium thật, 13 + 24 + 13 + 12 bước (hai bài cuối ngắt mạng thật, bài cuối dùng hai máy); cần stack + seed + BFF + web đang chạy
 ```
 
-Bài e2e tạo thêm bệnh nhân (tên bắt đầu bằng `Zq`) và các lượt khám trong hai phòng khám demo mỗi lần chạy, và tự dọn hàng chờ (kể cả sau lần chạy hỏng). Để chạy nhanh bước chèn lỗi cổng, khởi động BFF với `OUTBOX_BASE_MS=500 OUTBOX_CAP_MS=2000`. Muốn dữ liệu demo sạch: `pnpm stack:down`, xóa volume
+e2e mặc định mở `http://127.0.0.1:5173`; giao diện ở cổng khác thì đặt `E2E_URL` (`dev-up.sh` in ra giá trị đúng). Bài e2e tạo thêm bệnh nhân (tên bắt đầu bằng `Zq`) và các lượt khám trong hai phòng khám demo mỗi lần chạy, và tự dọn hàng chờ (kể cả sau lần chạy hỏng). Để chạy nhanh bước chèn lỗi cổng, khởi động BFF với `OUTBOX_BASE_MS=500 OUTBOX_CAP_MS=2000`. Muốn dữ liệu demo sạch: `pnpm stack:down`, xóa volume
 (`docker compose -f infra/medplum/docker-compose.yml down -v`), rồi chạy lại các bước trên.
 
 ## Giới hạn của bản hiện tại
