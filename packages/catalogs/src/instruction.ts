@@ -38,3 +38,21 @@ export function computeQuantity(drug: DrugEntry, line: LineDose): number | undef
   if (line.perDose && line.timesPerDay && line.days) return Math.ceil(line.perDose * line.timesPerDay * line.days);
   return undefined;
 }
+
+export interface ResolvedLine {
+  instruction: string;
+  quantity?: number;
+}
+
+export interface LineInput extends LineDose {
+  drug: string;
+  /** Ghi đè cách dùng sinh tự động. */
+  instruction?: string | undefined;
+}
+
+/** Cách dùng và số lượng cuối cùng của một dòng thuốc: cách dùng gõ tay (nếu có) thắng cách dùng tự sinh. */
+export function resolveLine(drug: DrugEntry, line: LineInput): ResolvedLine {
+  const typed = line.instruction?.trim();
+  const quantity = computeQuantity(drug, line);
+  return { instruction: typed || buildInstruction(drug, line), ...(quantity !== undefined ? { quantity } : {}) };
+}

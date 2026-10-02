@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ALLERGY_CLASSES,
   DRUGS,
+  INGREDIENTS,
   ICD10,
   TEMPLATES,
   buildInstruction,
@@ -8,6 +10,8 @@ import {
   drugCode,
   getDrug,
   getIcd10,
+  resolveLine,
+  searchIngredients,
   searchDrugs,
   searchIcd10,
 } from '../src/index.js';
@@ -119,5 +123,27 @@ describe('tìm kiếm', () => {
     const ac = getDrug(drugCode('Amoxicillin + acid clavulanic 625 mg'))!;
     expect(ac.ingredients).toEqual(['amoxicillin', 'acid clavulanic']);
     expect(ac.classes).toContain('penicillin');
+  });
+});
+
+describe('dị ứng và dòng thuốc', () => {
+  it('mọi nhóm của thuốc đều có trong danh sách nhóm dị ứng hoặc là nhóm điều trị không dùng cho dị ứng', () => {
+    const allergyIds = new Set(ALLERGY_CLASSES.map((c) => c.id));
+    for (const id of ['penicillin', 'cephalosporin', 'beta-lactam', 'nsaid', 'sulfonamide']) expect(allergyIds.has(id)).toBe(true);
+    // Thuốc nhóm kháng sinh/kháng viêm phải gắn đúng nhóm để đối chiếu dị ứng hoạt động.
+    expect(getDrug(drugCode('Amoxicillin 500 mg'))!.classes).toContain('penicillin');
+    expect(getDrug(drugCode('Cefuroxim 500 mg'))!.classes).toContain('beta-lactam');
+    expect(getDrug(drugCode('Ibuprofen 400 mg'))!.classes).toContain('nsaid');
+  });
+  it('tìm hoạt chất không dấu', () => {
+    expect(searchIngredients('amox')).toContain('amoxicillin');
+    expect(searchIngredients('')).toEqual([]);
+    expect(INGREDIENTS.length).toBeGreaterThan(60);
+  });
+  it('cách dùng gõ tay thắng cách dùng tự sinh; số lượng tự tính', () => {
+    const drug = getDrug(drugCode('Amoxicillin 500 mg'))!;
+    expect(resolveLine(drug, { drug: drug.code, perDose: 1, timesPerDay: 3, days: 5 })).toEqual({ instruction: 'Uống 1 viên x 3 lần/ngày', quantity: 15 });
+    expect(resolveLine(drug, { drug: drug.code, perDose: 1, timesPerDay: 3, days: 5, instruction: ' Uống khi no ' }).instruction).toBe('Uống khi no');
+    expect(resolveLine(drug, { drug: drug.code })).toEqual({ instruction: '' });
   });
 });

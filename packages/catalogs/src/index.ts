@@ -1,3 +1,4 @@
+export * from './allergy.js';
 export * from './drugs.js';
 export * from './icd10.js';
 export * from './instruction.js';
