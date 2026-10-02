@@ -230,7 +230,14 @@ async function checkIn(c) {
 /** Mở màn hình khám của bệnh nhân chu kỳ này từ hàng chờ: "Gọi vào khám", hoặc "Tiếp tục khám" sau khi tải lại trang. */
 async function openVisit(c) {
   await page().getByTestId('tab-queue').click();
-  await page().getByTestId('queue-row').filter({ hasText: c.patient.fullName }).locator('[data-testid="call"], [data-testid="continue"]').click();
+  const rows = page().getByTestId('queue-row').filter({ hasText: c.patient.fullName });
+  await rows.first().waitFor();
+  // Sau một lần mất phản hồi ở "cấp số", hàng chờ có lúc hiện HAI dòng cho cùng một lượt khám cho tới khi mục cấp số được gửi lại:
+  // dòng của máy chủ (đang chờ) và dòng tạm trên máy. Máy chủ vẫn chỉ có một lượt khám. Ghi lại để báo ở cuối bài, rồi bấm nút mà
+  // bác sĩ đang khám dở sẽ bấm: "Tiếp tục khám" nếu có, không thì "Gọi vào khám".
+  if ((await rows.count()) > 1) c.run.doubleRow = true;
+  const resume = rows.getByTestId('continue');
+  await ((await resume.count()) ? resume : rows.getByTestId('call')).first().click();
   await page().getByTestId('visit').waitFor();
 }
 const onVisit = async () => (await page().getByTestId('visit').count()) > 0;
@@ -357,6 +364,7 @@ try {
       `đơn ${print?.code}${print?.offline ? ' in từ máy' : ''}`,
       c.run.syncedMs !== undefined ? `máy chủ nhận sau ${(c.run.syncedMs / 1000).toFixed(1)} giây` : 'MÁY CHỦ CHƯA NHẬN',
       ...(c.run.signRefused.length ? [`"Ký & In" bị từ chối ${c.run.signRefused.length} lần trước khi in`] : []),
+      ...(c.run.doubleRow ? ['hàng chờ hiện hai dòng cho lượt khám này'] : []),
     ];
     console.log(`· chu kỳ ${pad(c.index)}: ${describe(c)} → ${notes.join(', ')} [${((Date.now() - from) / 1000).toFixed(1)} giây]`);
   }
@@ -473,6 +481,8 @@ try {
   console.log(`\nThời gian chạy: ${((Date.now() - started) / 1000).toFixed(0)} giây.${waits.length ? ` Máy chủ nhận lượt khám sau khi có mạng: trung vị ${sec(waits[Math.floor((waits.length - 1) / 2)])} giây, lâu nhất ${sec(waits.at(-1))} giây.` : ''}`);
   if (slow.length) console.log(`Chờ máy chủ nhận trên 10 giây ở ${slow.length} chu kỳ: ${slow.map((c) => `${pad(c.index)} (${sec(c.run.syncedMs)} giây)`).join(', ')}.`);
   if (refused.length) console.log(`"Ký & In" báo chưa ký được, phải bấm lại, ở ${refused.length} chu kỳ: ${refused.map((c) => `${pad(c.index)} (${c.run.signRefused.length} lần)`).join(', ')}. Câu báo: "${refused[0].run.signRefused[0]}"`);
+  const doubled = ran.filter((c) => c.run.doubleRow);
+  if (doubled.length) console.log(`Hàng chờ hiện hai dòng cho cùng một lượt khám (dòng của máy chủ và dòng tạm trên máy) ở ${doubled.length} chu kỳ: ${doubled.map((c) => pad(c.index)).join(', ')}. Máy chủ vẫn chỉ có một lượt khám cho mỗi bệnh nhân.`);
   if (failed) {
     console.error(`\n✗ M0-2 KHÔNG đạt với hạt giống ${SEED}: ${failed}/${step} bước kiểm sai.`);
     await page().screenshot({ path: `${shots}FAILED-cycles-end.png` }).catch(() => {});
