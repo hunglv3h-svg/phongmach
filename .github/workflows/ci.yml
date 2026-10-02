@@ -87,6 +87,12 @@ jobs:
         run: pnpm --filter @phongmach/clinic-web e2e:offline
       - name: Ngoại tuyến, hai máy (xung đột 409, quy tắc 422 xác nhận lại, hết phiên 401)
         run: pnpm --filter @phongmach/clinic-web e2e:conflict
+      # Tự tạo phòng khám thử, chạy BFF riêng ở 8111 và bản build ở 4174 (dùng lại dist đã build ở trên), rồi dừng chúng.
+      # Hạt giống ngẫu nhiên mỗi lần chạy, in ở dòng đầu của bài: chạy lại bằng E2E_SEED=<số> pnpm e2e:cycles.
+      - name: Ngoại tuyến, M0-2 (20 chu kỳ ngắt và khôi phục mạng trên phòng khám thử riêng; đếm 0 mất, 0 trùng)
+        run: pnpm e2e:cycles
+        env:
+          CYCLES_SKIP_BUILD: '1'
       - name: Ảnh chụp màn hình
         if: always()
         uses: actions/upload-artifact@v4
@@ -99,4 +105,5 @@ jobs:
         if: failure()
         run: |
           tail -n 100 "$RUNNER_TEMP/bff.log" || true
+          tail -n 100 services/bff/.data/e2e-cycles/bff.log || true
           docker compose -f infra/medplum/docker-compose.yml logs --tail 100 medplum-server
