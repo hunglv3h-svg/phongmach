@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { loadAuth, saveAuth, setUnauthorizedHandler, type AuthState } from './api';
 import { DemoBanner } from './components/DemoBanner';
 import { Login } from './components/Login';
@@ -10,6 +10,10 @@ import { useLocalStore } from './local/useLocalStore';
 export function App() {
   const [auth, setAuth] = useState<AuthState | undefined>(() => loadAuth());
   const [notice, setNotice] = useState<string>();
+  // Phiên vừa hết hạn (401) của ai: màn hình đăng nhập báo "Phiên đã hết hạn: đăng nhập lại để đồng bộ N mục" (OFF-6).
+  const [expired, setExpired] = useState<{ tenant: string; userId: string }>();
+  const authRef = useRef(auth);
+  authRef.current = auth;
   const store = useLocalStore(auth ? { tenant: auth.tenant.slug, userId: auth.user.id } : undefined);
 
   const update = useCallback((next: AuthState | undefined) => {
@@ -21,14 +25,27 @@ export function App() {
 
   // Hết phiên (401): chỉ về màn hình đăng nhập, KHÔNG xóa dữ liệu trên máy (đăng nhập lại đúng người thì dùng tiếp).
   useEffect(() => {
-    setUnauthorizedHandler(() => update(undefined));
+    setUnauthorizedHandler(() => {
+      const a = authRef.current;
+      if (a) setExpired({ tenant: a.tenant.slug, userId: a.user.id });
+      update(undefined);
+    });
     return () => setUnauthorizedHandler(undefined);
   }, [update]);
+
+  const login = useCallback(
+    (next: AuthState) => {
+      setExpired(undefined);
+      update(next);
+    },
+    [update]
+  );
 
   // Đăng xuất: xóa dữ liệu trên máy của người này (bản nháp có dữ liệu lâm sàng) cùng khóa của nó.
   // Còn mục chưa đồng bộ thì người dùng đã chọn "giữ dữ liệu đã mã hóa trên máy" (OFF-6): chỉ đóng kho, không xóa.
   const logout = async (keep: boolean) => {
     setNotice(undefined);
+    setExpired(undefined);
     if (keep) {
       store?.close();
     } else {
@@ -53,7 +70,7 @@ export function App() {
           <main className="page"><p className="muted">Đang mở dữ liệu trên máy…</p></main>
         )
       ) : (
-        <Login onLogin={update} {...(notice ? { notice } : {})} />
+        <Login onLogin={login} {...(notice ? { notice } : {})} {...(expired ? { expired } : {})} />
       )}
     </>
   );

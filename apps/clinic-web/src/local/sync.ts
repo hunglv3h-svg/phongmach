@@ -5,6 +5,7 @@
 // - Chỉ gửi mục của chính người đang đăng nhập: mỗi người một kho, và bộ máy dừng nếu phiên không phải chủ kho (OFF-6).
 import { vnDay } from '@phongmach/clinical';
 import { ApiError } from '../api';
+import { ATTENTION, depState } from './deps';
 import { effectsOf, resolveIds, send, type AnyOp, type NewOp, type Op, type OpBody, type OpError, type Payloads } from './ops';
 import { dbName, type Change, type LocalStore, type OpMeta, type OpStatus, type Owner } from './store';
 
@@ -62,20 +63,25 @@ export interface SyncState {
   /** Theo những gì bộ máy thấy: trình duyệt báo mất mạng hoặc lần gửi gần nhất lỗi mạng thì false. */
   online: boolean;
   paused: false | 'unauthorized' | 'owner';
+  /**
+   * false cho tới khi đếm xong lần đầu sau khi mở kho (đăng nhập, tải lại trang): trong lúc đó `pending` và `attention` là 0
+   * nhưng chưa có nghĩa. Giao diện phải hiện "đang đếm" thay cho "0" (N3: không báo "hết mục chờ" khi chưa biết).
+   */
+  counted: boolean;
   /** Mục chưa xong (mọi trạng thái trừ `done`). */
   pending: number;
   /** Mục cần người xử lý (xung đột, quy tắc, lỗi khác) và mục bị chúng giữ lại. */
   attention: number;
   /** id mục đang gửi (chỉ trong tab đang giữ khóa). */
   sending?: string;
+  /** Lần gần nhất máy chủ nhận một mục của máy này (ms kể từ epoch). Không có: hôm nay chưa gửi được mục nào. */
+  lastSyncAt?: number;
   /** Tăng mỗi lần kho thay đổi: giao diện đọc lại hàng đợi khi số này đổi. */
   version: number;
 }
 
 /** Biến đổi một mục khi nó chưa gửi được vì mất mạng (ví dụ thêm giờ máy khách, số tạm): cùng id, cùng `clientUuid`. */
 export type Promote = (payload: Payloads[keyof Payloads]) => { payload: Payloads[keyof Payloads]; changes?: Change[] } | Promise<{ payload: Payloads[keyof Payloads]; changes?: Change[] }>;
-
-const ATTENTION: ReadonlySet<OpStatus> = new Set(['conflict', 'rules', 'error']);
 
 const realClock: Clock = {
   now: () => Date.now(),
@@ -130,7 +136,7 @@ export class SyncEngine {
   private readonly periodMs: number;
   private readonly lockName: string;
 
-  private current: SyncState = { online: true, paused: false, pending: 0, attention: 0, version: 0 };
+  private current: SyncState = { online: true, paused: false, counted: false, pending: 0, attention: 0, version: 0 };
   private readonly listeners = new Set<(s: SyncState) => void>();
   private timer: unknown;
   private started = false;
@@ -312,24 +318,11 @@ export class SyncEngine {
     const all = ops ?? (await this.ops());
     const byId = new Map(all.map((o) => [o.id, o]));
     const pending = all.filter((o) => o.meta.status !== 'done');
-    const attention = pending.filter((o) => ATTENTION.has(o.meta.status) || this.depState(o, byId).kind === 'held').length;
-    this.emit({ pending: pending.length, attention }, true);
+    const attention = pending.filter((o) => ATTENTION.has(o.meta.status) || depState(o, byId).kind === 'held').length;
+    // Sau khi tải lại trang: lần gửi thành công cuối lấy từ mục đã xong còn trong kho (mục đã xong của ngày cũ bị dọn khi mở ứng dụng).
+    const last = this.current.lastSyncAt ?? all.reduce((max, o) => (o.meta.status === 'done' ? Math.max(max, o.updatedAt) : max), 0);
+    this.emit({ counted: true, pending: pending.length, attention, ...(last ? { lastSyncAt: last } : {}) }, true);
     return all;
-  }
-
-  /** Mục trước nó: xong hết thì gửi được; có mục cần xử lý thì bị giữ; còn lại thì chờ. Mục không còn trong kho là đã xong và đã dọn. */
-  private depState(op: AnyOp, byId: Map<string, AnyOp>, seen = new Set<string>()): { kind: 'ready' } | { kind: 'waiting' } | { kind: 'held'; by: string } {
-    let waiting = false;
-    for (const depId of op.meta.deps) {
-      const dep = byId.get(depId);
-      if (!dep || dep.meta.status === 'done' || seen.has(depId)) continue;
-      if (ATTENTION.has(dep.meta.status)) return { kind: 'held', by: depId };
-      seen.add(depId);
-      const inner = this.depState(dep, byId, seen);
-      if (inner.kind === 'held') return inner;
-      waiting = true;
-    }
-    return waiting ? { kind: 'waiting' } : { kind: 'ready' };
   }
 
   private backoff(attempts: number): number {
@@ -370,7 +363,7 @@ export class SyncEngine {
       for (const op of [...byId.values()].sort((a, b) => a.meta.seq - b.meta.seq)) {
         if (tried.has(op.id) || op.meta.status === 'done' || ATTENTION.has(op.meta.status)) continue;
         if (!force && !this.focus.has(op.id) && op.meta.nextAt > now) continue;
-        if (this.depState(op, byId).kind !== 'ready') continue;
+        if (depState(op, byId).kind !== 'ready') continue;
         const payload = resolveIds(op, ids);
         if (!payload) continue;
         tried.add(op.id);
@@ -391,7 +384,7 @@ export class SyncEngine {
           await this.store.commit([{ table: 'ops', id: op.id, plain: { ...op.meta, status: 'done', nextAt: 0 }, value: done }, ...effects]);
           for (const c of effects) if (c.table === 'ids' && !('delete' in c)) ids.set(c.id, c.serverId);
           this.update(byId, op, 'done', done);
-          this.emit({ online: true });
+          this.emit({ online: true, lastSyncAt: this.clock.now() });
           progress = true;
           continue;
         }
@@ -456,7 +449,7 @@ export class SyncEngine {
     if (!op) return { kind: 'rejected', status: 'error', error: { status: -1, code: 'missing', message: 'Mục không còn trong hàng đợi' } };
     if (op.meta.status === 'done') return { kind: 'done', result: op.body.result };
     if (ATTENTION.has(op.meta.status)) return { kind: 'rejected', status: op.meta.status as 'conflict' | 'rules' | 'error', error: op.body.error! };
-    const dep = this.depState(op as AnyOp, new Map(ops.map((o) => [o.id, o])));
+    const dep = depState(op as AnyOp, new Map(ops.map((o) => [o.id, o])));
     if (dep.kind === 'held') return { kind: 'held', by: dep.by };
     if (this.current.paused) return { kind: 'paused' };
     if (promoted || !this.current.online) return { kind: 'offline' };

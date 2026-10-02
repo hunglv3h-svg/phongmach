@@ -649,6 +649,40 @@ Lát 3b tách làm hai commit. **Lát 3b-1 xong** (kho, bộ máy đồng bộ, 
   5. Chưa có giao diện xác nhận lại mục 422 của hàng đợi (`SyncEngine.acknowledge` đã có và có kiểm thử), chưa có danh sách chờ đồng bộ. Cả hai thuộc lát 4.
 - Gói JS 451 → 494 KB, nén 146 → 159 KB [Đã đo, bản build].
 
+Lát 4 tách làm hai commit. **Lát 4-1 xong** (hàm thuần, chỉ báo, danh sách chỉ đọc; chưa có xử lý mục bị từ chối và thông báo):
+- `local/deps.ts`: hàm thuần `depState` cho biết một mục gửi được, đang chờ mục trước, hay bị giữ vì mục nào. Bộ máy đồng bộ, danh sách và màn hình kết quả ký dùng chung hàm này. Trước đây màn hình kết quả ký tự tính và chỉ xét mục trước trực tiếp; nay xét qua nhiều bậc như bộ máy.
+- `SyncState` thêm hai trường:
+  - `counted`: false cho tới khi đếm xong lần đầu sau khi mở kho. Trong lúc đó `pending` là 0 nhưng chưa có nghĩa.
+  - `lastSyncAt`: lần gần nhất máy chủ nhận một mục của máy này. Sau khi tải lại trang, giá trị lấy từ mục đã xong còn trong kho.
+- `local/syncList.ts`, toàn hàm thuần trên hàng đợi đã giải mã trong bộ nhớ:
+  - `buildSyncRows`: một dòng cho mỗi mục chưa xong, gồm loại thao tác, bệnh nhân, số thứ tự (có nhãn "tạm"), mã đơn, trạng thái, lỗi gần nhất của máy chủ. Trạng thái: chờ gửi, đang gửi, chờ mục trước, thử lại lúc mấy giờ (lần gửi thứ mấy), xung đột, chờ bác sĩ xác nhận, cần xử lý, bị giữ vì mục nào. Mất mạng hoặc hết phiên thì mục chờ ghi rõ "chờ có mạng", "chờ đăng nhập lại".
+  - `conflictText`: câu của OFF-7, kèm số lượt khám và tên người giữ. Tên lấy từ hàng chờ của máy chủ nếu có, không thì từ thông điệp 409.
+  - `buildNotices`, `ackList`: dựng thông báo và kiểm lý do xác nhận. Đã có kiểm thử; giao diện dùng chúng ở lát 4-2.
+  - `indicatorView`, `expiredText`: chỉ báo và câu "Phiên đã hết hạn: đăng nhập lại để đồng bộ N mục".
+- Giao diện:
+  - `SyncBar` ở thanh trên: "Có mạng" hoặc "Mất mạng", số mục chờ hoặc "Đang đếm mục chờ…", "đang gửi", huy hiệu "N cần xử lý", "Gửi lần cuối HH:MM", nút "Đồng bộ ngay".
+  - `SyncPanel`: ngăn "Chờ đồng bộ" mở từ chỉ báo. Chỉ có hai nút: "Đồng bộ ngay" và "Đóng".
+  - Màn hình đăng nhập sau khi hết phiên: "Phiên đã hết hạn: đăng nhập lại để đồng bộ N mục", cùng dòng "Máy này còn N mục…" đã có.
+- Kiểm thử: 29 bài đơn vị mới (304 → 333).
+  - 21 bài cho hàm thuần và cho danh sách dựng từ hàng đợi thật (IndexedDB giả, BFF giả, đồng hồ ảo): 409 do người khác mở lượt khám, 422, lỗi tạm, đang gửi, "đang đếm" trước lần đếm đầu.
+  - 8 bài dựng thành phần ra HTML tĩnh bằng `react-dom/server` (không cần jsdom): chỉ báo, danh sách, màn hình đăng nhập. Bài "không có nút xóa hay hủy" đếm mọi thẻ nút trong ngăn danh sách ở từng trạng thái của mục.
+- Đột biến thử lát 4-1 (23, mỗi cái làm ít nhất một bài đỏ):
+  - chỉ báo hiện 0 trước khi đếm xong, theo 3 cách: ở hàm chỉ báo, ở bộ máy, ở thuộc tính `data-pending`;
+  - không hiện "bị giữ"; "bị giữ" chỉ xét mục trước trực tiếp;
+  - mất dòng "Phiên đã hết hạn" ở hàm, ở thanh chỉ báo, ở màn hình đăng nhập; câu mất số mục;
+  - thêm nút xóa, thêm nút hủy không có `data-testid`;
+  - 409 tự biến mất khỏi danh sách; 409 bị coi là lỗi tạm; "Đồng bộ ngay" gửi lại mục xung đột;
+  - câu xung đột mất tên; mất thông điệp lỗi của máy chủ; dòng thử lại mất số lần gửi;
+  - nhãn hiển thị bị gửi lên máy chủ;
+  - thông báo cho cả mục bị giữ; không báo đổi số tạm; không báo lệch mã đơn; nhận lý do xác nhận quá ngắn;
+  - huy hiệu cần xử lý biến mất.
+- **Đi khác thiết kế, hoặc chi tiết thêm:**
+  1. Mục mở hồ sơ, hoàn tất và ghi nhận in mang thêm phần `display` (tên bệnh nhân, số, mã đơn) trong phần **mã hóa**. Danh sách nhờ đó không phải tra ngược qua mục khác, và mục của ngày cũ vẫn có tên sau khi bộ đệm ngày đó bị dọn. Phần này không gửi lên máy chủ (có kiểm thử). Mục tạo trước lát 4 không có phần này: danh sách tra qua hàng chờ trên máy và đơn đã ký.
+  2. Mọi lần gọi máy chủ gặp 401 đều đưa ứng dụng về màn hình đăng nhập (từ lát 3b). Vì vậy câu "Phiên đã hết hạn…" chủ yếu hiện ở màn hình đăng nhập; dòng tương ứng ở thanh chỉ báo chỉ kịp hiện thoáng qua.
+  3. Thuộc tính `data-pending` của chỉ báo là `counting` cho tới khi đếm xong, không còn là `0`. Bài e2e chờ `data-pending="0"` vì thế không còn đúng sớm.
+  4. "Gửi lần cuối" tính theo mục đã xong còn trong kho. Mục đã xong của ngày cũ bị dọn khi mở ứng dụng, nên đầu ngày chỉ báo không có dòng này cho tới lần gửi đầu tiên.
+- Gói JS 494 → 506 KB, nén 159 → 162 KB [Đã đo, bản build].
+
 **Quyết định của chủ dự án (02/10/2026):**
 
 1. **Không dùng mã PIN cho kho cục bộ ở M0** (lý do ở OFF-5).

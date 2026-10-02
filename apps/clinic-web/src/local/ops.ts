@@ -10,17 +10,27 @@ export const TMP_PREFIX = 'tmp-';
 export const newTmpId = (): string => `${TMP_PREFIX}${crypto.randomUUID()}`;
 export const isTmp = (id: string | undefined): boolean => !!id?.startsWith(TMP_PREFIX);
 
+/**
+ * Nhãn để hiện một mục trong danh sách chờ đồng bộ (tên bệnh nhân, số thứ tự, mã đơn) mà không phải tra ngược qua mục khác.
+ * Nằm trong phần mã hóa của mục, và KHÔNG được gửi lên máy chủ (`send` chỉ gửi các trường của yêu cầu).
+ */
+export interface OpDisplay {
+  patientName?: string;
+  number?: number;
+  code?: string;
+}
+
 export interface Payloads {
   /** Tạo bệnh nhân; `tmpId` là id dùng trên máy cho tới khi máy chủ trả id thật. */
   patient: { tmpId: string; input: NewPatient };
   /** Cấp số. `display`: tên và ngày sinh để hiện hàng chờ trên máy khi chưa đồng bộ. */
   checkin: { visitTmpId?: string; body: CheckInRequest; display: { patientName: string; birthDate?: string } };
   /** Mở hồ sơ (gọi vào khám). `openedAt` chỉ có khi mở lúc mất mạng. */
-  open: { visitId: string; openedAt?: string };
+  open: { visitId: string; openedAt?: string; display?: OpDisplay };
   /** Hoàn tất lượt khám (ký đơn hoặc kết thúc không kê đơn). `rxTmpId`: id tạm của đơn đã in khi mất mạng. */
-  complete: { visitId: string; rxTmpId?: string; body: CompleteRequest };
+  complete: { visitId: string; rxTmpId?: string; body: CompleteRequest; display?: OpDisplay };
   /** Ghi nhật ký một lần in làm lúc mất mạng. */
-  printed: { prescriptionId: string; printedAt: string };
+  printed: { prescriptionId: string; printedAt: string; display?: OpDisplay };
 }
 
 export interface Results {

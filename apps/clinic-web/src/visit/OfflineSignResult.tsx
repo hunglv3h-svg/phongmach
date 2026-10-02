@@ -2,13 +2,12 @@ import { useEffect, useState } from 'react';
 import type { CompleteResponse, RulesRejected } from '../api';
 import { clock } from '../format';
 import type { SignOutcome } from '../local/client';
+import { depState, needsAttention } from '../local/deps';
 import type { AnyOp } from '../local/ops';
 import { useOffline } from '../local/OfflineProvider';
 import { printLocal, printSaved } from '../print';
 
 type SyncView = { status: 'pending' | 'done' | 'conflict' | 'rules' | 'error' | 'held'; op?: AnyOp };
-
-const ATTENTION = new Set(['conflict', 'rules', 'error']);
 
 /**
  * Kết quả ký khi mất mạng: đơn đã lưu bền trên máy và đã in từ dữ liệu trên máy (nhãn "KÝ KHI MẤT MẠNG").
@@ -27,9 +26,10 @@ export function OfflineSignResult({ result, onBack }: { result: Extract<SignOutc
       const op = ops.find((o) => o.id === opId);
       if (!live) return;
       if (!op) return setView({ status: 'pending' });
-      if (op.meta.status === 'done' || ATTENTION.has(op.meta.status)) return setView({ status: op.meta.status as SyncView['status'], op });
-      // Mục hoàn tất bị giữ vì một mục trước nó (cấp số, mở hồ sơ) đang cần xử lý.
-      const blocker = ops.find((o) => op.meta.deps.includes(o.id) && ATTENTION.has(o.meta.status));
+      if (op.meta.status === 'done' || needsAttention(op.meta.status)) return setView({ status: op.meta.status as SyncView['status'], op });
+      // Mục hoàn tất bị giữ vì một mục trước nó (cấp số, mở hồ sơ, kể cả qua nhiều bậc) đang cần xử lý: cùng cách tính với danh sách chờ đồng bộ.
+      const dep = depState(op, new Map(ops.map((o) => [o.id, o])));
+      const blocker = dep.kind === 'held' ? ops.find((o) => o.id === dep.by) : undefined;
       setView(blocker ? { status: 'held', op: blocker } : { status: 'pending', op });
     });
     return () => {

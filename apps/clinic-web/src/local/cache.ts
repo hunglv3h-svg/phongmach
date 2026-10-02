@@ -2,6 +2,7 @@
 // với các thao tác chưa đồng bộ, cấp số tạm. Mọi bản ghi bộ đệm nằm trong kho mã hóa (`store.ts`), dạng rõ chỉ có id và ngày.
 import { sortQueue, type AllergyView, type HistoryItem, type PrescriptionDetail, type QueueItem, type VisitSummary } from '@phongmach/clinical';
 import { classifyQuery, digitsOnly, foldName, normalizePhone, rankByPhoneSuffix, type PatientSummary } from '@phongmach/fhir-vn-model';
+import { ATTENTION } from './deps';
 import type { AnyOp, Op } from './ops';
 
 /** Một bệnh nhân trong bộ đệm: người trong hàng chờ hôm nay, hồ sơ đã mở trong ngày, hoặc người tạo trên máy này. */
@@ -79,8 +80,6 @@ export interface LocalQueueItem extends QueueItem {
     renumbered?: { from: number; to: number };
   };
 }
-
-const ATTENTION = new Set(['conflict', 'rules', 'error']);
 
 /**
  * Gộp hàng chờ của máy chủ với các thao tác trên máy (OFF-2, N3): người cấp số khi mất mạng hiện với số tạm, lượt đã mở
