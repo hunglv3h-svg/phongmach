@@ -31,8 +31,11 @@ export function buildAllergy(patientId: string, input: NewAllergy, now: Date): A
 
 const ENTERED_IN_ERROR = (system: string) => ({ coding: [{ system, code: 'entered-in-error' }] });
 
+/** Rút lại bản ghi nhập nhầm. FHIR (ait-2) cấm giữ `clinicalStatus` khi `verificationStatus` là entered-in-error. */
 export function withdrawAllergy(a: AllergyIntolerance): AllergyIntolerance {
-  return { ...a, verificationStatus: ENTERED_IN_ERROR('http://terminology.hl7.org/CodeSystem/allergyintolerance-verification') };
+  const { clinicalStatus: _drop, ...rest } = a;
+  void _drop;
+  return { ...rest, verificationStatus: ENTERED_IN_ERROR('http://terminology.hl7.org/CodeSystem/allergyintolerance-verification') };
 }
 
 const isWithdrawn = (r: AllergyIntolerance | Condition) => r.verificationStatus?.coding?.some((c) => c.code === 'entered-in-error') ?? false;
@@ -65,8 +68,11 @@ export function buildHistoryItem(patientId: string, input: { clientUuid: string;
   };
 }
 
+/** Như trên: Condition (con-5) cũng cấm giữ `clinicalStatus` khi entered-in-error. */
 export function withdrawHistoryItem(c: Condition): Condition {
-  return { ...c, verificationStatus: ENTERED_IN_ERROR('http://terminology.hl7.org/CodeSystem/condition-ver-status') };
+  const { clinicalStatus: _drop, ...rest } = c;
+  void _drop;
+  return { ...rest, verificationStatus: ENTERED_IN_ERROR('http://terminology.hl7.org/CodeSystem/condition-ver-status') };
 }
 
 export function isHistoryItem(c: Condition): boolean {

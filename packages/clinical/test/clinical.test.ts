@@ -135,6 +135,9 @@ describe('dị ứng và tiền sử', () => {
     const a = { ...buildAllergy('p1', { clientUuid: UUID, kind: 'class', value: 'Penicillin' }, NOW), id: 'a1' };
     expect(toAllergyView(a)).toMatchObject({ id: 'a1', kind: 'class', value: 'penicillin' });
     expect(toAllergyView(withdrawAllergy(a))).toBeUndefined();
+    // Bản ghi rút lại không được còn clinicalStatus (ràng buộc ait-2 của FHIR; Medplum cảnh báo khi vi phạm).
+    expect(withdrawAllergy(a).clinicalStatus).toBeUndefined();
+    expect(a.clinicalStatus).toBeDefined();
   });
   it('dị ứng theo hoạt chất giữ tên hiển thị; nhóm lạ bị từ chối', () => {
     const a = { ...buildAllergy('p1', { clientUuid: UUID, kind: 'ingredient', value: 'amoxicillin', label: 'Amoxicillin' }, NOW), id: 'a2' };
@@ -146,6 +149,7 @@ describe('dị ứng và tiền sử', () => {
     const h = { ...buildHistoryItem('p1', { clientUuid: UUID, text: ' Tăng huyết áp 5 năm ' }, NOW), id: 'h1' };
     expect(toHistoryItem(h)).toMatchObject({ id: 'h1', text: 'Tăng huyết áp 5 năm' });
     expect(toHistoryItem(withdrawHistoryItem(h))).toBeUndefined();
+    expect(withdrawHistoryItem(h).clinicalStatus).toBeUndefined(); // con-5
     expect(() => buildHistoryItem('p1', { clientUuid: UUID, text: ' ' }, NOW)).toThrow(DomainError);
     expect(() => buildHistoryItem('p1', { clientUuid: UUID, text: 'x'.repeat(301) }, NOW)).toThrow(DomainError);
   });
@@ -197,7 +201,7 @@ describe('gói hoàn tất lượt khám', () => {
     visitSeconds: 90,
   };
   const types = (b: Bundle) => (b.entry ?? []).map((e) => e.resource?.resourceType);
-  const digestBase64 = (t: string) => `digest(${t.length})`;
+  const digestBase64 = () => 'ZGlnZXN0'; // "digest" dạng base64 hợp lệ (Medplum kiểm tra định dạng base64Binary)
 
   it('khám không kê đơn: không có List, Task, Provenance', () => {
     const b = buildCompletionBundle(base);
@@ -217,7 +221,7 @@ describe('gói hoàn tất lượt khám', () => {
     const prov = b.entry!.find((e) => e.resource?.resourceType === 'Provenance')!.resource as { target: Array<{ reference: string }>; extension: Array<{ valueBoolean: boolean }>; signature: Array<{ data: string }> };
     expect(prov.target[0]!.reference).toBe(list.fullUrl);
     expect(prov.extension[0]!.valueBoolean).toBe(true); // nhãn mô phỏng
-    expect(prov.signature[0]!.data).toMatch(/^digest\(/);
+    expect(prov.signature[0]!.data).toBe('ZGlnZXN0');
     const task = b.entry!.find((e) => e.resource?.resourceType === 'Task')!.resource as Task;
     expect(task.focus?.reference).toBe(list.fullUrl);
     expect(task.status).toBe('requested');

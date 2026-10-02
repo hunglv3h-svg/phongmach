@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { MedplumClient } from '@medplum/core';
 import type { Encounter } from '@medplum/fhirtypes';
 import { drugCode } from '@phongmach/catalogs';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { MemoryAuditSink } from '../../src/audit.js';
 import { buildApp } from '../../src/app.js';
 import { SimulatedGateway } from '../../src/gateway.js';
@@ -31,7 +31,6 @@ const call = (method: 'GET' | 'POST' | 'PATCH' | 'DELETE', url: string, who: str
 
 const AMOX = { drug: drugCode('Amoxicillin 500 mg'), perDose: 1, timesPerDay: 3, days: 5 };
 const PARA = { drug: drugCode('Paracetamol 500 mg'), perDose: 1, quantity: 10 };
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const count = async (type: string, query = '') => (await adminA.search(type as 'Patient', `_summary=count&_total=accurate${query}`)).total ?? -1;
 
 async function newPatient(name: string, extra: object = { birthDate: '1985-03-15', cccd: `000${Math.floor(Math.random() * 1e9).toString().padStart(9, '0')}` }) {
@@ -53,7 +52,10 @@ const completionBody = (clientUuid: string, over: object = {}) => ({
   ...over,
 });
 // Đồng hồ của worker không bao giờ chạy lùi so với đồng hồ giả của ứng dụng (test có tua nhanh 75 giây).
-const outbox = (slug = 'a') => runOutboxOnce({ tenants: [slug], stores, gateway: simulator, audit, now: () => new Date(Math.max(Date.now(), clock.getTime()) + 1) });
+// Các bài thử lại truyền `at` (thời gian ảo): kiểm tra "chưa đến hạn" / "đã đến hạn" không phụ thuộc tốc độ máy chạy CI.
+const nowForWorker = () => new Date(Math.max(Date.now(), clock.getTime()) + 1);
+const outbox = (at?: Date, slug = 'a') => runOutboxOnce({ tenants: [slug], stores, gateway: simulator, audit, now: () => at ?? nowForWorker() });
+const later = (from: Date, ms: number) => new Date(from.getTime() + ms);
 
 beforeAll(async () => {
   const admin = await adminClient();
@@ -76,6 +78,8 @@ beforeAll(async () => {
   for (const u of tenants.users) tokens[u.id] = (await app.inject({ method: 'POST', url: '/api/session', payload: { tenant: u.tenant, userId: u.id } })).json().token;
 }, 60_000);
 afterAll(async () => app?.close());
+// Một bài hỏng giữa chừng không được để cổng mô phỏng ở trạng thái lỗi cho các bài sau.
+beforeEach(() => void simulator?.set('a', { mode: 'up', failNext: 0 }));
 
 describe('hàng chờ trên Medplum thật', () => {
   it('cấp số tăng dần; gửi lại cùng clientUuid không cấp thêm; nhiều lễ tân cùng lúc không trùng số', async () => {
@@ -239,7 +243,6 @@ describe('luồng khám đầy đủ: mở hồ sơ, kê đơn, ký, in, gửi c
 });
 
 describe('liên thông: lỗi cổng, thử lại, không mất đơn', () => {
-  afterAll(() => simulator.set('a', { mode: 'up', failNext: 0 }));
   async function signNew(name: string) {
     clock = new Date();
     const patientId = await newPatient(name);
@@ -253,22 +256,23 @@ describe('liên thông: lỗi cổng, thử lại, không mất đơn', () => {
 
   it('cổng chết: "chờ gửi lại" có hẹn giờ; cổng sống lại: tự gửi được, không mất đơn', async () => {
     const rx = await signNew('Lê Văn Lỗi');
+    const t0 = nowForWorker();
     simulator.set('a', { mode: 'down' });
-    expect(await outbox()).toEqual({ sent: 0, failed: 1 });
+    expect(await outbox(t0)).toEqual({ sent: 0, failed: 1 });
     expect(await status(rx.id)).toMatchObject({ status: 'retry', attempts: 1, lastError: expect.stringContaining('không phản hồi'), nextAttemptAt: expect.any(String) });
-    expect(await outbox()).toEqual({ sent: 0, failed: 0 }); // chưa đến hạn thử lại
+    expect(await outbox(later(t0, RETRY.baseMs - 10))).toEqual({ sent: 0, failed: 0 }); // chưa đến hạn thử lại
     simulator.set('a', { mode: 'up' });
-    await sleep(RETRY.baseMs + 30);
-    expect(await outbox()).toEqual({ sent: 1, failed: 0 });
+    expect(await outbox(later(t0, RETRY.baseMs + 5))).toEqual({ sent: 1, failed: 0 });
     expect(await status(rx.id)).toMatchObject({ status: 'sent', attempts: 2, nationalCode: expect.stringMatching(/^SIM-/) });
   });
   it('lỗi tạm thời vài lần rồi tự hết (kịch bản trình diễn)', async () => {
     const rx = await signNew('Lê Văn Chập');
     simulator.set('a', { failNext: 2 });
+    let at = nowForWorker();
     let sent = 0;
     for (let i = 0; i < 6 && sent === 0; i++) {
-      sent += (await outbox()).sent;
-      await sleep(RETRY.capMs + 20);
+      sent += (await outbox(at)).sent;
+      at = later(at, RETRY.capMs + 20); // luôn quá hạn thử lại kế tiếp
     }
     expect(sent).toBe(1);
     expect(await status(rx.id)).toMatchObject({ status: 'sent', attempts: 3 });
@@ -276,17 +280,18 @@ describe('liên thông: lỗi cổng, thử lại, không mất đơn', () => {
   it('quá số lần: "lỗi"; gửi lại thủ công khi cổng ổn thì gửi được', async () => {
     const rx = await signNew('Lê Văn Hỏng');
     simulator.set('a', { mode: 'down' });
+    let at = nowForWorker();
     for (let i = 0; i < RETRY.maxAttempts; i++) {
-      await outbox();
-      await sleep(RETRY.capMs + 20);
+      await outbox(at);
+      at = later(at, RETRY.capMs + 20);
     }
     expect(await status(rx.id)).toMatchObject({ status: 'failed', attempts: RETRY.maxAttempts });
-    expect(await outbox()).toEqual({ sent: 0, failed: 0 }); // đã bỏ cuộc, không thử nữa
+    expect(await outbox(later(at, 60_000))).toEqual({ sent: 0, failed: 0 }); // đã bỏ cuộc, không thử nữa
     const pending = (await call('GET', '/api/prescriptions/pending', 'a-assistant')).json().pending as Array<{ code: string; gateway: { status: string } }>;
     expect(pending.find((p) => p.code === rx.code)!.gateway.status).toBe('failed');
     simulator.set('a', { mode: 'up' });
     expect((await call('POST', `/api/prescriptions/${rx.id}/retry`, 'a-doctor')).statusCode).toBe(200);
-    expect(await outbox()).toEqual({ sent: 1, failed: 0 });
+    expect(await outbox(later(at, 60_000))).toEqual({ sent: 1, failed: 0 });
     expect(await status(rx.id)).toMatchObject({ status: 'sent' });
     expect((await call('POST', `/api/prescriptions/${rx.id}/retry`, 'a-doctor')).statusCode).toBe(409); // đã gửi xong
   });
@@ -345,7 +350,7 @@ describe('Medplum không hoàn tác: hoàn tất ghi dở rồi chạy lại', (
       now: new Date(),
       exam,
       diagnoses: [getIcd10('J02.9')!],
-      prescription: { code: 'PM-DO-DANG', lines: [{ drug, input: PARA, resolved: resolveLine(drug, PARA) }], acks: [], digestBase64: () => 'x' },
+      prescription: { code: 'PM-DO-DANG', lines: [{ drug, input: PARA, resolved: resolveLine(drug, PARA) }], acks: [], digestBase64: () => 'eA==' },
     };
     // Người dùng "a-doctor" đã mở lượt này qua API nên participant có userId khớp.
     const first = await flaky.completeVisit(command);
