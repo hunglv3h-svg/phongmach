@@ -66,7 +66,8 @@ Bài e2e tạo thêm bệnh nhân (tên bắt đầu bằng `Zq`) và các lư�
 - **Chưa có xác thực thật** (T-IDP). BFF chỉ chạy khi đặt `DEMO_AUTH=1`, chỉ lắng nghe trên localhost, và chỉ nên dùng với dữ liệu giả.
 - **Mô phỏng**: chữ ký số (băm nội dung, chưa gọi nhà cung cấp) và cổng đơn thuốc quốc gia (bộ nối giả có nút chèn lỗi). Mọi nơi hiển thị đều có nhãn.
 - Danh mục ICD-10, thuốc và đơn mẫu là **tập con minh họa**, chưa được cố vấn y khoa duyệt, không dùng lâm sàng.
-- Chưa có: ngoại tuyến (M0-S3), Zalo, thu tiền (xem kế hoạch, mục 5 và 6). Bản nháp lượt khám tạm lưu trong `sessionStorage` của tab (xóa khi đăng xuất), chưa mã hóa.
+- Chưa có: ngoại tuyến (M0-S3, đang làm), Zalo, thu tiền (xem kế hoạch, mục 5 và 6).
+- Bản nháp lượt khám lưu trên máy trong IndexedDB, mã hóa AES-GCM, mỗi người dùng một kho, xóa cả kho lẫn khóa khi đăng xuất. Khóa nằm cùng máy với dữ liệu nên **chưa** bảo vệ được trước người dùng chung trình duyệt hay người lấy được ổ đĩa (kế hoạch, OFF-5); cần xác thực thật (T-IDP).
 - **Medplum không hoàn tác `transaction` khi một mục lỗi** (xem kế hoạch, F11): gói hoàn tất lượt khám được thiết kế để chạy lại được, không dựa vào hoàn tác.
 - Nhật ký truy cập ghi vào file cục bộ (`services/bff/.data/`); chuyển ra kho bất biến ở M1 (T-AUD).
 - Ứng dụng web chỉ lưu vỏ ứng dụng cho PWA, **không** lưu phản hồi API (có dữ liệu bệnh nhân).

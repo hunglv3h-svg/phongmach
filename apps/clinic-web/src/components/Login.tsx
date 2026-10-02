@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, type AuthState, type DemoTenant } from '../api';
 import { ROLE_LABEL } from '../format';
 
-export function Login({ onLogin }: { onLogin: (auth: AuthState) => void }) {
+export function Login({ onLogin, notice }: { onLogin: (auth: AuthState) => void; notice?: string }) {
   const [tenants, setTenants] = useState<DemoTenant[]>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -26,6 +26,7 @@ export function Login({ onLogin }: { onLogin: (auth: AuthState) => void }) {
     <main className="login">
       <h1>Chọn phòng khám và người dùng</h1>
       <p className="muted">Hai phòng khám demo dùng hai kho dữ liệu tách biệt. Chưa có mật khẩu: đây là bản trình diễn.</p>
+      {notice && <p className="error" role="alert" data-testid="login-notice">{notice}</p>}
       {error && <p className="error" role="alert">{error}</p>}
       {!tenants && !error && <p className="muted">Đang tải…</p>}
       <div className="tenant-grid">

@@ -518,6 +518,13 @@ Mục phụ thuộc vào một mục "cần xử lý" được giữ lại ("ch�
 - "In lại đơn" khi mất mạng in từ dữ liệu trên máy. Bước e2e mới so trang in dựng ở trình duyệt với trang BFF dựng: giống từng ký tự, trừ dòng liên thông. Xuất PDF được đúng một trang A5; chạy được cả trên bản dev lẫn bản build.
 - Đột biến thử đã làm: bỏ thoát ký tự, tính tuổi theo giờ hiện tại, không cắt khoảng trắng lời dặn, không hạ chữ thường UUID, lấy ngày theo UTC. Mỗi đột biến làm đúng một bài đỏ. Bài về chữ hoa/thường ban đầu vẫn xanh khi bị đột biến vì UUID mẫu chỉ có chữ số; đã thêm vectơ có chữ cái.
 
+Lát 2 xong:
+- Bản nháp lượt khám chuyển từ `sessionStorage` sang kho IndexedDB (Dexie) mã hóa AES-GCM. Mỗi (phòng khám, người dùng) một kho. Khóa không xuất được. Mỗi lần ghi một IV mới. Bản mã gắn với bảng + id. Mọi thao tác với kho chạy lần lượt. Đăng xuất xóa kho và khóa; hết phiên (401) chỉ đóng kho, không xóa. Bản nháp dạng rõ của bản trước còn trong `sessionStorage` bị xóa khi khởi động. Trình duyệt không có kho mã hóa thì giữ nháp trong bộ nhớ của tab và báo rõ trên màn hình khám.
+- Màn hình khám có chỉ báo "Đã lưu nháp trên máy (mã hóa)". IndexedDB ghi bất đồng bộ, nên bài e2e chờ chỉ báo này rồi mới tải lại trang.
+- Kiểm thử: 11 bài đơn vị trên IndexedDB giả lập. e2e có thêm hai bước: đọc thẳng IndexedDB trong Chromium không thấy chữ nào của bản nháp ở dạng rõ; đăng xuất thì kho biến mất.
+- Đột biến thử: ghi dạng rõ, IV cố định, bỏ AAD, bỏ chạy lần lượt, đăng xuất chỉ đóng kho, khóa xuất được, tab sau ghi đè khóa. Mỗi cái làm một bài đỏ; "ghi dạng rõ" làm đỏ cả bài e2e. Bài "hai tab cùng mở" ban đầu không bắt được việc ghi đè khóa; đã viết lại cho tất định (tab kia ghi nháp đúng lúc tab này sinh khóa).
+- Cái giá: gói JS 343 → 447 KB, nén 109 → 144 KB [Đã đo]; gần như toàn bộ phần tăng là Dexie. Nếu cần nhẹ hơn, `idb` (khoảng 1 KB) thay được vì kho chỉ dùng đọc/ghi theo khóa.
+
 Còn lại cho lát 3: lần in ngoại tuyến chưa có dòng nhật ký `prescription-print`. Trang in có nhãn "ký khi mất mạng" mới được kiểm qua kiểm thử đơn vị; kiểm PDF một trang A5 cho trang này làm khi ký ngoại tuyến chạy được qua giao diện.
 
 **Quyết định của chủ dự án (02/10/2026):**

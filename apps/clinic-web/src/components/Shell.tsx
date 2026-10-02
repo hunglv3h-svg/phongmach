@@ -1,8 +1,8 @@
 import type { VisitContext } from '@phongmach/clinical';
 import { useState } from 'react';
 import type { AuthState } from '../api';
+import type { DraftStore } from '../local/store';
 import { ROLE_LABEL } from '../format';
-import { dropAllDrafts } from '../visit/draft';
 import { Visit } from '../visit/Visit';
 import { AuditLog } from './AuditLog';
 import { Display } from './Display';
@@ -14,7 +14,7 @@ import { Scope } from './Scope';
 
 type Screen = 'reception' | 'queue' | 'visit' | 'display' | 'gateway' | 'metrics' | 'audit' | 'scope';
 
-export function Shell({ auth, onLogout }: { auth: AuthState; onLogout: () => void }) {
+export function Shell({ auth, store, onLogout }: { auth: AuthState; store: DraftStore; onLogout: () => void }) {
   const [screen, setScreen] = useState<Screen>('reception');
   const [visit, setVisit] = useState<VisitContext>();
   const { role } = auth.user;
@@ -31,10 +31,6 @@ export function Shell({ auth, onLogout }: { auth: AuthState; onLogout: () => voi
     { id: 'scope', label: 'Phạm vi', show: true },
   ];
 
-  const logout = () => {
-    dropAllDrafts(); // bản nháp chứa dữ liệu lâm sàng, không để lại sau khi đăng xuất
-    onLogout();
-  };
 
   return (
     <div className="shell">
@@ -48,11 +44,11 @@ export function Shell({ auth, onLogout }: { auth: AuthState; onLogout: () => voi
             <button key={t.id} className={screen === t.id ? 'tab active' : 'tab'} onClick={() => setScreen(t.id)} data-testid={`tab-${t.id}`}>{t.label}</button>
           ))}
         </nav>
-        <button className="ghost" onClick={logout}>Đăng xuất</button>
+        <button className="ghost" onClick={onLogout}>Đăng xuất</button>
       </header>
       {screen === 'reception' && <Reception token={auth.token} />}
       {screen === 'queue' && <Queue auth={auth} onOpenVisit={(context) => { setVisit(context); setScreen('visit'); }} />}
-      {screen === 'visit' && visit && <Visit key={visit.visit.id} auth={auth} context={visit} onDone={() => { setVisit(undefined); setScreen('queue'); }} />}
+      {screen === 'visit' && visit && <Visit key={visit.visit.id} auth={auth} store={store} context={visit} onDone={() => { setVisit(undefined); setScreen('queue'); }} />}
       {screen === 'display' && <Display token={auth.token} />}
       {screen === 'gateway' && <Gateway auth={auth} />}
       {screen === 'metrics' && clinical && <Metrics auth={auth} />}

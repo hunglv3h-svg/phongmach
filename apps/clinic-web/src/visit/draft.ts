@@ -210,41 +210,6 @@ export function addPrevious(d: Draft, v: VisitSummary): Draft {
   };
 }
 
-// --- lưu nháp tạm trong tab (sessionStorage): chống mất công khi tải lại trang. Bản mã hóa và ngoại tuyến là việc của M0-S3.
-const PREFIX = 'phongmach.draft.';
-
-export function loadDraft(visitId: string): Draft | undefined {
-  try {
-    const raw = sessionStorage.getItem(PREFIX + visitId);
-    return raw ? (JSON.parse(raw) as Draft) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-export function saveDraft(visitId: string, d: Draft): void {
-  try {
-    sessionStorage.setItem(PREFIX + visitId, JSON.stringify(d));
-  } catch {
-    // đầy bộ nhớ hoặc bị chặn: bỏ qua, ứng dụng vẫn chạy
-  }
-}
-
-export function dropDraft(visitId: string): void {
-  try {
-    sessionStorage.removeItem(PREFIX + visitId);
-  } catch {
-    // bỏ qua
-  }
-}
-
-/** Đăng xuất phải xóa mọi bản nháp: chúng chứa dữ liệu lâm sàng. */
-export function dropAllDrafts(): void {
-  try {
-    for (const k of Object.keys(sessionStorage)) if (k.startsWith(PREFIX)) sessionStorage.removeItem(k);
-  } catch {
-    // bỏ qua
-  }
-}
+// Bản nháp được lưu trong kho mã hóa trên máy (`local/store.ts`), không còn ở sessionStorage.
 
 export { computeQuantity };

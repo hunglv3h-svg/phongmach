@@ -89,6 +89,24 @@ async function pickDiagnosis(query) {
   await page.getByTestId('dx-search').press('Enter');
 }
 const pendingState = () => page.getByTestId('gateway-status').getAttribute('data-status');
+/** Đọc thẳng mọi kho IndexedDB của ứng dụng trong trình duyệt (không qua mã ứng dụng): tên kho, số bản ghi từng bảng, mọi byte dưới dạng chữ. */
+const rawLocalDump = () =>
+  page.evaluate(async () => {
+    const out = { names: [], rows: {}, text: '' };
+    const decoder = new TextDecoder();
+    const req = (r) => new Promise((resolve, reject) => ((r.onsuccess = () => resolve(r.result)), (r.onerror = () => reject(r.error))));
+    for (const { name } of (await indexedDB.databases()).filter((d) => d.name?.startsWith('phongmach:'))) {
+      out.names.push(name);
+      const db = await req(indexedDB.open(name));
+      for (const store of db.objectStoreNames) {
+        const rows = await req(db.transaction(store).objectStore(store).getAll());
+        out.rows[store] = (out.rows[store] ?? 0) + rows.length;
+        for (const row of rows) for (const v of Object.values(row)) out.text += `${v instanceof ArrayBuffer || ArrayBuffer.isView(v) ? decoder.decode(v) : JSON.stringify(v)}\n`;
+      }
+      db.close();
+    }
+    return out;
+  });
 /** Xuất PDF như khi in: phải đúng một trang khổ A5 (148×210 mm ≈ 419,5×595,3 pt). */
 async function assertOneA5Page(html, name) {
   const printPage = await context.newPage();
@@ -154,6 +172,15 @@ try {
   assert.equal(await page.getByTestId('vital-pulse').getAttribute('aria-invalid'), 'true');
   await page.getByTestId('vital-pulse').fill('96');
   ok('gõ tắt "viem hong" chọn bằng bàn phím ra J02.9; sinh hiệu sai (chữ) bị đánh dấu, dấu phẩy "38,5" được hiểu');
+
+  // Bản nháp nằm trong kho mã hóa trên máy (IndexedDB): chờ lưu xong rồi đọc thẳng kho như người mở tệp của trình duyệt.
+  await page.locator('[data-testid="draft-saved"][data-dirty="false"][data-persistent="true"]').waitFor();
+  const raw = await rawLocalDump();
+  assert.ok(raw.names.includes('phongmach:noi-tong-quat:noi-doctor'), `có kho của bác sĩ, thực tế ${raw.names}`);
+  assert.ok(raw.rows.drafts >= 1 && raw.rows.meta === 1, `kho có bản nháp và đúng một khóa: ${JSON.stringify(raw.rows)}`);
+  for (const secret of ['Đau họng, sốt nhẹ, không ho', 'Họng đỏ', 'J02.9', 'Nguyễn Văn An', 'symptoms']) assert.ok(!raw.text.includes(secret), `kho trên máy không được có "${secret}" ở dạng rõ`);
+  assert.deepEqual(await page.evaluate(() => Object.keys(sessionStorage).filter((k) => k.startsWith('phongmach.draft.'))), [], 'không còn bản nháp trong sessionStorage');
+  ok('bản nháp lưu trong IndexedDB đã mã hóa: đọc thẳng kho không thấy triệu chứng, chẩn đoán, tên; sessionStorage không còn bản nháp');
 
   // Mô phỏng tải lại trang giữa chừng: bản nháp phải còn.
   await page.reload();
@@ -288,6 +315,8 @@ try {
 
   // ================================================================== Số đo, nhật ký, cách ly
   await logout();
+  assert.ok(!(await rawLocalDump()).names.includes('phongmach:noi-tong-quat:noi-doctor'), 'đăng xuất phải xóa kho trên máy của bác sĩ');
+  ok('bác sĩ đăng xuất: kho trên máy (bản nháp và khóa) bị xóa');
   await login('noi-owner');
   await page.getByTestId('tab-metrics').click();
   await page.getByTestId('metrics-row').first().waitFor();

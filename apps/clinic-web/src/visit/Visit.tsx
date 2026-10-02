@@ -4,7 +4,8 @@ import { ApiError, api, type AuthState, type CompleteResponse, type RulesRejecte
 import { ageText, clock, pad3 } from '../format';
 import { useNow } from '../hooks';
 import { printSaved } from '../print';
-import { addPrevious, dropDraft, evaluate, loadDraft, newDraft, saveDraft, toCompleteRequest, toVitals, type Draft } from './draft';
+import type { DraftStore } from '../local/store';
+import { addPrevious, evaluate, newDraft, toCompleteRequest, toVitals, type Draft } from './draft';
 import { ExamForm } from './ExamForm';
 import { PatientSide } from './PatientSide';
 import { PrescriptionEditor } from './PrescriptionEditor';
@@ -15,11 +16,50 @@ import { SignResult } from './SignResult';
  * Màn hình khám một trang: bên trái hồ sơ (dị ứng, tiền sử, lịch sử khám), giữa khám bệnh, phải kê đơn.
  * Đồng hồ ở đầu trang đếm từ lúc mở hồ sơ (T-TELE); con số chính thức do máy chủ đo khi ký.
  */
-export function Visit({ auth, context: initial, onDone }: { auth: AuthState; context: VisitContext; onDone: () => void }) {
+export function Visit(props: { auth: AuthState; store: DraftStore; context: VisitContext; onDone: () => void }) {
+  const { store, context } = props;
+  const visitId = context.visit.id;
+  // Bản nháp nằm trong kho mã hóa trên máy: đọc bất đồng bộ trước khi hiện màn hình khám.
+  const [loaded, setLoaded] = useState<{ draft: Draft; stored: boolean; error?: string }>();
+  useEffect(() => {
+    let live = true;
+    store.getDraft(visitId).then(
+      (d) => live && setLoaded(d ? { draft: d, stored: true } : { draft: newDraft(context.visit.reason ?? ''), stored: false }),
+      () => live && setLoaded({ draft: newDraft(context.visit.reason ?? ''), stored: false, error: 'Không đọc được bản nháp đã lưu trên máy: đã mở bản nháp mới.' })
+    );
+    return () => {
+      live = false;
+    };
+  }, [store, visitId, context.visit.reason]);
+
+  if (!loaded) return <main className="page"><p className="muted">Đang mở bản nháp…</p></main>;
+  return <VisitEditor {...props} initialDraft={loaded.draft} draftStored={loaded.stored} {...(loaded.error ? { loadError: loaded.error } : {})} />;
+}
+
+function VisitEditor({
+  auth,
+  store,
+  context: initial,
+  onDone,
+  initialDraft,
+  draftStored,
+  loadError,
+}: {
+  auth: AuthState;
+  store: DraftStore;
+  context: VisitContext;
+  onDone: () => void;
+  initialDraft: Draft;
+  draftStored: boolean;
+  loadError?: string;
+}) {
   const { token } = auth;
   const visit = initial.visit;
   const [context, setContext] = useState(initial);
-  const [draft, setDraft] = useState<Draft>(() => loadDraft(visit.id) ?? newDraft(visit.reason ?? ''));
+  const [draft, setDraft] = useState<Draft>(initialDraft);
+  // Bản nháp đã nằm trong kho (so theo đối tượng): khác `draft` nghĩa là còn thay đổi chưa lưu xong.
+  const [savedDraft, setSavedDraft] = useState<Draft | undefined>(draftStored ? initialDraft : undefined);
+  const [saveError, setSaveError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
   const [server, setServer] = useState<RulesRejected>();
@@ -29,8 +69,18 @@ export function Visit({ auth, context: initial, onDone }: { auth: AuthState; con
   const now = useNow(1000);
 
   useEffect(() => {
-    if (!result) saveDraft(visit.id, draft);
-  }, [draft, visit.id, result]);
+    if (result || draft === savedDraft) return;
+    // Kho chạy các lần ghi lần lượt, nên lần ghi xong sau cùng là bản mới nhất.
+    store.putDraft(visit.id, draft).then(
+      () => {
+        setSavedDraft(draft);
+        setSaveError(false);
+      },
+      () => setSaveError(true)
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, visit.id, result, store]);
+  const dirty = draft !== savedDraft;
 
   const allergies = context.allergies;
   const { findings, verdict } = useMemo(
@@ -55,8 +105,8 @@ export function Visit({ auth, context: initial, onDone }: { auth: AuthState; con
     setServer(undefined);
     try {
       const res = await api.completeVisit(token, visit.id, toCompleteRequest(draft, withRx));
-      dropDraft(visit.id);
       setResult(res);
+      void store.deleteDraft(visit.id).catch(() => undefined);
       const detail = toDetail(res);
       if (detail && !res.replayed) {
         printSaved(token, detail, auth.tenant.name).then(
@@ -108,6 +158,16 @@ export function Visit({ auth, context: initial, onDone }: { auth: AuthState; con
         <div>
           <h1>{context.patient.fullName}</h1>
           <small>{[age, SPECIALTY_LABEL[visit.specialty], context.patient.cccdMasked ? `CCCD ${context.patient.cccdMasked}` : 'chưa có CCCD'].filter(Boolean).join(' · ')}</small>
+          <small className={saveError ? 'error draft-state' : 'muted draft-state'} data-testid="draft-saved" data-dirty={String(dirty)} data-persistent={String(store.persistent)}>
+            {saveError
+              ? 'Không lưu được bản nháp trên máy'
+              : dirty
+                ? 'Đang lưu nháp…'
+                : store.persistent
+                  ? 'Đã lưu nháp trên máy (mã hóa)'
+                  : 'Trình duyệt không cho lưu trên máy: nháp chỉ giữ trong tab này, mất khi tải lại'}
+          </small>
+          {loadError && <small className="error draft-state" role="alert">{loadError}</small>}
         </div>
         <div className="timer" role="timer" aria-label="Thời gian khám" data-testid="visit-timer">
           <span>Đã khám</span>
