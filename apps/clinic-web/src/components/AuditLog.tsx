@@ -5,13 +5,16 @@ import { ACTION_LABEL, INTENT_LABEL, ROLE_LABEL, formatTime, shortId } from '../
 /** Mô tả ngắn gọn một dòng nhật ký, không có dấu chấm thừa và dùng đúng đơn vị theo hành động. */
 function detail(e: AuditEntry): string {
   const parts: string[] = [];
-  if (e.queryKind) parts.push(`theo ${INTENT_LABEL[e.queryKind] ?? e.queryKind}`);
+  // Thao tác làm lúc mất mạng, ghi khi đồng bộ: giờ thao tác là giờ máy khách khai, không phải giờ ghi nhật ký.
+  if (e.queryKind === 'offline') parts.push(`làm lúc mất mạng${e.clientTs ? ` (${formatTime(e.clientTs)} theo máy khách)` : ''}, ghi khi đồng bộ`);
+  else if (e.queryKind) parts.push(`theo ${INTENT_LABEL[e.queryKind] ?? e.queryKind}`);
   if (e.resultCount !== undefined) {
     if (e.action === 'audit-read') parts.push(`${e.resultCount} dòng nhật ký`);
     else if (e.action === 'create') parts.push(e.resultCount ? 'bệnh nhân mới' : 'đã có sẵn, không tạo trùng');
     else if (e.action === 'check-in') parts.push(e.resultCount ? 'lượt mới' : 'đã có sẵn, không cấp thêm số');
     else if (e.action === 'visit-complete') parts.push(`${e.resultCount} thuốc`);
     else if (e.action === 'queue-read') parts.push(`${e.resultCount} lượt`);
+    else if (e.action === 'queue-prefetch') parts.push(`${e.resultCount} bệnh nhân`);
     else if (e.action === 'prescription-read' || e.action === 'history-read' || e.action === 'note-read') parts.push(`${e.resultCount} mục`);
     else parts.push(`${e.resultCount} hồ sơ`);
   }

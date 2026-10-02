@@ -41,6 +41,8 @@ export interface AuditEntry {
   queryKind?: string;
   resultCount?: number;
   resourceIds?: string[];
+  /** Thao tác làm lúc mất mạng: giờ theo máy khách (máy khách khai). */
+  clientTs?: string;
 }
 
 export interface NewPatient {

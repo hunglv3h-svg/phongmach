@@ -1,7 +1,7 @@
 import type { Bundle, Encounter, List, MedicationRequest, Patient, Task } from '@medplum/fhirtypes';
 import { describe, expect, it } from 'vitest';
 import { drugCode, getDrug, getIcd10, resolveLine, type LineInput } from '@phongmach/catalogs';
-import { DomainError, buildPatient, toPatientSummary } from '@phongmach/fhir-vn-model';
+import { DomainError, EXTENSIONS, buildPatient, toPatientSummary } from '@phongmach/fhir-vn-model';
 import {
   DEFAULT_RETRY,
   attemptsOf,
@@ -22,6 +22,8 @@ import {
   localPrescriptionDetail,
   makePrescriptionCode,
   markCalled,
+  measureVisit,
+  plausibleClientTime,
   markFailed,
   markSent,
   nextNumber,
@@ -62,6 +64,47 @@ describe('thời gian', () => {
     expect(percentile(v, 90)).toBe(90);
     expect(percentile([7], 90)).toBe(7);
     expect(percentile([], 50)).toBeUndefined();
+  });
+});
+
+describe('giờ máy khách khi đồng bộ (OFF-2, OFF-3)', () => {
+  const at = (ms: number) => new Date(NOW.getTime() + ms).toISOString();
+  it('giờ máy khách dùng được khi hợp lệ và không ở tương lai quá 5 phút', () => {
+    expect(plausibleClientTime(at(-26 * 3600_000), NOW)?.toISOString()).toBe(at(-26 * 3600_000));
+    expect(plausibleClientTime(at(4 * 60_000), NOW)).toBeDefined();
+    expect(plausibleClientTime(at(6 * 60_000), NOW)).toBeUndefined();
+    expect(plausibleClientTime('không phải giờ', NOW)).toBeUndefined();
+    expect(plausibleClientTime(undefined, NOW)).toBeUndefined();
+  });
+  it('không có giờ máy khách: đo bằng giờ máy chủ như trước', () => {
+    expect(measureVisit({ now: NOW, opened: { at: at(-95_000), source: 'server' } })).toEqual({ signedAt: NOW, seconds: 95, source: 'server' });
+    expect(measureVisit({ now: NOW })).toEqual({ signedAt: NOW, source: 'server' });
+    // Mở bằng giờ máy khách nhưng ký không gửi giờ máy khách: hai đồng hồ, không đo.
+    expect(measureVisit({ now: NOW, opened: { at: at(-95_000), source: 'client' } })).toEqual({ signedAt: NOW, source: 'client-invalid' });
+  });
+  it('ký khi mất mạng, đồng bộ 3 giờ sau: thời lượng = ký − mở theo đồng hồ máy khách, giờ ký giữ đúng như đã in', () => {
+    // Đồng hồ máy khách chạy chậm 2 phút: độ lệch triệt tiêu vì cả hai mốc cùng một đồng hồ.
+    const client = { openedAt: at(-3 * 3600_000 - 120_000 - 70_000), signedAt: at(-3 * 3600_000 - 120_000) };
+    const m = measureVisit({ now: NOW, opened: { at: client.openedAt, source: 'client' }, client });
+    expect(m).toEqual({ signedAt: new Date(client.signedAt), seconds: 70, source: 'client' });
+  });
+  it('giờ không hợp lý thì vẫn trả giờ ký (để lưu bản ghi) nhưng không đo: âm, quá trần, ở tương lai, dài hơn khoảng máy chủ thấy', () => {
+    const bad = (client: { openedAt: string; signedAt: string }, opened?: { at: string; source: 'server' | 'client' }) => measureVisit({ now: NOW, opened, client });
+    expect(bad({ openedAt: at(-10_000), signedAt: at(-20_000) })).toEqual({ signedAt: new Date(at(-20_000)), source: 'client-invalid' });
+    expect(bad({ openedAt: at(-13 * 3600_000), signedAt: at(0) }).source).toBe('client-invalid');
+    expect(bad({ openedAt: at(9 * 60_000), signedAt: at(10 * 60_000) }).source).toBe('client-invalid');
+    // Máy chủ thấy mở hồ sơ 2 phút trước, máy khách khai phiên 20 phút.
+    expect(bad({ openedAt: at(-20 * 60_000), signedAt: at(0) }, { at: at(-120_000), source: 'server' }).source).toBe('client-invalid');
+    expect(bad({ openedAt: at(-100_000), signedAt: at(0) }, { at: at(-120_000), source: 'server' })).toMatchObject({ seconds: 100, source: 'client' });
+    expect(bad({ openedAt: 'x', signedAt: 'y' })).toEqual({ signedAt: NOW, source: 'client-invalid' });
+  });
+  it('mở hồ sơ lúc mất mạng: mốc mở theo máy khách và gắn nguồn; mở lại có mạng thì bỏ nguồn cũ', () => {
+    const enc = { ...buildCheckIn({ patientId: 'p1', clientUuid: UUID, specialty: 'noi', priority: 'normal' }, { day: '2026-10-20', number: 1, now: NOW }), id: 'e1' };
+    const offline = markCalled(enc, { name: 'BS' }, NOW, new Date(at(-600_000)));
+    expect(offline.extension).toEqual(expect.arrayContaining([{ url: EXTENSIONS.examOpened, valueDateTime: at(-600_000) }, { url: EXTENSIONS.examOpenedSource, valueCode: 'client' }]));
+    const online = markCalled(offline, { name: 'BS' }, NOW);
+    expect(online.extension?.filter((x) => x.url === EXTENSIONS.examOpenedSource)).toEqual([]);
+    expect(online.extension?.find((x) => x.url === EXTENSIONS.examOpened)?.valueDateTime).toBe(NOW.toISOString());
   });
 });
 

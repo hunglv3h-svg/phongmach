@@ -8,6 +8,8 @@ import type {
   PrescriptionDetail,
   PrescriptionToSign,
   QueueItem,
+  QueuePatient,
+  VisitSecondsSource,
   VisitContext,
   VisitSummary,
 } from '@phongmach/clinical';
@@ -27,11 +29,22 @@ export type OpenResult =
   | { kind: 'closed' }
   | { kind: 'taken'; doctorName?: string | undefined };
 
+/** Cấp số cho thao tác làm lúc mất mạng (OFF-2). */
+export interface CheckInOptions {
+  /** Giờ đến theo máy khách (đã kiểm tra hợp lý): ngày của lượt khám tính theo giờ này. */
+  arrivedAt?: Date | undefined;
+  /** Số tạm máy khách đã báo cho bệnh nhân: giữ nếu còn trống, nếu không thì cấp số kế tiếp. */
+  proposedNumber?: number | undefined;
+}
+
 export interface CompleteCommand {
   clientUuid: string;
   encounterId: string;
   doctor: Doctor;
+  /** Giờ máy chủ nhận yêu cầu. */
   now: Date;
+  /** Có khi mở hoặc ký lúc mất mạng: giờ theo đồng hồ máy khách (OFF-3). */
+  clientTimes?: { openedAt: string; signedAt: string } | undefined;
   exam: ExamInput;
   diagnoses: Icd10Entry[];
   prescription?: PrescriptionToSign | undefined;
@@ -60,6 +73,7 @@ export interface FinishedVisit {
   doctorName?: string | undefined;
   doctorUserId?: string | undefined;
   seconds?: number | undefined;
+  source?: VisitSecondsSource | undefined;
 }
 
 /** Hộp thư đi của MỘT phòng khám. */
@@ -81,10 +95,16 @@ export interface ClinicStore extends OutboxStore {
   /** Bổ sung thông tin còn thiếu (CCCD, ngày sinh). Trả về undefined nếu không có bệnh nhân. */
   updatePatient(id: string, patch: { cccd?: string | undefined; birthDate?: string | undefined }): Promise<PatientSummary | undefined>;
 
-  checkIn(input: CheckInInput, now: Date): Promise<{ item: QueueItem; created: boolean } | undefined>;
+  checkIn(input: CheckInInput, now: Date, options?: CheckInOptions): Promise<{ item: QueueItem; created: boolean } | undefined>;
   listQueue(day: string): Promise<QueueItem[]>;
+  /**
+   * Tóm tắt và dị ứng của bệnh nhân đang chờ hoặc đang khám trong ngày (nạp trước cho lúc mất mạng, OFF-4).
+   * `patientIds` chỉ lọc bớt: không bao giờ trả về người ngoài hàng chờ của ngày đó.
+   */
+  prefetchQueue(day: string, patientIds?: string[]): Promise<QueuePatient[]>;
   cancelVisit(encounterId: string): Promise<'ok' | 'not-found' | 'not-waiting'>;
-  openVisit(encounterId: string, doctor: Doctor, now: Date): Promise<OpenResult>;
+  /** `openedAt`: mở lúc mất mạng, mốc theo máy khách (đã kiểm tra hợp lý). */
+  openVisit(encounterId: string, doctor: Doctor, now: Date, openedAt?: Date): Promise<OpenResult>;
   readVisit(encounterId: string): Promise<VisitContext | undefined>;
   completeVisit(command: CompleteCommand): Promise<CompleteResult>;
 

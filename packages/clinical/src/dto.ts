@@ -157,8 +157,25 @@ export interface VisitMetrics {
   excludedLongerThanSeconds: number;
   /** Có nhiều lượt hơn số tối đa đọc được nên số liệu chưa đủ. */
   truncated: boolean;
-  doctors: Array<{ name: string; visits: number; excluded: number; p50Seconds?: number; p90Seconds?: number }>;
-  all: { visits: number; excluded: number; p50Seconds?: number; p90Seconds?: number };
+  doctors: Array<MetricsGroup & { name: string }>;
+  all: MetricsGroup;
+}
+
+export interface MetricsGroup {
+  visits: number;
+  excluded: number;
+  /** Số lượt (đã tính trong `visits`) đo bằng đồng hồ máy khách vì mở hoặc ký lúc mất mạng (OFF-3). */
+  clientMeasured: number;
+  /** Lượt có giờ máy khách không hợp lý: không đo được, không tính vào phân vị, đếm riêng để không giấu. */
+  invalidClock: number;
+  p50Seconds?: number;
+  p90Seconds?: number;
+}
+
+/** Bệnh nhân trong hàng chờ hôm nay kèm dị ứng, nạp sẵn về máy để tìm và khám khi mất mạng (OFF-4). */
+export interface QueuePatient {
+  patient: PatientSummary;
+  allergies: AllergyView[];
 }
 
 /** Mọi thứ bác sĩ cần thấy khi mở hồ sơ để khám. */

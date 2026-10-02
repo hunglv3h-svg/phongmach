@@ -160,8 +160,8 @@ describe('tính số đo', () => {
     const visits = [...[10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((s) => v(s)), v(200, 'u2', 'BS. Lan')];
     const m = computeMetrics(visits, range);
     expect(m.doctors).toEqual([
-      { name: 'BS. Hà', visits: 10, excluded: 0, p50Seconds: 50, p90Seconds: 90 },
-      { name: 'BS. Lan', visits: 1, excluded: 0, p50Seconds: 200, p90Seconds: 200 },
+      { name: 'BS. Hà', visits: 10, excluded: 0, clientMeasured: 0, invalidClock: 0, p50Seconds: 50, p90Seconds: 90 },
+      { name: 'BS. Lan', visits: 1, excluded: 0, clientMeasured: 0, invalidClock: 0, p50Seconds: 200, p90Seconds: 200 },
     ]);
     expect(m.all).toMatchObject({ visits: 11, p50Seconds: 60 });
   });
@@ -172,8 +172,17 @@ describe('tính số đo', () => {
   });
   it('lượt không có mốc mở hồ sơ bị bỏ; không có số liệu thì không có phân vị', () => {
     const m = computeMetrics([v(undefined)], range);
-    expect(m.all).toEqual({ visits: 0, excluded: 0 });
+    expect(m.all).toEqual({ visits: 0, excluded: 0, clientMeasured: 0, invalidClock: 0 });
     expect(m.doctors).toEqual([]);
+  });
+  it('lượt mở hoặc ký lúc mất mạng: đo ở máy khách thì tính và đếm riêng; giờ không hợp lý thì không tính nhưng đếm riêng', () => {
+    const m = computeMetrics(
+      [v(40), { ...v(70), source: 'client' as const }, { ...v(MAX_COUNTED_SECONDS + 5), source: 'client' as const }, { ...v(undefined), source: 'client-invalid' as const }],
+      range
+    );
+    // 40 và 70 vào phân vị; phiên quá dài bị loại (không tính là "đo ở máy khách"); giờ không hợp lý không vào phân vị.
+    expect(m.all).toEqual({ visits: 2, excluded: 1, clientMeasured: 1, invalidClock: 1, p50Seconds: 40, p90Seconds: 70 });
+    expect(m.doctors[0]).toMatchObject({ visits: 2, clientMeasured: 1, invalidClock: 1 });
   });
   it('báo khi số liệu bị cắt', () => {
     expect(computeMetrics([], { ...range, truncated: true }).truncated).toBe(true);

@@ -11,6 +11,7 @@ import {
   type PrescriptionDetail,
   type PrescriptionSummary,
   type QueueItem,
+  type QueuePatient,
   type VisitContext,
   type VisitSummary,
 } from '@phongmach/clinical';
@@ -19,7 +20,7 @@ import { buildPatient, type NewPatientInput, type PatientSummary, type SearchInt
 import { MemoryAuditSink, type AuditSink } from '../../src/audit.js';
 import { buildApp, type AppDeps } from '../../src/app.js';
 import { SessionService } from '../../src/session.js';
-import type { ClinicStore, CompleteCommand, CompleteResult, Doctor, FinishedVisit, OpenResult, OutboxJob, StoreFactory } from '../../src/store.js';
+import type { CheckInOptions, ClinicStore, CompleteCommand, CompleteResult, Doctor, FinishedVisit, OpenResult, OutboxJob, StoreFactory } from '../../src/store.js';
 import { parseTenantsFile } from '../../src/tenants.js';
 
 export const tenantsFile = parseTenantsFile({
@@ -51,6 +52,9 @@ export class FakeStore implements ClinicStore {
   allergies = new Map<string, AllergyView & { patientId: string }>();
   history = new Map<string, HistoryItem & { patientId: string }>();
   completions: CompleteCommand[] = [];
+  checkIns: Array<{ input: CheckInInput; options: CheckInOptions }> = [];
+  opens: Array<{ id: string; openedAt?: Date | undefined }> = [];
+  prefetches: Array<{ day: string; patientIds?: string[] | undefined }> = [];
   retried: string[] = [];
   searches: SearchIntent[] = [];
   /** Kết quả ép sẵn cho lần hoàn tất kế tiếp (để thử nhánh lỗi). */
@@ -87,20 +91,31 @@ export class FakeStore implements ClinicStore {
     return p;
   }
 
-  async checkIn(input: CheckInInput, now: Date) {
+  async checkIn(input: CheckInInput, now: Date, options: CheckInOptions = {}) {
+    this.checkIns.push({ input, options });
     const patient = this.patients.get(input.patientId);
     if (!patient) return undefined;
     const existing = [...this.visits.values()].find((v) => v.clientUuid === input.clientUuid);
     if (existing) return { item: existing.item, created: false };
-    const encs = [...this.visits.values()].map((v) => ({ ...buildCheckIn({ ...input, patientId: v.item.patientId }, { day: vnDay(now), number: v.item.number, now }) }));
-    const number = nextNumber(encs);
-    const enc = { ...buildCheckIn(input, { day: vnDay(now), number, now }), id: crypto.randomUUID() };
+    const arrived = options.arrivedAt ?? now;
+    const encs = [...this.visits.values()].map((v) => ({ ...buildCheckIn({ ...input, patientId: v.item.patientId }, { day: vnDay(arrived), number: v.item.number, now: arrived }) }));
+    const next = nextNumber(encs);
+    const taken = new Set([...this.visits.values()].map((v) => v.item.number));
+    const number = options.proposedNumber && options.proposedNumber <= next && !taken.has(options.proposedNumber) ? options.proposedNumber : next;
+    const enc = { ...buildCheckIn(input, { day: vnDay(arrived), number, now: arrived }), id: crypto.randomUUID() };
     const item = toQueueItem(enc, { ...buildPatient({ clientUuid: input.clientUuid, fullName: patient.fullName }), id: patient.id, ...(patient.birthDate ? { birthDate: patient.birthDate } : {}) })!;
     this.visits.set(item.id, { item, clientUuid: input.clientUuid });
     return { item, created: true };
   }
   async listQueue() {
     return [...this.visits.values()].map((v) => v.item);
+  }
+  async prefetchQueue(day: string, patientIds?: string[]): Promise<QueuePatient[]> {
+    this.prefetches.push({ day, patientIds });
+    const ids = new Set(
+      [...this.visits.values()].filter((v) => v.item.status === 'waiting' || v.item.status === 'in-exam').map((v) => v.item.patientId).filter((id) => !patientIds || patientIds.includes(id))
+    );
+    return [...ids].map((id) => ({ patient: this.patients.get(id)!, allergies: [...this.allergies.values()].filter((a) => a.patientId === id) }));
   }
   async cancelVisit(id: string) {
     const v = this.visits.get(id);
@@ -109,12 +124,13 @@ export class FakeStore implements ClinicStore {
     v.item = { ...v.item, status: 'cancelled' };
     return 'ok' as const;
   }
-  async openVisit(id: string, doctor: Doctor, now: Date): Promise<OpenResult> {
+  async openVisit(id: string, doctor: Doctor, now: Date, openedAt?: Date): Promise<OpenResult> {
+    this.opens.push({ id, openedAt });
     const v = this.visits.get(id);
     if (!v) return { kind: 'not-found' };
     if (v.item.status === 'done' || v.item.status === 'cancelled') return { kind: 'closed' };
     if (v.item.status === 'in-exam' && v.item.doctorUserId !== doctor.userId) return { kind: 'taken', doctorName: v.item.doctorName };
-    if (v.item.status === 'waiting') v.item = { ...v.item, status: 'in-exam', doctorName: doctor.name, doctorUserId: doctor.userId, calledAt: now.toISOString() };
+    if (v.item.status === 'waiting') v.item = { ...v.item, status: 'in-exam', doctorName: doctor.name, doctorUserId: doctor.userId, calledAt: (openedAt ?? now).toISOString() };
     return { kind: 'ok', context: (await this.readVisit(id))! };
   }
   async readVisit(id: string): Promise<VisitContext | undefined> {
@@ -138,10 +154,11 @@ export class FakeStore implements ClinicStore {
     if (v.item.status !== 'in-exam' || v.item.doctorUserId !== cmd.doctor.userId) return { kind: 'not-open' };
     this.completions.push(cmd);
     const rx = cmd.prescription;
+    const signedAt = cmd.clientTimes?.signedAt ?? cmd.now.toISOString();
     const prescription: PrescriptionSummary | undefined = rx && {
       id: crypto.randomUUID(),
       code: rx.code,
-      signedAt: cmd.now.toISOString(),
+      signedAt,
       signerName: cmd.doctor.name,
       patientId: v.item.patientId,
       lines: rx.lines.map((l) => ({ drug: l.drug.code, name: l.drug.name, unit: l.drug.unit, instruction: l.resolved.instruction, ...(l.resolved.quantity ? { quantity: l.resolved.quantity } : {}) })),
@@ -151,7 +168,7 @@ export class FakeStore implements ClinicStore {
     };
     const visit: VisitSummary = {
       encounterId: v.item.id,
-      date: cmd.now.toISOString(),
+      date: signedAt,
       specialty: v.item.specialty,
       vitals: cmd.exam.vitals,
       diagnoses: cmd.diagnoses.map((d: Icd10Entry) => ({ code: d.code, name: d.name })),

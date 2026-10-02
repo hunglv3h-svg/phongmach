@@ -84,6 +84,16 @@ export function checkPrescription(lines: LineInput[], ctx: RuleContext, config: 
     }
   }
 
+  if (ctx.allergiesKnown === false && lines.length > 0) {
+    findings.push({
+      key: 'allergy-unknown',
+      rule: 'allergy-unknown',
+      severity: 'ack',
+      lines: [],
+      message: 'Máy chưa có dữ liệu dị ứng của bệnh nhân này (mở hồ sơ khi mất mạng): hỏi bệnh nhân về dị ứng thuốc trước khi ký.',
+    });
+  }
+
   const age = ctx.patient.ageYears;
   if (age === undefined) {
     // Không biết tuổi thì mọi quy tắc theo tuổi (trẻ em, CCCD) bị bỏ qua: không được bỏ qua trong im lặng.

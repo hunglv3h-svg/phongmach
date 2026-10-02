@@ -55,6 +55,8 @@ if ! docker info >/dev/null 2>&1; then
   command -v dockerd >/dev/null 2>&1 || fail "Không có docker/dockerd"
   say "khởi động dockerd (log: $LOGS/dockerd.log)"
   sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
+  # Sandbox khởi động lại để lại /var/run/docker.pid của dockerd cũ: dockerd mới từ chối chạy. Chỉ xóa khi không còn dockerd nào.
+  if [ -f /var/run/docker.pid ] && ! pgrep -x dockerd >/dev/null 2>&1; then rm -f /var/run/docker.pid; fi
   nohup dockerd >"$LOGS/dockerd.log" 2>&1 &
   for _ in $(seq 1 40); do docker info >/dev/null 2>&1 && break; sleep 1; done
   docker info >/dev/null 2>&1 || { tail -20 "$LOGS/dockerd.log"; fail "dockerd không lên"; }

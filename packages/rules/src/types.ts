@@ -18,7 +18,8 @@ export type RuleId =
   | 'no-cccd'
   | 'no-birthdate'
   | 'no-weight'
-  | 'paediatric-form';
+  | 'paediatric-form'
+  | 'allergy-unknown';
 
 export interface Finding {
   /** Khóa ổn định theo nội dung (không theo vị trí dòng) để xác nhận vẫn đúng khi bác sĩ đổi thứ tự thuốc. */
@@ -45,6 +46,11 @@ export interface RuleContext {
     weightKg?: number | undefined;
   };
   allergies: Allergy[];
+  /**
+   * false: máy không có dữ liệu dị ứng của bệnh nhân (mở hồ sơ khi mất mạng, chưa nạp trước). Không được coi "không biết" là
+   * "không dị ứng": bác sĩ phải hỏi bệnh nhân và xác nhận kèm lý do. Mặc định true.
+   */
+  allergiesKnown?: boolean;
   /** Mã ICD-10 đã chọn. */
   diagnoses: string[];
 }

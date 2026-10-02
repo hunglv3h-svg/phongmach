@@ -457,7 +457,7 @@ Không hợp lý thì **vẫn lưu lượt khám**, không tính vào p50/p90, �
 
 *Loại:* dùng giờ máy chủ lúc đồng bộ (thời lượng gần 0 hoặc dài bằng cả lúc mất mạng); từ chối yêu cầu có giờ không hợp lý (mất bản ghi đã ký và đã in).
 
-**OFF-4. Tìm bệnh nhân ngoại tuyến.** *Quyết định:* bộ đệm cục bộ chỉ chứa (a) người trong hàng chờ hôm nay, (b) hồ sơ đã mở trong ngày (Tiếp đón, Khám), (c) bệnh nhân tạo trên máy này. Không lưu kết quả tìm kiếm chưa mở. Với bác sĩ và chủ phòng khám, khi có mạng ứng dụng nạp trước tóm tắt và **dị ứng** của người mới vào hàng chờ qua điểm cuối gộp mới `GET /api/queue/prefetch` (một dòng nhật ký `note-read` kèm danh sách id). Tìm ngoại tuyến giải mã bộ đệm (vài trăm người là cùng) vào bộ nhớ rồi lọc bằng `classifyQuery` + `foldName`: tên không dấu theo tiền tố từng từ, số điện thoại, 4 số cuối. **Không có chỉ mục tên dạng rõ trên đĩa.** CCCD không tìm được ngoại tuyến (máy khách chỉ có CCCD đã che), trừ bệnh nhân tạo trên máy này. Bộ đệm ngày cũ bị dọn khi mở ứng dụng. Ô tìm ghi "Mất mạng: chỉ tìm trong N hồ sơ trên máy này" và giữ quy tắc kết quả cũ bị mờ (bài học 1 của M0-S1).
+**OFF-4. Tìm bệnh nhân ngoại tuyến.** *Quyết định:* bộ đệm cục bộ chỉ chứa (a) người trong hàng chờ hôm nay, (b) hồ sơ đã mở trong ngày (Tiếp đón, Khám), (c) bệnh nhân tạo trên máy này. Không lưu kết quả tìm kiếm chưa mở. Khi có mạng, ứng dụng nạp trước tóm tắt và **dị ứng** của người mới vào hàng chờ qua điểm cuối gộp mới `GET /api/queue/prefetch` (một dòng nhật ký `queue-prefetch` kèm danh sách id). Điểm cuối này mở cho mọi vai trò, vì phụ tá cần số điện thoại để tìm khi mất mạng và mọi vai trò vốn đã xem được dị ứng. Nó chỉ trả người đang chờ hoặc đang khám hôm nay, kể cả khi hỏi đích danh người khác. Tìm ngoại tuyến giải mã bộ đệm (vài trăm người là cùng) vào bộ nhớ rồi lọc bằng `classifyQuery` + `foldName`: tên không dấu theo tiền tố từng từ, số điện thoại, 4 số cuối. **Không có chỉ mục tên dạng rõ trên đĩa.** CCCD không tìm được ngoại tuyến (máy khách chỉ có CCCD đã che), trừ bệnh nhân tạo trên máy này. Bộ đệm ngày cũ bị dọn khi mở ứng dụng. Ô tìm ghi "Mất mạng: chỉ tìm trong N hồ sơ trên máy này" và giữ quy tắc kết quả cũ bị mờ (bài học 1 của M0-S1).
 
 *An toàn:* mở hồ sơ ngoại tuyến của người **chưa có dữ liệu dị ứng trên máy** sinh phát hiện mới `allergy-unknown`, mức "xác nhận kèm lý do" như `no-birthdate`: bác sĩ phải hỏi bệnh nhân rồi xác nhận mới ký được; yêu cầu hoàn tất báo cờ này để máy chủ lưu xác nhận cùng đơn. Máy chủ chạy lại quy tắc với dị ứng thật khi đồng bộ (OFF-7).
 
@@ -499,7 +499,7 @@ Mục phụ thuộc vào một mục "cần xử lý" được giữ lại ("ch�
 
 *Loại:* "người gửi sau thắng" (âm thầm ghi đè); máy chủ tự nhận đơn vi phạm quy tắc (không ai biết có dị ứng mới).
 
-**Thay đổi ở BFF** (mọi trường mới đều tùy chọn, không trường nào nới quyền; giữ `failedEntries`, tenant từ phiên, nhật ký không có dữ liệu bệnh nhân, ghi nhật ký trước khi trả dữ liệu): `POST /api/queue` thêm `arrivedAt`, `proposedNumber`; `POST /api/visits/:id/open` thêm `openedAt`; `POST /api/visits/:id/complete` thêm `clientTimes` và cờ `allergiesUnknown`, mã đơn theo ngày của `signedAt`; mới `GET /api/queue/prefetch` (bác sĩ, chủ); mới `POST /api/prescriptions/:id/printed` (ghi nhật ký lần in ngoại tuyến); số đo tách nguồn `server`/`client`.
+**Thay đổi ở BFF** (mọi trường mới đều tùy chọn, không trường nào nới quyền; giữ `failedEntries`, tenant từ phiên, nhật ký không có dữ liệu bệnh nhân, ghi nhật ký trước khi trả dữ liệu): `POST /api/queue` thêm `arrivedAt`, `proposedNumber`; `POST /api/visits/:id/open` thêm `openedAt`; `POST /api/visits/:id/complete` thêm `clientTimes` và cờ `allergiesUnknown`, mã đơn theo ngày của `signedAt`; mới `GET /api/queue/prefetch` (mọi vai trò, chỉ người trong hàng chờ hôm nay); mới `POST /api/prescriptions/:id/printed` (ghi nhật ký lần in ngoại tuyến); số đo tách nguồn `server`/`client`/`client-invalid`; dòng nhật ký của thao tác làm lúc mất mạng có `queryKind: 'offline'` và `clientTs` (giờ máy khách khai).
 
 **Cách đo M0-2 (chi tiết hóa đoạn "Cách đo" ở trên).**
 
@@ -525,7 +525,18 @@ Lát 2 xong:
 - Đột biến thử: ghi dạng rõ, IV cố định, bỏ AAD, bỏ chạy lần lượt, đăng xuất chỉ đóng kho, khóa xuất được, tab sau ghi đè khóa. Mỗi cái làm một bài đỏ; "ghi dạng rõ" làm đỏ cả bài e2e. Bài "hai tab cùng mở" ban đầu không bắt được việc ghi đè khóa; đã viết lại cho tất định (tab kia ghi nháp đúng lúc tab này sinh khóa).
 - Cái giá: gói JS 343 → 447 KB, nén 109 → 144 KB [Đã đo]; gần như toàn bộ phần tăng là Dexie. Nếu cần nhẹ hơn, `idb` (khoảng 1 KB) thay được vì kho chỉ dùng đọc/ghi theo khóa.
 
-Còn lại cho lát 3: lần in ngoại tuyến chưa có dòng nhật ký `prescription-print`. Trang in có nhãn "ký khi mất mạng" mới được kiểm qua kiểm thử đơn vị; kiểm PDF một trang A5 cho trang này làm khi ký ngoại tuyến chạy được qua giao diện.
+Lát 3a xong (BFF, chưa nối vào giao diện):
+- `POST /api/queue` nhận `arrivedAt` và `proposedNumber`. Ngày của lượt khám tính theo giờ đến. Số tạm được giữ nếu còn trống, đã có người lấy thì cấp số kế tiếp; số tạm vượt quá số kế tiếp bị bỏ qua để không tạo lỗ hổng trong dãy số.
+- `POST /api/visits/:id/open` nhận `openedAt`; mốc mở được gắn nguồn `client`.
+- `POST /api/visits/:id/complete` nhận `clientTimes` và `allergiesUnknown`. Mã đơn, tuổi và mọi mốc thời gian của bản ghi lấy theo giờ ký của máy khách. Thời gian phiên khám đo bằng hàm thuần `measureVisit` (gói `clinical`); giờ không hợp lý thì vẫn lưu, gắn cờ `client-invalid` và đếm riêng ở số đo.
+- Hai điểm cuối mới: `GET /api/queue/prefetch` và `POST /api/prescriptions/:id/printed`.
+- Quy tắc mới `allergy-unknown` trong gói `rules`. Máy chủ vẫn chạy kiểm tra dị ứng thật kể cả khi máy khách khai "chưa rõ dị ứng".
+- Trang "Thời gian khám" có thêm cột "Đo ở máy khám" và "Giờ không hợp lý". Nhật ký truy cập ghi rõ thao tác làm lúc mất mạng và giờ theo máy khách.
+- Kiểm thử: 12 bài đơn vị BFF mới, 5 bài `clinical`, 2 bài quy tắc, 6 bài tích hợp trên Medplum thật (giữ số tạm, ngày theo giờ đến, ký lúc mất mạng rồi gửi lại không trùng, giờ không hợp lý, nạp trước, ghi nhận in). Các bài tích hợp đặt trong tệp có sẵn để không thêm lần đăng nhập quản trị.
+- Đột biến thử (9): mã đơn theo giờ máy chủ, bỏ cờ chưa rõ dị ứng, ghi dòng in không kiểm đơn, nhận giờ đến ở tương lai, bỏ so với khoảng máy chủ thấy, đo cả giờ ký ở tương lai, nhận số tạm vượt số kế tiếp, kho bỏ giờ máy khách, nạp trước cả người đã khám xong. Mỗi đột biến làm ít nhất một bài đỏ. Bài "nạp trước không có người đã khám xong" ban đầu dựa vào kết quả của bài trước nên đúng một cách vô nghĩa khi bài trước hỏng; đã sửa cho độc lập.
+- `infra/dev-up.sh`: sau khi sandbox khởi động lại, tệp `/var/run/docker.pid` cũ làm `dockerd` từ chối chạy. Script nay xóa tệp đó khi không còn `dockerd` nào.
+
+Còn lại cho lát 3b: giao diện chưa gọi các trường và điểm cuối mới; lần in ngoại tuyến chưa có dòng nhật ký cho tới khi hàng đợi gửi `printed`. Trang in có nhãn "ký khi mất mạng" mới được kiểm qua kiểm thử đơn vị; kiểm PDF một trang A5 cho trang này làm khi ký ngoại tuyến chạy được qua giao diện.
 
 **Quyết định của chủ dự án (02/10/2026):**
 

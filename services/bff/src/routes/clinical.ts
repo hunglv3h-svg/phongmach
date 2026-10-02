@@ -5,6 +5,7 @@ import {
   SPECIALTIES,
   addDays,
   makePrescriptionCode,
+  plausibleClientTime,
   sortQueue,
   toDisplayBoard,
   toRuleAllergy,
@@ -23,6 +24,8 @@ import { ALL_ROLES, CLINICAL_ROLES, type RouteContext } from './context.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const num = z.number().finite();
+/** Giờ do máy khách gửi (thao tác làm lúc mất mạng): ISO 8601 có múi giờ. */
+const clientTime = z.iso.datetime({ offset: true });
 
 const idParams = z.object({ id: z.string().regex(UUID_RE) });
 const patientParams = z.object({ id: z.string().regex(UUID_RE) });
@@ -34,7 +37,13 @@ const checkInBody = z.object({
   specialty: z.enum(SPECIALTIES as [string, ...string[]]),
   priority: z.enum(PRIORITIES as [string, ...string[]]).default('normal'),
   reason: z.string().max(200).optional(),
+  // Cấp số lúc mất mạng (OFF-2): giờ đến theo máy khách và số tạm đã báo cho bệnh nhân.
+  arrivedAt: clientTime.optional(),
+  proposedNumber: z.number().int().min(1).max(999).optional(),
 });
+
+/** Mở hồ sơ lúc mất mạng (OFF-3): mốc mở theo máy khách. Không có body là mở bình thường. */
+const openBody = z.object({ openedAt: clientTime.optional() }).default({});
 
 const completeBody = z.object({
   clientUuid: z.uuid(),
@@ -66,6 +75,10 @@ const completeBody = z.object({
       acknowledgements: z.array(z.object({ key: z.string().max(200), reason: z.string().max(300) })).max(30).default([]),
     })
     .optional(),
+  // Mở hoặc ký lúc mất mạng (OFF-3): cả hai mốc theo đồng hồ máy khách.
+  clientTimes: z.object({ openedAt: clientTime, signedAt: clientTime }).optional(),
+  // Máy không có dữ liệu dị ứng lúc ký (OFF-4): máy chủ đòi xác nhận 'allergy-unknown' như máy khách đã đòi.
+  allergiesUnknown: z.boolean().optional(),
 });
 
 const allergyBody = z.object({ clientUuid: z.uuid(), kind: z.enum(['class', 'ingredient']), value: z.string().min(1).max(100), label: z.string().max(100).optional() });
@@ -75,6 +88,8 @@ const simBody = z.object({ mode: z.enum(['up', 'down']).optional(), failNext: z.
 const metricsQuery = z.object({ days: z.coerce.number().int().min(1).max(90).default(14) });
 const visitsQuery = z.object({ limit: z.coerce.number().int().min(1).max(50).default(10) });
 const pendingQuery = z.object({ limit: z.coerce.number().int().min(1).max(100).default(50) });
+const prefetchQuery = z.object({ patients: z.string().max(4000).optional() });
+const printedBody = z.object({ printedAt: clientTime.optional() }).default({});
 
 const doctorOf = (ctx: RouteContext, req: { session?: { userId: string; userName: string } }): Doctor => {
   const s = req.session!;
@@ -94,10 +109,21 @@ export function registerClinicalRoutes(api: FastifyInstance, ctx: RouteContext):
   });
 
   api.post('/api/queue', { preHandler: ctx.guard('check-in', ...ALL_ROLES) }, async (req, reply) => {
-    const body = checkInBody.parse(req.body);
-    const result = await (await ctx.store(req)).checkIn({ ...body, specialty: body.specialty as 'noi' | 'nhi', priority: body.priority as 'normal' | 'appointment' | 'urgent' }, ctx.now());
+    const { arrivedAt, proposedNumber, ...body } = checkInBody.parse(req.body);
+    const now = ctx.now();
+    // Giờ đến ở tương lai (đồng hồ máy khách chạy nhanh) thì dùng giờ máy chủ.
+    const arrived = plausibleClientTime(arrivedAt, now);
+    const result = await (await ctx.store(req)).checkIn(
+      { ...body, specialty: body.specialty as 'noi' | 'nhi', priority: body.priority as 'normal' | 'appointment' | 'urgent' },
+      now,
+      { arrivedAt: arrived, proposedNumber }
+    );
     if (!result) return reply.code(404).send({ error: 'not-found' });
-    await ctx.record(req, 'check-in', { resourceIds: [result.item.patientId, result.item.id], resultCount: result.created ? 1 : 0 });
+    await ctx.record(req, 'check-in', {
+      resourceIds: [result.item.patientId, result.item.id],
+      resultCount: result.created ? 1 : 0,
+      ...(arrivedAt ? { queryKind: 'offline', clientTs: arrivedAt } : {}),
+    });
     return reply.code(result.created ? 201 : 200).send(result);
   });
 
@@ -108,6 +134,16 @@ export function registerClinicalRoutes(api: FastifyInstance, ctx: RouteContext):
     if (outcome === 'not-waiting') return reply.code(409).send({ error: 'not-waiting', message: 'Chỉ hủy được lượt đang chờ' });
     await ctx.record(req, 'queue-cancel', { resourceIds: [id] });
     return { ok: true };
+  });
+
+  // Nạp trước cho lúc mất mạng (OFF-4): tóm tắt và dị ứng của người đang chờ hoặc đang khám hôm nay, không ai khác.
+  api.get('/api/queue/prefetch', { preHandler: ctx.guard('queue-prefetch', ...ALL_ROLES) }, async (req) => {
+    const { patients } = prefetchQuery.parse(req.query);
+    const ids = patients?.split(',').filter((id) => UUID_RE.test(id));
+    const day = vnDay(ctx.now());
+    const result = await (await ctx.store(req)).prefetchQueue(day, ids);
+    await ctx.record(req, 'queue-prefetch', { resultCount: result.length, resourceIds: result.map((r) => r.patient.id) });
+    return { day, patients: result };
   });
 
   // Màn hình chờ: chỉ số thứ tự và chữ cái đầu. Không ghi nhật ký từng lần (tải lại mỗi vài giây) vì không có dữ liệu cá nhân đầy đủ.
@@ -121,11 +157,13 @@ export function registerClinicalRoutes(api: FastifyInstance, ctx: RouteContext):
 
   api.post('/api/visits/:id/open', { preHandler: ctx.guard('visit-open', ...CLINICAL_ROLES) }, async (req, reply) => {
     const { id } = idParams.parse(req.params);
-    const result = await (await ctx.store(req)).openVisit(id, doctorOf(ctx, req), ctx.now());
+    const { openedAt } = openBody.parse(req.body ?? {});
+    const now = ctx.now();
+    const result = await (await ctx.store(req)).openVisit(id, doctorOf(ctx, req), now, plausibleClientTime(openedAt, now));
     if (result.kind === 'not-found') return reply.code(404).send({ error: 'not-found' });
     if (result.kind === 'closed') return reply.code(409).send({ error: 'closed', message: 'Lượt khám đã kết thúc hoặc đã hủy' });
     if (result.kind === 'taken') return reply.code(409).send({ error: 'taken', message: `Hồ sơ đang do ${result.doctorName ?? 'người khác'} khám` });
-    await ctx.record(req, 'visit-open', { resourceIds: [result.context.patient.id, id] });
+    await ctx.record(req, 'visit-open', { resourceIds: [result.context.patient.id, id], ...(openedAt ? { queryKind: 'offline', clientTs: openedAt } : {}) });
     return result.context;
   });
 
@@ -142,6 +180,9 @@ export function registerClinicalRoutes(api: FastifyInstance, ctx: RouteContext):
     const body = completeBody.parse(req.body);
     const store = await ctx.store(req);
     const now = ctx.now();
+    // Ký lúc mất mạng: giờ ký của máy khách là giờ trên tờ đơn đã in, nên mã đơn và tuổi tính theo giờ đó (OFF-1, OFF-3).
+    const signedAt = body.clientTimes ? new Date(body.clientTimes.signedAt) : now;
+    const offline = body.clientTimes ? { queryKind: 'offline', clientTs: body.clientTimes.signedAt } : {};
     const context = await store.readVisit(id);
     if (!context) return reply.code(404).send({ error: 'not-found' });
 
@@ -162,15 +203,16 @@ export function registerClinicalRoutes(api: FastifyInstance, ctx: RouteContext):
         lines,
         {
           specialty: context.visit.specialty,
-          patient: { ageYears: ageInYears(context.patient.birthDate, now), hasCccd: !!context.patient.cccdMasked, weightKg: body.exam.vitals.weightKg },
+          patient: { ageYears: ageInYears(context.patient.birthDate, signedAt), hasCccd: !!context.patient.cccdMasked, weightKg: body.exam.vitals.weightKg },
           allergies: context.allergies.map(toRuleAllergy),
+          allergiesKnown: !body.allergiesUnknown,
           diagnoses: diagnoses.map((d) => d.code),
         },
         ctx.rules
       );
       const verdict = judge(findings, body.prescription.acknowledgements);
       if (!verdict.canSign) {
-        await ctx.record(req, 'visit-complete', { outcome: 'denied', resourceIds: [context.patient.id, id] });
+        await ctx.record(req, 'visit-complete', { outcome: 'denied', resourceIds: [context.patient.id, id], ...offline });
         return reply.code(422).send({ error: 'rules-not-satisfied', blocking: verdict.blocking, unacknowledged: verdict.unacknowledged });
       }
       const signed: SignedLine[] = lines.map((input) => {
@@ -180,7 +222,7 @@ export function registerClinicalRoutes(api: FastifyInstance, ctx: RouteContext):
       // Mã đơn sinh xác định từ clientUuid: gửi lại sau lỗi giữa chừng cho đúng cùng một mã.
       const bytes = createHash('sha256').update(body.clientUuid.toLowerCase()).digest();
       prescription = {
-        code: makePrescriptionCode(vnDay(now), bytes),
+        code: makePrescriptionCode(vnDay(signedAt), bytes),
         lines: signed,
         advice: body.prescription.advice,
         followUpDays: body.prescription.followUpDays,
@@ -189,17 +231,17 @@ export function registerClinicalRoutes(api: FastifyInstance, ctx: RouteContext):
       };
     }
 
-    const result = await store.completeVisit({ clientUuid: body.clientUuid, encounterId: id, doctor: doctorOf(ctx, req), now, exam: body.exam, diagnoses, prescription });
+    const result = await store.completeVisit({ clientUuid: body.clientUuid, encounterId: id, doctor: doctorOf(ctx, req), now, clientTimes: body.clientTimes, exam: body.exam, diagnoses, prescription });
     if (result.kind === 'not-found') return reply.code(404).send({ error: 'not-found' });
     if (result.kind === 'not-open') return reply.code(409).send({ error: 'not-open', message: 'Chưa mở hồ sơ hoặc hồ sơ do người khác khám' });
     if (result.kind === 'already-closed') return reply.code(409).send({ error: 'already-closed', message: 'Lượt khám đã được kết thúc' });
     if (result.kind === 'incomplete') {
       // Ghi dở: một số mục lỗi. Báo lỗi tạm thời; gửi lại cùng clientUuid sẽ hoàn tất mà không tạo bản ghi trùng.
       req.log.warn({ failed: result.failed.map((f) => ({ i: f.index, s: f.status })) }, 'hoàn tất lượt khám ghi dở');
-      await ctx.record(req, 'visit-complete', { outcome: 'error', resourceIds: [context.patient.id, id] });
+      await ctx.record(req, 'visit-complete', { outcome: 'error', resourceIds: [context.patient.id, id], ...offline });
       return reply.code(503).send({ error: 'incomplete', retry: true, message: 'Lưu chưa trọn vẹn, hãy bấm lại: dữ liệu sẽ không bị trùng.' });
     }
-    await ctx.record(req, 'visit-complete', { resourceIds: [context.patient.id, id], resultCount: result.visit.prescription?.lines.length ?? 0 });
+    await ctx.record(req, 'visit-complete', { resourceIds: [context.patient.id, id], resultCount: result.visit.prescription?.lines.length ?? 0, ...offline });
     return reply.code(result.replayed ? 200 : 201).send({ visit: result.visit, prescription: result.visit.prescription, replayed: result.replayed });
   });
 
@@ -292,6 +334,16 @@ export function registerClinicalRoutes(api: FastifyInstance, ctx: RouteContext):
     const html = await renderPrescriptionHtml(detail, clinic.name);
     await ctx.record(req, 'prescription-print', { resourceIds: [detail.prescription.patientId, id] });
     return reply.type('text/html; charset=utf-8').send(html);
+  });
+
+  // Ghi nhật ký một lần in làm lúc mất mạng (trình duyệt in từ dữ liệu trên máy, không qua /print).
+  api.post('/api/prescriptions/:id/printed', { preHandler: ctx.guard('prescription-print', ...ALL_ROLES) }, async (req, reply) => {
+    const { id } = idParams.parse(req.params);
+    const { printedAt } = printedBody.parse(req.body ?? {});
+    const detail = await (await ctx.store(req)).readPrescription(id);
+    if (!detail) return reply.code(404).send({ error: 'not-found' });
+    await ctx.record(req, 'prescription-print', { resourceIds: [detail.prescription.patientId, id], queryKind: 'offline', ...(printedAt ? { clientTs: printedAt } : {}) });
+    return { ok: true };
   });
 
   api.post('/api/prescriptions/:id/retry', { preHandler: ctx.guard('prescription-retry', ...CLINICAL_ROLES) }, async (req, reply) => {
