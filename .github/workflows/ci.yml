@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Kiểu, kiểm thử đơn vị, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+  integration:
+    name: Kiểm thử tích hợp với Medplum thật
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Dựng Medplum (PostgreSQL, Redis, server)
+        run: |
+          node infra/medplum/setup.mjs
+          docker compose -f infra/medplum/docker-compose.yml up -d
+      - name: Chờ Medplum sẵn sàng
+        run: curl --silent --fail --retry 60 --retry-delay 3 --retry-connrefused --retry-all-errors http://localhost:8103/healthcheck
+      - run: pnpm --filter @phongmach/bff test:integration
+      - name: Nhật ký Medplum khi lỗi
+        if: failure()
+        run: docker compose -f infra/medplum/docker-compose.yml logs --tail 200 medplum-server
+
+  e2e:
+    name: Giao diện đầu-cuối (Chromium) trên Medplum thật
+    runs-on: ubuntu-latest
+    env:
+      E2E_URL: http://127.0.0.1:4173
+      CHROMIUM_PATH: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Dựng Medplum (PostgreSQL, Redis, server)
+        run: |
+          node infra/medplum/setup.mjs
+          docker compose -f infra/medplum/docker-compose.yml up -d
+      - name: Chờ Medplum sẵn sàng
+        run: curl --silent --fail --retry 60 --retry-delay 3 --retry-connrefused --retry-all-errors http://localhost:8103/healthcheck
+      - name: Nạp dữ liệu demo (hai phòng khám, dị ứng, tiền sử, lượt khám cũ)
+        run: pnpm seed
+        env:
+          SEED_PATIENTS: '5'
+      - name: Chạy BFF (thử lại nhanh để bước chèn lỗi cổng không chờ lâu) và bản build của giao diện
+        run: |
+          pnpm --filter @phongmach/clinic-web build
+          (cd services/bff && DEMO_AUTH=1 OUTBOX_BASE_MS=500 OUTBOX_CAP_MS=2000 nohup pnpm start > "$RUNNER_TEMP/bff.log" 2>&1 &)
+          (cd apps/clinic-web && nohup pnpm preview --host 127.0.0.1 > "$RUNNER_TEMP/web.log" 2>&1 &)
+          curl --silent --fail --retry 30 --retry-delay 2 --retry-connrefused --retry-all-errors http://127.0.0.1:8110/api/health
+          curl --silent --fail --retry 30 --retry-delay 2 --retry-connrefused --retry-all-errors http://127.0.0.1:4173/
+      - run: pnpm --filter @phongmach/clinic-web e2e
+      - run: pnpm --filter @phongmach/clinic-web e2e:visit
+      - name: Ảnh chụp màn hình
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: apps/clinic-web/e2e/screenshots/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Nhật ký BFF và Medplum khi lỗi
+        if: failure()
+        run: |
+          tail -n 100 "$RUNNER_TEMP/bff.log" || true
+          docker compose -f infra/medplum/docker-compose.yml logs --tail 100 medplum-server

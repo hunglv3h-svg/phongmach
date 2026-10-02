@@ -1,0 +1,24 @@
+{
+  "name": "@phongmach/rules",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Quy tắc kê đơn (T-RULE): hàm thuần, dùng chung cho giao diện (cảnh báo ngay khi gõ) và BFF (kiểm tra lại khi ký)",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@phongmach/catalogs": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.0",
+    "vitest": "^5.0.0"
+  }
+}

@@ -1,0 +1,4 @@
+# Bí mật và cấu hình sinh ra bởi setup.mjs — không commit
+.env
+config/
+experiments/.bench-state.json

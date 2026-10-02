@@ -1,0 +1,34 @@
+{
+  "name": "@phongmach/bff",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "BFF / Domain API: lớp duy nhất gọi Medplum. Giải tenant từ phiên, không từ tham số.",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "seed": "tsx scripts/seed-demo.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run test/unit",
+    "test:integration": "vitest run test/integration"
+  },
+  "dependencies": {
+    "@medplum/core": "5.2.0",
+    "@medplum/fhirtypes": "5.2.0",
+    "@phongmach/catalogs": "workspace:*",
+    "@phongmach/clinical": "workspace:*",
+    "@phongmach/fhir-vn-model": "workspace:*",
+    "@phongmach/rules": "workspace:*",
+    "fastify": "^5.0.0",
+    "jose": "^6.0.0",
+    "qrcode": "^1.5.4",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/qrcode": "^1.5.5",
+    "tsx": "^4.0.0",
+    "typescript": "^6.0.0",
+    "vitest": "^5.0.0"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "@phongmach/clinical",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Hàng chờ, khám, đơn thuốc và hàng đợi gửi cổng trên FHIR R4: dựng tài nguyên, đọc ngược thành mô hình hiển thị, kiểu dùng chung cho BFF và giao diện",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@medplum/fhirtypes": "5.2.0",
+    "@phongmach/catalogs": "workspace:*",
+    "@phongmach/fhir-vn-model": "workspace:*",
+    "@phongmach/rules": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.0",
+    "vitest": "^5.0.0"
+  }
+}
