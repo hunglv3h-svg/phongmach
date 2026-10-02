@@ -1,0 +1,24 @@
+{
+  "name": "@phongmach/catalogs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Danh mục minh họa cho M0: ICD-10, thuốc, đơn mẫu. KHÔNG phải danh mục chính thức và chưa được duyệt y khoa.",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@phongmach/fhir-vn-model": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.0",
+    "vitest": "^5.0.0"
+  }
+}
