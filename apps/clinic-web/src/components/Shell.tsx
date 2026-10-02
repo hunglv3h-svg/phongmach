@@ -77,7 +77,8 @@ export function Shell({ auth, store, onLogout }: { auth: AuthState; store: Local
           </section>
         </div>
       )}
-      <SyncNotices notices={overview.notices} onDismiss={overview.dismiss} onOpenList={() => setListOpen(true)} />
+      {/* Màn hình chờ đặt ở nơi công cộng và chỉ có số thứ tự với chữ cái đầu: không hiện thông báo (có họ tên bệnh nhân) ở đó. Huy hiệu ở thanh trên vẫn còn. */}
+      {screen !== 'display' && <SyncNotices notices={overview.notices} onDismiss={overview.dismiss} onOpenList={() => setListOpen(true)} />}
       {listOpen && <SyncPanel view={overview.view} rows={overview.rows} actions={actions} onClose={() => setListOpen(false)} />}
       {screen === 'reception' && <Reception token={auth.token} />}
       {screen === 'queue' && <Queue auth={auth} onOpenVisit={(opened) => { setVisit(opened); setScreen('visit'); }} />}

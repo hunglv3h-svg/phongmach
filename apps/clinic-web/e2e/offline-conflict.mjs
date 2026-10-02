@@ -283,8 +283,16 @@ try {
   assert.ok(!conflictVisits.some((v) => v.prescription?.code === conflictCode), 'máy chủ không có đơn của bác sĩ cho lượt này');
   ok('"Đồng bộ ngay" không gửi lại mục xung đột; in lại từ máy vẫn được (nhãn "KÝ KHI MẤT MẠNG"); máy chủ không nhận lần hoàn tất nào của bác sĩ');
 
-  // Tắt thông báo: thông báo mất, huy hiệu "cần xử lý" vẫn còn.
+  // Màn hình chờ (đặt nơi công cộng) không hiện thông báo có họ tên bệnh nhân; huy hiệu thì vẫn còn.
   await list.getByTestId('sync-list-close').click();
+  await A.page.getByTestId('tab-display').click();
+  await A.page.getByTestId('display').waitFor();
+  assert.equal(await A.page.locator('[data-testid="sync-notice"]').count(), 0, 'màn hình chờ không hiện thông báo đồng bộ');
+  assert.ok(!(await A.page.getByTestId('display').innerText()).includes('Xung Đột'), 'màn hình chờ không có họ tên');
+  await A.page.getByTestId('attention-badge').waitFor();
+  await A.page.getByTestId('tab-queue').click();
+  // Tắt thông báo: thông báo mất, huy hiệu "cần xử lý" vẫn còn.
+  await notice.waitFor();
   await notice.getByTestId('sync-notice-dismiss').click();
   assert.equal(await A.page.locator('[data-testid="sync-notice"]').count(), 0);
   assert.match(await A.page.getByTestId('attention-badge').innerText(), /4 cần xử lý/);
@@ -297,7 +305,7 @@ try {
   await status(A, { pending: 4, attention: 4 });
   await A.page.getByTestId('attention-badge').waitFor();
   assert.equal(await A.page.locator('[data-testid="sync-notice"]').count(), 0);
-  ok('tắt thông báo không tắt được huy hiệu "4 cần xử lý"; tải lại trang các mục vẫn còn; đọc thẳng IndexedDB không thấy tên bệnh nhân, thuốc hay thông điệp lỗi ở dạng rõ');
+  ok('màn hình chờ không hiện thông báo có họ tên; tắt thông báo không tắt được huy hiệu "4 cần xử lý"; tải lại trang các mục vẫn còn; IndexedDB không có tên bệnh nhân, thuốc hay thông điệp lỗi ở dạng rõ');
 
   // ================================================================================================== 401: hết phiên
   A.expected = /status of 401/;

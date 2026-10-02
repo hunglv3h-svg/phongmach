@@ -708,7 +708,7 @@ Lát 4 tách làm hai commit. **Lát 4-1 xong** (hàm thuần, chỉ báo, danh 
   - Đọc thẳng IndexedDB ở cả hai kịch bản: không có tên bệnh nhân, thuốc, thông điệp lỗi của máy chủ hay lý do xác nhận ở dạng rõ. Bất biến của hàng rào in (F12) đúng cho cả lần in lại từ danh sách.
 - Đột biến thử lát 4 trên mã cuối:
   - 45 đột biến qua kiểm thử đơn vị (23 của lát 4-1 chạy lại, 22 mới), mỗi cái làm ít nhất một bài đỏ. Nhóm mới: xác nhận sinh `clientUuid` mới (2 cách); xác nhận không kèm lý do; gửi lại khi lý do chưa đủ; xác nhận cả đơn có lỗi chặn; gọi `discard` từ danh sách (3 cách); thêm nút "Bỏ qua"; nút gửi lại không khóa; mất dòng "đơn đã in"; huy hiệu ẩn khi tắt thông báo; tắt thông báo làm mất dòng; tắt một tắt hết; in lại không ghi nhận, không nhãn, không phụ thuộc mục ký; dọn đơn ngày cũ (3 cách); thứ tự hiện; thông báo không có nút tắt.
-  - 9 đột biến qua bài e2e hai máy (bản dev), mỗi cái làm bài đỏ ở một bước: huy hiệu ẩn khi tắt thông báo (đột biến ở khung ứng dụng, nơi kiểm thử đơn vị không tới; đỏ ở bước 6); xác nhận sinh `clientUuid` mới (bước 11); thêm nút xóa (bước 4); mất dòng "Phiên đã hết hạn" (bước 7); không hiện "bị giữ" (bước 4); 409 được gửi lại (bước 3); "Đồng bộ ngay" xóa thẳng mục xung đột khỏi kho (bước 5); 409 biến mất khỏi danh sách (bước 4); nhãn hiển thị ghi ra đĩa ở dạng rõ (bước 6).
+  - 10 đột biến qua bài e2e hai máy (bản dev), mỗi cái làm bài đỏ ở một bước: thông báo có họ tên hiện cả ở màn hình chờ (bước 6); huy hiệu ẩn khi tắt thông báo (đột biến ở khung ứng dụng, nơi kiểm thử đơn vị không tới; đỏ ở bước 6); xác nhận sinh `clientUuid` mới (bước 11); thêm nút xóa (bước 4); mất dòng "Phiên đã hết hạn" (bước 7); không hiện "bị giữ" (bước 4); 409 được gửi lại (bước 3); "Đồng bộ ngay" xóa thẳng mục xung đột khỏi kho (bước 5); 409 biến mất khỏi danh sách (bước 4); nhãn hiển thị ghi ra đĩa ở dạng rõ (bước 6).
   - Hai đột biến lúc đầu không đỏ, cả hai do chính đột biến:
     - Một cái viết sai cú pháp JSX (tệp không dịch được, 0 bài chạy). Script đột biến coi đó là "không đỏ"; đã viết lại và chạy lại.
     - Đột biến e2e "Đồng bộ ngay gọi `discard` cho mọi mục" qua cả 12 bước. Lý do: `discard` của bộ máy từ chối bỏ mục còn có mục phụ thuộc, mà trong kịch bản e2e mục bị từ chối nào cũng có mục phụ thuộc, nên đột biến không đổi hành vi. Kiểm thử đơn vị vẫn bắt được nó (ở đó có một mục lỗi không có mục phụ thuộc). Đã thay bằng đột biến xóa thẳng khỏi kho, đỏ ở bước 5.
@@ -717,8 +717,9 @@ Lát 4 tách làm hai commit. **Lát 4-1 xong** (hàm thuần, chỉ báo, danh 
   1. Nút in lại ở danh sách chỉ có ở mục ký mà máy còn giữ bản đơn. Mỗi lần in lại thêm một mục ghi nhận in, nên con số "cần xử lý" tăng theo số lần in lại khi mục ký đang bị giữ.
   2. Kịch bản 401 của e2e giả lập phản hồi 401 bằng `page.route`; token thật vẫn còn hạn. Hết hạn thật sau 480 phút [Chưa đo].
   3. Thông báo đã tắt giữ theo phiên trình duyệt (`sessionStorage`): mở tab mới thì thông báo hiện lại. Mục bị từ chối lần nữa là sự việc mới và được báo lại.
-  4. Đơn 422 có lỗi chặn không có đường xử lý trong M0 ngoài việc liên hệ bệnh nhân và kê lại; mục nằm lại trong danh sách. Cùng loại với giải quyết xung đột: ngoài phạm vi M0.
-  5. Lát này không sửa BFF.
+  4. Thông báo có họ tên bệnh nhân, nên không hiện ở tab "Màn hình chờ" (màn hình đặt nơi công cộng, chỉ có số thứ tự và chữ cái đầu). Huy hiệu ở thanh trên vẫn còn. Bài e2e kiểm điều này; gỡ điều kiện thì bài đỏ ở bước 6.
+  5. Đơn 422 có lỗi chặn không có đường xử lý trong M0 ngoài việc liên hệ bệnh nhân và kê lại; mục nằm lại trong danh sách. Cùng loại với giải quyết xung đột: ngoài phạm vi M0.
+  6. Lát này không sửa BFF.
 - Gói JS 506 → 510 KB, nén 162 → 163 KB [Đã đo, bản build].
 - Máy dev lần này là Windows (Git Bash), không phải sandbox Linux như các lát trước:
   - `infra/dev-up.sh` không chạy được nguyên trạng (không có `setsid`); đã dựng tay theo đúng các bước của script.
