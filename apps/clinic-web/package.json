@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Ứng dụng phòng khám (PWA): tiếp đón, hàng chờ, khám một trang, kê đơn, in, liên thông (mô phỏng).",
+  "description": "Ứng dụng phòng khám (PWA): tiếp đón, hàng chờ, khám một trang, kê đơn, in, liên thông (mô phỏng); ngoại tuyến trên từng máy (kho mã hóa, hàng đợi đồng bộ).",
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json && vite build",

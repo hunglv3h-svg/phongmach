@@ -29,7 +29,8 @@ export default defineConfig(({ mode }) => {
           ],
         },
         workbox: {
-          // Chỉ lưu vỏ ứng dụng. KHÔNG lưu phản hồi /api (có dữ liệu bệnh nhân): bộ nhớ ngoại tuyến có mã hóa là việc của M0-S3.
+          // Chỉ lưu vỏ ứng dụng. KHÔNG lưu phản hồi /api (có dữ liệu bệnh nhân): dữ liệu dùng khi mất mạng nằm trong kho mã hóa trên máy
+          // (`src/local/store.ts`), không đi qua service worker.
           navigateFallback: '/index.html',
           navigateFallbackDenylist: [/^\/api\//],
           globPatterns: ['**/*.{js,css,html,png}'],

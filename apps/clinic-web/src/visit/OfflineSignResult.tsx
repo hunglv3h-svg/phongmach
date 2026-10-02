@@ -11,7 +11,7 @@ type SyncView = { status: 'pending' | 'done' | 'conflict' | 'rules' | 'error' | 
 
 /**
  * Kết quả ký khi mất mạng: đơn đã lưu bền trên máy và đã in từ dữ liệu trên máy (nhãn "KÝ KHI MẤT MẠNG").
- * Theo dõi mục hoàn tất trong hàng đợi: chờ đồng bộ → đã đồng bộ, hoặc cần xử lý (OFF-7). Danh sách đầy đủ ở lát 4.
+ * Theo dõi mục hoàn tất trong hàng đợi: chờ đồng bộ → đã đồng bộ, hoặc cần xử lý (OFF-7). Danh sách đầy đủ: `components/SyncPanel.tsx`.
  */
 export function OfflineSignResult({ result, onBack }: { result: Extract<SignOutcome, { kind: 'offline' }>; onBack: () => void }) {
   const { client, sync, online } = useOffline();
