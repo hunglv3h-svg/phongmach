@@ -8,6 +8,7 @@ Cập nhật 02/10/2026 (lần 3). Dựa trên ba nguồn:
 
 **Quyết định của chủ dự án (02/10/2026):** làm sớm và cắt phạm vi; nhiệm vụ là ra MVP nhanh để nhà đầu tư được thuyết phục hơn.
 Hệ quả: mục 5 và 6 được viết lại quanh hai cột mốc MVP, **M0 (13/11/2026, trình nhà đầu tư)** và **M1 (31/03/2027, pilot)**.
+Đội có sẵn từ 05/10 (xác nhận 02/10); **M0-S1 đã bắt đầu**, trạng thái ở mục 5.6.
 
 Quy ước độ tin cậy:
 
@@ -184,7 +185,7 @@ Kubernetes hai vùng. Những điều chỉnh bên dưới đều có bằng ch�
 
 | # | Điều chỉnh | Lý do |
 |---|---|---|
-| A1 | **Idempotency**: UUID do client sinh lưu thành `identifier` (ví dụ `urn:phongmach:client-uuid`), ghi bằng create có điều kiện (`If-None-Exist`), dùng transaction bundle có `urn:uuid:` để nối tham chiếu giữa các bản ghi tạo khi ngoại tuyến. Không dùng `PUT` theo id | Medplum từ chối `PUT` tạo mới theo id client (404); `If-None-Exist` đã thử, không tạo trùng |
+| A1 | **Idempotency**: UUID do client sinh lưu thành `identifier` (ví dụ `urn:phongmach:client-uuid`), ghi bằng create có điều kiện (`If-None-Exist`), dùng transaction bundle có `urn:uuid:` để nối tham chiếu giữa các bản ghi tạo khi ngoại tuyến. Không dùng `PUT` theo id | Medplum từ chối `PUT` tạo mới theo id client (404); `If-None-Exist` đã thử, không tạo trùng, kể cả khi 6 yêu cầu cùng `clientUuid` đến đồng thời qua BFF (9 lần chạy) |
 | A2 | **Gửi cổng không dựa vào "cùng giao dịch"**: ghi ý định gửi (outbox) trước → transaction bundle idempotent → worker gửi cổng idempotent theo mã đơn → **bộ quét đối soát** tìm MedicationRequest đã ký chưa có trạng thái liên thông. Subscription của Medplum chỉ là tín hiệu phụ, chưa kiểm chứng | Ghi kép giữa Medplum và DB của BFF |
 | A3 | **Nhật ký hai tầng**: (a) nhật ký truy cập ở BFF, ghi đồng bộ, chi tiết theo "mở hồ sơ / tìm kiếm / xuất", lưu ra kho bất biến ngoài Medplum; (b) `saveAuditEvents` của Medplum chỉ cho ghi/sửa/xóa lâm sàng. Quyết định cuối sau khi đo ở T2 | Khối lượng đọc, tìm kiếm không có sự kiện, ghi không đợi, xóa tenant xóa nhật ký |
 | A4 | **Quy trình rời tenant** riêng: export tự viết (gồm Binary, loại bỏ `secret`), lưu nhật ký ra ngoài, xóa Binary và file riêng, rồi mới `$expunge`; tenant admin không có quyền `$expunge` | Mục 3.2 dòng 3–4 |
@@ -320,6 +321,34 @@ Tiêu chí M0-1 đến M0-6 (mục 5.3) là điều kiện để cuộc họp 13
 | 6 (09–13/11) | Tổng hợp; mô hình chi phí (T5); báo cáo T4; hạn TL34 Q10; backlog M1, tuyển bổ sung; gói bằng chứng | Ngoại tuyến hoàn chỉnh theo phạm vi M0 (M0-2); kịch bản 10 phút; nhãn "mô phỏng"; bản dự phòng; diễn tập hai lần; **họp quyết định đi/không đi 13/11** | Gói bằng chứng; biên bản quyết định; ngân sách chốt lại (±30% → ±15%) |
 
 Suốt giai đoạn: theo dõi văn bản pháp luật hàng tuần (rủi ro số một của cả hai tài liệu).
+
+### 5.6 Trạng thái M0-S1 (cập nhật 02/10/2026)
+
+M0-S1 (05–16/10) bắt đầu sớm hơn lịch vì đội đã sẵn sàng. Mã nằm ở `apps/`, `services/`, `packages/` (xem `README.md` gốc). Q14–Q16 chưa được trả lời riêng, nên đang áp dụng các mặc định đề xuất ở mục 5.2.
+
+| Hạng mục kế hoạch (tuần 1–2) | Trạng thái | Bằng chứng |
+|---|---|---|
+| Repo, CI, khung BFF và PWA | Xong, trừ việc CI chưa chạy trên GitHub | Monorepo pnpm; `.github/workflows/ci.yml` có hai job (kiểu + đơn vị + build; tích hợp với Medplum thật). Đã mô phỏng lại các lệnh của CI cục bộ |
+| Dữ liệu demo cho hai phòng khám (T-DEMO, một phần) | Xong | 2 phòng khám, mỗi phòng 900 bệnh nhân giả, bác sĩ là `Practitioner`; chạy lại không tạo trùng; có cả ca dùng cho kịch bản trình diễn ("Nguyễn Văn An" và "Nguyễn Văn Ân") |
+| Tìm bệnh nhân theo số điện thoại, 4 số cuối, CCCD, tên không dấu (T-NAME) | Xong | 14 kiểm thử tích hợp trên Medplum thật; xem kết quả e2e bên dưới |
+| Ghi lặp lại được (T-IDEM) | Xong | 6 yêu cầu đồng thời cùng `clientUuid` ra đúng 1 bệnh nhân, ổn định qua 9 lần chạy liên tiếp |
+| Nhật ký truy cập ở BFF (T-AUD, mức M0) | Xong | Ghi trước khi trả dữ liệu (ghi lỗi thì không trả dữ liệu); không chứa nội dung tìm kiếm; chủ phòng khám xem được, vai trò khác bị từ chối và việc từ chối cũng được ghi |
+| Prototype giao diện thử với bác sĩ | **Chưa**: cần người dùng thật | Giao diện tiếp đón đã chạy; phiên thử với bác sĩ là việc của tuần 5 (đo M0-1) |
+| Danh mục ICD-10 và thuốc (T-CAT) | Chưa (M0-S2) | |
+
+Kiểm thử đã chạy: 31 (mô hình) + 24 (BFF đơn vị) + 17 (web) kiểm thử đơn vị; 14 kiểm thử tích hợp với Medplum thật; 13 bước đầu-cuối trên Chromium thật, đạt 3 lần liên tiếp với mã cuối cùng.
+Mọi con số trong bảng này chỉ nói về một máy dev, một người dùng.
+
+Bài học từ M0-S1, đã đưa vào mã và kiểm thử:
+
+1. **Kết quả tìm cũ phải bị vô hiệu hóa khi gõ truy vấn mới.** Bài e2e đầu tiên bắt được lỗi thật: gõ tên rồi bấm Enter ngay có thể mở nhầm hồ sơ của bệnh nhân ở lần tìm trước. Nay kết quả cũ mờ đi và không chọn được cho đến khi kết quả mới về. Bài kiểm tra đã được xác nhận thất bại khi gỡ bản sửa. Đây là loại lỗi an toàn bệnh nhân, nên mọi màn hình chọn bệnh nhân sau này (hàng chờ, khám) phải theo cùng quy tắc.
+2. **Con trỏ chuột nằm yên không được giành mục đang chọn bằng bàn phím.** Trình duyệt vẫn phát sự kiện "enter" khi danh sách đổi dưới con trỏ; dùng `mousemove` thay cho `mouseenter`. Cũng có kiểm thử riêng và đã xác nhận thất bại khi gỡ bản sửa.
+3. **Log không chứa dữ liệu cá nhân** (quy tắc "no PII in logs" của TL34 D.1): Fastify mặc định ghi cả chuỗi truy vấn (có số điện thoại, CCCD, tên), nên phải tự tắt; có kiểm thử khẳng định log và nhật ký không chứa nội dung truy vấn, token hay tên.
+4. **Nhật ký truy cập fail-closed**: nếu không ghi được nhật ký thì yêu cầu lỗi và dữ liệu bệnh nhân không rời BFF (có kiểm thử). Hệ quả: đĩa nhật ký đầy sẽ làm cả phòng khám ngừng tra cứu; cần cảnh báo ở T-OBS và quyết định chấp nhận đánh đổi này.
+5. **Nạp dữ liệu qua hạn mức mặc định** (≈ 500 lần ghi/phút): script seed tự chờ và gửi lại các phần tử bị từ chối (429); 1.000 lần ghi mất 2 phút 14 giây. Dùng lại được cho công cụ chuyển dữ liệu (T-MIG).
+6. **Công cụ**: pnpm 12 coi script build của `esbuild` là lỗi cứng, phải khai báo `allowBuilds` trong `pnpm-workspace.yaml`; shim `corepack` của pnpm hỏng trong môi trường này nên cài pnpm trực tiếp.
+
+Chế độ demo: BFF chưa có xác thực thật (T-IDP) nên chỉ khởi động khi đặt `DEMO_AUTH=1` và chỉ lắng nghe trên localhost; điều này giữ nguyên cho đến khi chốt Q7.
 
 ---
 
