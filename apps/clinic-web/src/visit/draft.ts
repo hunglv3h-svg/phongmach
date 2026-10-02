@@ -48,6 +48,10 @@ export interface Draft {
   followUpDays: string;
   /** khóa phát hiện → lý do xác nhận */
   acks: Record<string, string>;
+  /** Lúc mở hồ sơ theo đồng hồ của máy này (OFF-3): ghi cả khi mở có mạng, để ký lúc mất mạng gửi được `clientTimes`. */
+  openedAt?: string;
+  /** Hồ sơ được mở lúc mất mạng: máy chủ không biết giờ mở thật, nên lúc ký luôn gửi `clientTimes`. */
+  openedOffline?: boolean;
 }
 
 export const emptyVitals = (): Record<VitalField, string> => ({ temperatureC: '', pulse: '', systolic: '', diastolic: '', respiratoryRate: '', spo2: '', weightKg: '', heightCm: '' });
@@ -139,14 +143,26 @@ export interface RuleView {
 /** Chạy bộ quy tắc ở trình duyệt để cảnh báo ngay khi gõ. Server chạy lại cùng bộ quy tắc khi ký. */
 export function evaluate(
   d: Draft,
-  ctx: { specialty: 'noi' | 'nhi'; patient: Pick<PatientSummary, 'birthDate' | 'cccdMasked'>; allergies: Allergy[] },
+  ctx: {
+    specialty: 'noi' | 'nhi';
+    patient: Pick<PatientSummary, 'birthDate' | 'cccdMasked'>;
+    allergies: Allergy[];
+    /** false: máy chưa có dữ liệu dị ứng của bệnh nhân này (mở hồ sơ khi mất mạng), phải xác nhận 'allergy-unknown' (OFF-4). */
+    allergiesKnown?: boolean;
+  },
   config?: Partial<RulesConfig>,
   now = new Date()
 ): RuleView {
   const { vitals } = toVitals(d);
   const findings = checkPrescription(
     d.lines.map(toLineInput),
-    { specialty: ctx.specialty, patient: { ageYears: ageInYears(ctx.patient.birthDate, now), hasCccd: !!ctx.patient.cccdMasked, weightKg: vitals.weightKg }, allergies: ctx.allergies, diagnoses: d.diagnoses },
+    {
+      specialty: ctx.specialty,
+      patient: { ageYears: ageInYears(ctx.patient.birthDate, now), hasCccd: !!ctx.patient.cccdMasked, weightKg: vitals.weightKg },
+      allergies: ctx.allergies,
+      allergiesKnown: ctx.allergiesKnown ?? true,
+      diagnoses: d.diagnoses,
+    },
     config
   );
   const verdict = judge(findings, Object.entries(d.acks).map(([key, reason]) => ({ key, reason })));
@@ -210,41 +226,6 @@ export function addPrevious(d: Draft, v: VisitSummary): Draft {
   };
 }
 
-// --- lưu nháp tạm trong tab (sessionStorage): chống mất công khi tải lại trang. Bản mã hóa và ngoại tuyến là việc của M0-S3.
-const PREFIX = 'phongmach.draft.';
-
-export function loadDraft(visitId: string): Draft | undefined {
-  try {
-    const raw = sessionStorage.getItem(PREFIX + visitId);
-    return raw ? (JSON.parse(raw) as Draft) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-export function saveDraft(visitId: string, d: Draft): void {
-  try {
-    sessionStorage.setItem(PREFIX + visitId, JSON.stringify(d));
-  } catch {
-    // đầy bộ nhớ hoặc bị chặn: bỏ qua, ứng dụng vẫn chạy
-  }
-}
-
-export function dropDraft(visitId: string): void {
-  try {
-    sessionStorage.removeItem(PREFIX + visitId);
-  } catch {
-    // bỏ qua
-  }
-}
-
-/** Đăng xuất phải xóa mọi bản nháp: chúng chứa dữ liệu lâm sàng. */
-export function dropAllDrafts(): void {
-  try {
-    for (const k of Object.keys(sessionStorage)) if (k.startsWith(PREFIX)) sessionStorage.removeItem(k);
-  } catch {
-    // bỏ qua
-  }
-}
+// Bản nháp được lưu trong kho mã hóa trên máy (`local/store.ts`), không còn ở sessionStorage.
 
 export { computeQuantity };

@@ -122,9 +122,21 @@ export function toDisplayBoard(clinic: string, items: QueueItem[], now: Date): D
   };
 }
 
-/** Lượt khám sau khi bác sĩ mở hồ sơ. Gọi lại bởi cùng bác sĩ thì giữ nguyên (không đặt lại mốc thời gian). */
-export function markCalled(e: Encounter, doctor: { id?: string | undefined; name: string; userId?: string | undefined }, now: Date): Encounter {
-  const extension = [...(e.extension ?? []).filter((x) => x.url !== EXTENSIONS.examOpened), { url: EXTENSIONS.examOpened, valueDateTime: now.toISOString() }];
+/**
+ * Lượt khám sau khi bác sĩ mở hồ sơ. Gọi lại bởi cùng bác sĩ thì giữ nguyên (không đặt lại mốc thời gian).
+ * `openedAt`: mở lúc mất mạng, mốc theo đồng hồ máy khách (đã kiểm tra hợp lý), được đánh dấu nguồn 'client' (OFF-3).
+ */
+export function markCalled(
+  e: Encounter,
+  doctor: { id?: string | undefined; name: string; userId?: string | undefined },
+  now: Date,
+  openedAt?: Date
+): Encounter {
+  const extension = [
+    ...(e.extension ?? []).filter((x) => x.url !== EXTENSIONS.examOpened && x.url !== EXTENSIONS.examOpenedSource),
+    { url: EXTENSIONS.examOpened, valueDateTime: (openedAt ?? now).toISOString() },
+    ...(openedAt ? [{ url: EXTENSIONS.examOpenedSource, valueCode: 'client' }] : []),
+  ];
   return {
     ...e,
     status: 'in-progress',

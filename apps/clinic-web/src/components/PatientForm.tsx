@@ -1,6 +1,6 @@
 import { DomainError, buildPatient, type Gender, type PatientSummary } from '@phongmach/fhir-vn-model';
 import { useRef, useState, type FormEvent } from 'react';
-import { api } from '../api';
+import { useOffline } from '../local/OfflineProvider';
 
 export interface FormInitial {
   fullName?: string;
@@ -11,11 +11,13 @@ export interface FormInitial {
 interface Props {
   token: string;
   initial: FormInitial;
-  onCreated: (patient: PatientSummary, created: boolean) => void;
+  /** `tentative`: tạo lúc mất mạng, mới có trên máy này (id tạm), chờ đồng bộ. */
+  onCreated: (patient: PatientSummary, created: boolean, tentative: boolean) => void;
   onCancel: () => void;
 }
 
-export function PatientForm({ token, initial, onCreated, onCancel }: Props) {
+export function PatientForm({ initial, onCreated, onCancel }: Props) {
+  const { client } = useOffline();
   // Một UUID cho mỗi lần mở biểu mẫu: bấm hai lần hoặc gửi lại khi mạng chập chờn không tạo bệnh nhân trùng.
   const clientUuid = useRef(crypto.randomUUID());
   const [fullName, setFullName] = useState(initial.fullName ?? '');
@@ -45,8 +47,9 @@ export function PatientForm({ token, initial, onCreated, onCancel }: Props) {
     setBusy(true);
     setError(undefined);
     try {
-      const r = await api.createPatient(token, input);
-      onCreated(r.patient, r.created);
+      // Qua hàng đợi trên máy: có mạng thì gửi ngay; mất mạng thì tạo trên máy, gửi sau (cùng clientUuid, không tạo trùng).
+      const r = await client.createPatient(input);
+      onCreated(r.patient, r.created, r.tentative);
     } catch (err) {
       setError((err as Error).message);
       setBusy(false);

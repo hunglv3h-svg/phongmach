@@ -1,5 +1,5 @@
-import { formatAge } from '@phongmach/rules';
 import { GATEWAY_LABEL, type PrescriptionDetail } from '@phongmach/clinical';
+import { formatAge } from '@phongmach/rules';
 import QRCode from 'qrcode';
 
 const ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -8,8 +8,8 @@ export const esc = (s: string | number | undefined): string => String(s ?? '').r
 
 const GENDER: Record<string, string> = { male: 'Nam', female: 'Nữ', other: 'Khác', unknown: '' };
 
-const formatDate = (iso: string): string => {
-  // Hiển thị theo giờ Việt Nam (UTC+7).
+/** "dd/mm/yyyy hh:mm" theo giờ Việt Nam (UTC+7), không phụ thuộc múi giờ của máy in. */
+export const formatVnDateTime = (iso: string): string => {
   const d = new Date(Date.parse(iso) + 7 * 3_600_000);
   const p = (n: number) => String(n).padStart(2, '0');
   return `${p(d.getUTCDate())}/${p(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
@@ -18,14 +18,30 @@ const formatDate = (iso: string): string => {
 /** Nội dung mã QR trên đơn: tiền tố nhận diện + mã đơn nội bộ. Khi có cổng thật, mã quốc gia thay vào đây. */
 export const qrPayload = (code: string): string => `phongmach:${code}`;
 
-export async function renderPrescriptionHtml(detail: PrescriptionDetail, clinicName: string): Promise<string> {
+export interface PrintOptions {
+  /**
+   * In từ dữ liệu trên máy vì mất mạng (không qua BFF).
+   * `pendingSync`: đơn ký khi mất mạng, máy chủ chưa nhận; nếu không thì là in lại một đơn đã lưu, trạng thái liên thông có thể đã cũ.
+   */
+  local?: { pendingSync: boolean } | undefined;
+}
+
+/**
+ * Trang in đơn thuốc A5. Hàm thuần của dữ liệu đầu vào (tuổi tính tại lúc ký, giờ theo giờ Việt Nam), nên BFF và
+ * trình duyệt dựng ra cùng một trang cho cùng một đơn. Trang mang CSP `default-src 'none'`: không chạy được script dù có dữ liệu độc.
+ */
+export async function renderPrescriptionHtml(detail: PrescriptionDetail, clinicName: string, options: PrintOptions = {}): Promise<string> {
   const { prescription: rx, patient, diagnoses } = detail;
   const qr = await QRCode.toString(qrPayload(rx.code), { type: 'svg', margin: 0, errorCorrectionLevel: 'M' });
-  const age = formatAge(patient.birthDate);
+  const age = formatAge(patient.birthDate, new Date(rx.signedAt));
   const gateway = rx.gateway;
-  const national = gateway?.nationalCode
-    ? `Mã đơn quốc gia (mô phỏng): <b>${esc(gateway.nationalCode)}</b>`
-    : `Liên thông: ${esc(gateway ? GATEWAY_LABEL[gateway.status] : 'chưa gửi')}`;
+  const pending = options.local?.pendingSync === true;
+  const national = pending
+    ? 'Liên thông: chưa gửi (đơn chưa đồng bộ lên hệ thống)'
+    : gateway?.nationalCode
+      ? `Mã đơn quốc gia (mô phỏng): <b>${esc(gateway.nationalCode)}</b>`
+      : `Liên thông: ${esc(gateway ? GATEWAY_LABEL[gateway.status] : 'chưa gửi')}`;
+  const localNote = options.local && !pending ? ' · In khi mất mạng từ dữ liệu trên máy; trạng thái liên thông có thể chưa cập nhật' : '';
   const rows = rx.lines
     .map(
       (l, i) =>
@@ -58,6 +74,7 @@ th { background: #eee; font-size: 10pt; }
 <div class="clinic">${esc(clinicName)}</div>
 <h1>ĐƠN THUỐC</h1>
 <div class="sim">BẢN MÔ PHỎNG: chữ ký số mô phỏng, chưa liên thông cổng quốc gia, không có giá trị pháp lý</div>
+${pending ? '<div class="sim" data-offline="pending">KÝ KHI MẤT MẠNG: chưa đồng bộ lên hệ thống, chưa liên thông</div>' : ''}
 <div class="row"><b>Họ tên:</b> ${esc(patient.fullName)}${age ? ` &nbsp; <b>Tuổi:</b> ${esc(age)}` : ''}${GENDER[patient.gender ?? ''] ? ` &nbsp; <b>Giới:</b> ${esc(GENDER[patient.gender!])}` : ''}</div>
 ${patient.cccdMasked ? `<div class="row"><b>CCCD:</b> ${esc(patient.cccdMasked)}${patient.phone ? ` &nbsp; <b>Điện thoại:</b> ${esc(patient.phone)}` : ''}</div>` : ''}
 <div class="row"><b>Chẩn đoán:</b> ${diagnoses.map((d) => `${esc(d.name)} (${esc(d.code)})`).join('; ') || '…'}</div>
@@ -67,12 +84,12 @@ ${rx.followUpDays ? `<div class="row"><b>Tái khám sau:</b> ${esc(rx.followUpDa
 <div class="foot">
   <div class="qr">${qr}<div class="code">${esc(rx.code)}</div></div>
   <div class="sign">
-    <div>${esc(formatDate(rx.signedAt))}</div>
+    <div>${esc(formatVnDateTime(rx.signedAt))}</div>
     <div><b>Bác sĩ khám bệnh</b></div>
     <div class="stamp">(đã ký số mô phỏng)</div>
     <div><b>${esc(rx.signerName)}</b></div>
   </div>
 </div>
-<div class="row" style="font:8pt sans-serif;margin-top:2mm">${national}</div>
+<div class="row" style="font:8pt sans-serif;margin-top:2mm">${national}${localNote}</div>
 </body></html>`;
 }

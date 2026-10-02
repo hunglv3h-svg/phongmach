@@ -1,8 +1,10 @@
 // Kiểm thử tích hợp luồng khám trên Medplum thật: hàng chờ → mở hồ sơ → hoàn tất + kê đơn → gửi cổng mô phỏng.
 // Tự tạo hai phòng khám riêng cho mỗi lần chạy, không đụng dữ liệu demo.
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { MedplumClient } from '@medplum/core';
-import type { Encounter } from '@medplum/fhirtypes';
+import type { Encounter, List, MedicationRequest } from '@medplum/fhirtypes';
+import { addDays, makePrescriptionCode, vnDay } from '@phongmach/clinical';
+import { EXTENSIONS } from '@phongmach/fhir-vn-model';
 import { drugCode } from '@phongmach/catalogs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { MemoryAuditSink } from '../../src/audit.js';
@@ -412,5 +414,111 @@ describe('dị ứng và tiền sử', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().patient).toMatchObject({ birthDate: '1990-05-05', cccdMasked: expect.stringMatching(/4321$/) });
     expect((await call('PATCH', `/api/patients/${p}`, 'a-assistant', { cccd: '123' })).statusCode).toBe(422);
+  });
+});
+
+describe('ngoại tuyến: thao tác làm lúc mất mạng, gửi lên khi đồng bộ (M0-S3)', () => {
+  const ago = (ms: number) => new Date(clock.getTime() - ms).toISOString();
+  const ext = (e: Encounter, url: string) => e.extension?.find((x) => x.url === url);
+  let offlineRx = { id: '', patientId: '', code: '' };
+
+  it('số tạm còn trống thì được giữ; đã có người lấy thì cấp số kế tiếp; số vượt quá số kế tiếp thì không tạo lỗ hổng', async () => {
+    clock = new Date();
+    const numbers = ((await call('GET', '/api/queue', 'a-assistant')).json().items as Array<{ number: number }>).map((i) => i.number);
+    const next = Math.max(0, ...numbers) + 1;
+    const post = async (proposedNumber: number) =>
+      (await call('POST', '/api/queue', 'a-assistant', { clientUuid: randomUUID(), patientId: await newPatient('Lý Văn Tạm'), specialty: 'noi', arrivedAt: ago(60_000), proposedNumber })).json().item.number as number;
+    expect(await post(next)).toBe(next);
+    expect(await post(next)).toBe(next + 1); // máy khác đã lấy số này khi cùng mất mạng
+    expect(await post(next + 10)).toBe(next + 2);
+  });
+
+  it('giờ đến hôm qua (đồng bộ sau nửa đêm): lượt khám thuộc hàng chờ hôm qua, không chen vào hàng chờ hôm nay', async () => {
+    clock = new Date();
+    const today = vnDay(clock);
+    const arrivedAt = new Date(Date.parse(`${today}T00:00:00+07:00`) - 30 * 60_000).toISOString(); // 23:30 hôm qua
+    const res = await call('POST', '/api/queue', 'a-assistant', { clientUuid: randomUUID(), patientId: await newPatient('Lý Văn Hôm Qua'), specialty: 'noi', arrivedAt, proposedNumber: 1 });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().item.code).toBe(`${addDays(today, -1).replaceAll('-', '')}-001`); // phòng khám thử tạo hôm nay: hôm qua chưa có ai
+    expect(Date.parse(res.json().item.arrivedAt)).toBe(Date.parse(arrivedAt));
+    const ids = ((await call('GET', '/api/queue', 'a-assistant')).json().items as Array<{ id: string }>).map((i) => i.id);
+    expect(ids).not.toContain(res.json().item.id);
+  });
+
+  it('mở và ký lúc mất mạng, đồng bộ 2 giờ sau: thời gian đo bằng đồng hồ máy khách, bản ghi mang giờ ký đã in, mã đơn theo ngày ký; gửi lại không trùng', async () => {
+    clock = new Date();
+    const patientId = await newPatient('Hồ Văn Ngoại');
+    const visit = await enqueue(patientId);
+    const openedAt = ago(2 * 3600_000 + 80_000);
+    const signedAt = ago(2 * 3600_000);
+    expect((await call('POST', `/api/visits/${visit.id}/open`, 'a-doctor', { openedAt })).statusCode).toBe(200);
+    const enc = (await adminA.readResource('Encounter', visit.id)) as Encounter;
+    expect(Date.parse(ext(enc, EXTENSIONS.examOpened)!.valueDateTime!)).toBe(Date.parse(openedAt));
+    expect(ext(enc, EXTENSIONS.examOpenedSource)?.valueCode).toBe('client');
+
+    const uuid = randomUUID();
+    const payload = completionBody(uuid, { clientTimes: { openedAt, signedAt }, prescription: { lines: [AMOX, PARA], acknowledgements: [] } });
+    const res = await complete(visit.id, 'a-doctor', payload);
+    expect(res.statusCode).toBe(201);
+    const json = res.json();
+    expect(json.visit.visitSeconds).toBe(80);
+    expect(Date.parse(json.prescription.signedAt)).toBe(Date.parse(signedAt));
+    const expectedCode = makePrescriptionCode(vnDay(new Date(signedAt)), createHash('sha256').update(uuid.toLowerCase()).digest());
+    expect(json.prescription.code).toBe(expectedCode);
+    offlineRx = { id: json.prescription.id, patientId, code: expectedCode };
+
+    const done = (await adminA.readResource('Encounter', visit.id)) as Encounter;
+    expect(ext(done, EXTENSIONS.visitSecondsSource)?.valueCode).toBe('client');
+    expect(Date.parse(done.period!.end!)).toBe(Date.parse(signedAt));
+    const mrs = (await adminA.searchResources('MedicationRequest', { encounter: `Encounter/${visit.id}` })) as MedicationRequest[];
+    expect(mrs.map((m) => Date.parse(m.authoredOn!))).toEqual([Date.parse(signedAt), Date.parse(signedAt)]);
+
+    const before = [await count('MedicationRequest', `&encounter=Encounter/${visit.id}`), await count('List', `&encounter=Encounter/${visit.id}`), await count('Condition', `&encounter=Encounter/${visit.id}`)];
+    const again = await complete(visit.id, 'a-doctor', payload);
+    expect([again.statusCode, again.json().replayed, again.json().prescription.code]).toEqual([200, true, expectedCode]);
+    expect([await count('MedicationRequest', `&encounter=Encounter/${visit.id}`), await count('List', `&encounter=Encounter/${visit.id}`), await count('Condition', `&encounter=Encounter/${visit.id}`)]).toEqual(before);
+    expect(before).toEqual([2, 1, 1]);
+  });
+
+  it('giờ máy khách không hợp lý: vẫn lưu đủ (không mất bản ghi đã in), không tính vào số đo nhưng được đếm riêng', async () => {
+    clock = new Date();
+    const visit = await enqueue(await newPatient('Hồ Văn Lệch'));
+    expect((await call('POST', `/api/visits/${visit.id}/open`, 'a-doctor')).statusCode).toBe(200); // mở có mạng: máy chủ thấy lúc mở
+    // Máy khách khai phiên 13 giờ, dài hơn hẳn khoảng máy chủ thấy.
+    const res = await complete(visit.id, 'a-doctor', completionBody(randomUUID(), { clientTimes: { openedAt: ago(13 * 3600_000), signedAt: ago(0) }, prescription: { lines: [PARA], acknowledgements: [] } }));
+    expect(res.statusCode).toBe(201);
+    expect(res.json().visit.visitSeconds).toBeUndefined();
+    const enc = (await adminA.readResource('Encounter', visit.id)) as Encounter;
+    expect([enc.status, ext(enc, EXTENSIONS.visitSecondsSource)?.valueCode]).toEqual(['finished', 'client-invalid']);
+    expect(await count('List', `&encounter=Encounter/${visit.id}`)).toBe(1);
+    const metrics = (await call('GET', '/api/metrics/visits?days=2', 'a-owner')).json();
+    expect(metrics.all.invalidClock).toBeGreaterThanOrEqual(1);
+    expect(metrics.all.clientMeasured).toBeGreaterThanOrEqual(1);
+  });
+
+  it('nạp trước: người đang chờ kèm dị ứng; người đã khám xong không có, kể cả khi hỏi đích danh', async () => {
+    clock = new Date();
+    const waiting = await newPatient('Mai Thị Chờ');
+    await enqueue(waiting);
+    await call('POST', `/api/patients/${waiting}/allergies`, 'a-assistant', { clientUuid: randomUUID(), kind: 'class', value: 'nsaid' });
+    expect((await call('GET', '/api/queue/prefetch', 'a-doctor')).statusCode).toBe(200);
+    // Người đã khám xong hôm nay (tự tạo trong bài này, không dựa vào bài trước).
+    const finished = await newPatient('Mai Văn Xong');
+    const fv = await enqueue(finished);
+    expect((await call('POST', `/api/visits/${fv.id}/open`, 'a-doctor')).statusCode).toBe(200);
+    expect((await complete(fv.id, 'a-doctor', { clientUuid: randomUUID(), exam: { vitals: {} }, diagnoses: ['J06.9'] })).statusCode).toBe(201);
+    const got = ((await call('GET', '/api/queue/prefetch', 'a-doctor')).json().patients) as Array<{ patient: { id: string; fullName: string }; allergies: Array<{ value: string }> }>;
+    expect(got.find((p) => p.patient.id === waiting)).toMatchObject({ patient: { fullName: 'Mai Thị Chờ' }, allergies: [expect.objectContaining({ value: 'nsaid' })] });
+    expect(got.map((p) => p.patient.id)).not.toContain(finished);
+    expect((await call('GET', `/api/queue/prefetch?patients=${finished}`, 'a-doctor')).json().patients).toEqual([]);
+    expect((await call('GET', '/api/queue/prefetch', 'b-owner')).json().patients).toEqual([]);
+  });
+
+  it('ghi nhận lần in lúc mất mạng: một dòng "In đơn thuốc" đánh dấu offline; phòng khám khác không ghi được', async () => {
+    expect(offlineRx.id, 'cần đơn ký lúc mất mạng từ bài trước').not.toBe('');
+    const printedAt = ago(30_000);
+    expect((await call('POST', `/api/prescriptions/${offlineRx.id}/printed`, 'a-assistant', { printedAt })).statusCode).toBe(200);
+    expect(audit.entries.filter((e) => e.action === 'prescription-print').at(-1)).toMatchObject({ queryKind: 'offline', clientTs: printedAt, resourceIds: [offlineRx.patientId, offlineRx.id] });
+    expect((await call('POST', `/api/prescriptions/${offlineRx.id}/printed`, 'b-owner', { printedAt })).statusCode).toBe(404);
   });
 });

@@ -1,17 +1,22 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, type AuditEntry } from '../api';
+import { NEED_NETWORK } from '../local/client';
+import { useOffline } from '../local/OfflineProvider';
 import { ACTION_LABEL, INTENT_LABEL, ROLE_LABEL, formatTime, shortId } from '../format';
 
 /** Mô tả ngắn gọn một dòng nhật ký, không có dấu chấm thừa và dùng đúng đơn vị theo hành động. */
 function detail(e: AuditEntry): string {
   const parts: string[] = [];
-  if (e.queryKind) parts.push(`theo ${INTENT_LABEL[e.queryKind] ?? e.queryKind}`);
+  // Thao tác làm lúc mất mạng, ghi khi đồng bộ: giờ thao tác là giờ máy khách khai, không phải giờ ghi nhật ký.
+  if (e.queryKind === 'offline') parts.push(`làm lúc mất mạng${e.clientTs ? ` (${formatTime(e.clientTs)} theo máy khách)` : ''}, ghi khi đồng bộ`);
+  else if (e.queryKind) parts.push(`theo ${INTENT_LABEL[e.queryKind] ?? e.queryKind}`);
   if (e.resultCount !== undefined) {
     if (e.action === 'audit-read') parts.push(`${e.resultCount} dòng nhật ký`);
     else if (e.action === 'create') parts.push(e.resultCount ? 'bệnh nhân mới' : 'đã có sẵn, không tạo trùng');
     else if (e.action === 'check-in') parts.push(e.resultCount ? 'lượt mới' : 'đã có sẵn, không cấp thêm số');
     else if (e.action === 'visit-complete') parts.push(`${e.resultCount} thuốc`);
     else if (e.action === 'queue-read') parts.push(`${e.resultCount} lượt`);
+    else if (e.action === 'queue-prefetch') parts.push(`${e.resultCount} bệnh nhân`);
     else if (e.action === 'prescription-read' || e.action === 'history-read' || e.action === 'note-read') parts.push(`${e.resultCount} mục`);
     else parts.push(`${e.resultCount} hồ sơ`);
   }
@@ -21,6 +26,7 @@ function detail(e: AuditEntry): string {
 export function AuditLog({ token }: { token: string }) {
   const [entries, setEntries] = useState<AuditEntry[]>();
   const [error, setError] = useState<string>();
+  const { online } = useOffline();
 
   const load = useCallback(async () => {
     setError(undefined);
@@ -42,8 +48,9 @@ export function AuditLog({ token }: { token: string }) {
         <button className="secondary" onClick={() => void load()}>Làm mới</button>
       </div>
       <p className="muted">Ai đã đăng nhập, tìm, mở hoặc tạo hồ sơ nào, lúc nào. Nhật ký không lưu nội dung tìm kiếm, chỉ lưu loại truy vấn, số kết quả và mã hồ sơ.</p>
+      {!online && <p className="offline-note" data-testid="needs-network">{NEED_NETWORK}: nhật ký nằm trên máy chủ.</p>}
       {error && <p className="error" role="alert">{error}</p>}
-      {!entries && !error && <p className="muted">Đang tải…</p>}
+      {!entries && !error && online && <p className="muted">Đang tải…</p>}
       {entries && (
         <div className="table-wrap">
           <table data-testid="audit-table">

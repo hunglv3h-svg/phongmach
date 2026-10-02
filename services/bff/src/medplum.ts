@@ -13,6 +13,7 @@ import {
   markCalled,
   markFailed,
   markSent,
+  measureVisit,
   nextNumber,
   queueNumberOf,
   requeue,
@@ -35,19 +36,23 @@ import {
   type PendingPrescription,
   type PrescriptionDetail,
   type QueueItem,
+  type QueuePatient,
   type RetryPolicy,
+  type VisitSecondsSource,
   type VisitContext,
   type VisitSummary,
 } from '@phongmach/clinical';
 import { EXTENSIONS, SYSTEMS, buildPatient, clientUuidQuery, patchPatient, rankByPhoneSuffix, toPatientSummary, type NewPatientInput, type PatientSummary, type SearchIntent } from '@phongmach/fhir-vn-model';
 import type { GatewayPayload } from './gateway.js';
-import type { ClinicStore, CompleteCommand, CompleteResult, Doctor, FinishedVisit, OpenResult, OutboxJob, StoreFactory } from './store.js';
+import type { CheckInOptions, ClinicStore, CompleteCommand, CompleteResult, Doctor, FinishedVisit, OpenResult, OutboxJob, StoreFactory } from './store.js';
 import type { Tenant } from './tenants.js';
 
 /** Số kết quả lấy về khi tìm theo đoạn số, trước khi xếp hạng theo "kết thúc bằng". */
 const FRAGMENT_FETCH = 50;
 const QUEUE_MAX = 200;
 const CHECK_IN_ATTEMPTS = 5;
+/** Số bệnh nhân mỗi lần hỏi dị ứng khi nạp trước (giữ URL ngắn). */
+const PREFETCH_CHUNK = 50;
 const PREVIOUS_VISITS = 10;
 const PROBLEM_LIST = 'http://terminology.hl7.org/CodeSystem/condition-category|problem-list-item';
 const SEND_TASK = `${SYSTEMS.task}|send-prescription`;
@@ -116,7 +121,7 @@ export class MedplumClinicStore implements ClinicStore {
 
   // --------------------------------------------------------------------------------------------------- hàng chờ
 
-  async checkIn(input: CheckInInput, now: Date): Promise<{ item: QueueItem; created: boolean } | undefined> {
+  async checkIn(input: CheckInInput, now: Date, options: CheckInOptions = {}): Promise<{ item: QueueItem; created: boolean } | undefined> {
     const patient = await this.readOrUndefined('Patient', input.patientId);
     if (!patient) return undefined;
     const uuid = input.clientUuid.toLowerCase();
@@ -124,11 +129,17 @@ export class MedplumClinicStore implements ClinicStore {
     const existing = await this.medplum.searchOne('Encounter', mine);
     if (existing) return { item: this.item(existing, patient), created: false };
 
-    const day = vnDay(now);
+    // Cấp số lúc mất mạng (OFF-2): ngày theo giờ đến của máy khách; thử giữ số tạm một lần nếu nó chưa vượt số kế tiếp
+    // (số nhỏ hơn đã có người lấy thì tạo có điều kiện sẽ trả về lượt của người đó và vòng sau cấp số kế tiếp; số lớn hơn sẽ tạo lỗ hổng nên bỏ).
+    const arrived = options.arrivedAt ?? now;
+    const day = vnDay(arrived);
+    let proposal = options.proposedNumber;
     for (let attempt = 0; attempt < CHECK_IN_ATTEMPTS; attempt++) {
       const todays = await this.medplum.searchResources('Encounter', this.dayQuery(day, 'date'));
-      const number = nextNumber(todays);
-      const enc = buildCheckIn(input, { day, number, now });
+      const next = nextNumber(todays);
+      const number = proposal !== undefined && proposal <= next ? proposal : next;
+      proposal = undefined;
+      const enc = buildCheckIn(input, { day, number, now: arrived });
       const code = enc.identifier!.find((i) => i.system === SYSTEMS.visitCode)!.value!;
       // Tạo có điều kiện theo mã lượt khám: hai lễ tân cùng lấy số một lúc thì chỉ một người được số đó, người kia thử số kế tiếp.
       const saved = await this.medplum.createResourceIfNoneExist(enc, `identifier=${SYSTEMS.visitCode}|${code}`);
@@ -145,6 +156,29 @@ export class MedplumClinicStore implements ClinicStore {
       .filter((i): i is QueueItem => i !== undefined);
   }
 
+  async prefetchQueue(day: string, patientIds?: string[]): Promise<QueuePatient[]> {
+    const bundle = await this.medplum.search('Encounter', this.dayQuery(day, 'date', { _include: 'Encounter:patient' }));
+    const active = new Set(
+      entries<Encounter>(bundle, 'Encounter')
+        .filter((e) => e.status === 'arrived' || e.status === 'planned' || e.status === 'in-progress')
+        .map((e) => refId(e.subject?.reference, 'Patient'))
+        .filter((id): id is string => !!id && (!patientIds || patientIds.includes(id)))
+    );
+    const patients = entries<Patient>(bundle, 'Patient').filter((p) => p.id && active.has(p.id));
+    const allergies = new Map<string, AllergyView[]>(patients.map((p) => [p.id!, []]));
+    const ids = [...allergies.keys()];
+    for (let i = 0; i < ids.length; i += PREFETCH_CHUNK) {
+      const chunk = ids.slice(i, i + PREFETCH_CHUNK);
+      const found = await this.medplum.searchResources('AllergyIntolerance', { patient: chunk.map((id) => `Patient/${id}`).join(','), _count: '1000' });
+      for (const a of found) {
+        const view = toAllergyView(a);
+        const pid = refId(a.patient?.reference, 'Patient');
+        if (view && pid) allergies.get(pid)?.push(view);
+      }
+    }
+    return patients.map((p) => ({ patient: toPatientSummary(p), allergies: allergies.get(p.id!) ?? [] }));
+  }
+
   async cancelVisit(encounterId: string): Promise<'ok' | 'not-found' | 'not-waiting'> {
     const enc = await this.readOrUndefined('Encounter', encounterId);
     if (!enc) return 'not-found';
@@ -158,7 +192,7 @@ export class MedplumClinicStore implements ClinicStore {
     }
   }
 
-  async openVisit(encounterId: string, doctor: Doctor, now: Date): Promise<OpenResult> {
+  async openVisit(encounterId: string, doctor: Doctor, now: Date, openedAt?: Date): Promise<OpenResult> {
     for (let attempt = 0; attempt < 2; attempt++) {
       const enc = await this.readOrUndefined('Encounter', encounterId);
       if (!enc) return { kind: 'not-found' };
@@ -170,7 +204,7 @@ export class MedplumClinicStore implements ClinicStore {
         return context ? { kind: 'ok', context } : { kind: 'not-found' };
       }
       try {
-        await this.medplum.updateResource(markCalled(enc, { id: doctor.practitionerId, name: doctor.name, userId: doctor.userId }, now), ifMatch(enc));
+        await this.medplum.updateResource(markCalled(enc, { id: doctor.practitionerId, name: doctor.name, userId: doctor.userId }, now, openedAt), ifMatch(enc));
       } catch (err) {
         if (isPreconditionFailed(err)) continue; // người khác vừa đổi: đọc lại rồi quyết định
         throw err;
@@ -208,17 +242,20 @@ export class MedplumClinicStore implements ClinicStore {
 
     const patientId = refId(enc.subject?.reference, 'Patient')!;
     const opened = enc.extension?.find((e) => e.url === EXTENSIONS.examOpened)?.valueDateTime;
-    const visitSeconds = opened ? Math.max(0, Math.round((cmd.now.getTime() - Date.parse(opened)) / 1000)) : undefined;
+    const openedSource = enc.extension?.find((e) => e.url === EXTENSIONS.examOpenedSource)?.valueCode === 'client' ? 'client' : 'server';
+    // Ký lúc mất mạng: mốc thời gian của bản ghi là giờ ký của máy khách (đúng với tờ đã in), số đo chỉ tính khi hợp lý (OFF-3).
+    const measure = measureVisit({ now: cmd.now, opened: opened ? { at: opened, source: openedSource } : undefined, client: cmd.clientTimes });
     const bundle = buildCompletionBundle({
       clientUuid: cmd.clientUuid,
       patientId,
       encounter: enc,
       doctor: { id: cmd.doctor.practitionerId, name: cmd.doctor.name },
-      now: cmd.now,
+      now: measure.signedAt,
       exam: cmd.exam,
       diagnoses: cmd.diagnoses,
       prescription: cmd.prescription,
-      visitSeconds,
+      visitSeconds: measure.seconds,
+      visitSecondsSource: measure.source,
     });
     const response = await this.medplum.executeBatch(bundle);
     // Medplum không hoàn tác khi một mục lỗi (xem buildCompletionBundle): HTTP 200 vẫn có thể kèm mục 412/400.
@@ -371,7 +408,8 @@ export class MedplumClinicStore implements ClinicStore {
     const visits = found.slice(0, limit).map((e): FinishedVisit => {
       const individual = e.participant?.[0]?.individual;
       const seconds = e.extension?.find((x) => x.url === EXTENSIONS.visitSeconds)?.valueInteger;
-      return { doctorName: individual?.display, doctorUserId: individual?.identifier?.value, seconds };
+      const source = e.extension?.find((x) => x.url === EXTENSIONS.visitSecondsSource)?.valueCode as VisitSecondsSource | undefined;
+      return { doctorName: individual?.display, doctorUserId: individual?.identifier?.value, seconds, source };
     });
     return { visits, truncated: found.length > limit };
   }

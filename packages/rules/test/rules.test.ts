@@ -112,6 +112,21 @@ describe('dị ứng', () => {
   });
 });
 
+describe('chưa có dữ liệu dị ứng trên máy (mở hồ sơ khi mất mạng)', () => {
+  it('"không biết" không được coi là "không dị ứng": phải xác nhận kèm lý do mới ký được', () => {
+    const f = checkPrescription([PARA], ctx({ allergiesKnown: false }));
+    expect(f).toEqual([expect.objectContaining({ key: 'allergy-unknown', rule: 'allergy-unknown', severity: 'ack' })]);
+    expect(judge(f, []).canSign).toBe(false);
+    expect(judge(f, [{ key: 'allergy-unknown', reason: 'Đã hỏi, bệnh nhân không dị ứng thuốc' }]).canSign).toBe(true);
+  });
+  it('vẫn kiểm tra dị ứng đã biết; không có thuốc thì không cần hỏi; mặc định là đã biết', () => {
+    const penicillin: Allergy = { kind: 'class', value: 'penicillin', label: 'Penicillin' };
+    expect(rules(checkPrescription([AMOX], ctx({ allergiesKnown: false, allergies: [penicillin] }))).sort()).toEqual(['allergy', 'allergy-unknown']);
+    expect(rules(checkPrescription([], ctx({ allergiesKnown: false })))).toEqual(['no-lines']);
+    expect(checkPrescription([PARA], ctx())).toEqual([]);
+  });
+});
+
 describe('trẻ em', () => {
   const child = (ageYears: number, weightKg?: number): RuleContext => ctx({ specialty: 'nhi', patient: { ageYears, hasCccd: false, weightKg } });
   it('chưa ghi cân nặng thì phải xác nhận', () => {

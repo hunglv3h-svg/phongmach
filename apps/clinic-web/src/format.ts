@@ -12,6 +12,7 @@ export const ACTION_LABEL: Record<string, string> = {
   update: 'Cập nhật hồ sơ bệnh nhân',
   'audit-read': 'Xem nhật ký truy cập',
   'queue-read': 'Xem hàng chờ',
+  'queue-prefetch': 'Nạp trước hồ sơ hàng chờ (để dùng khi mất mạng)',
   'check-in': 'Cho vào hàng chờ',
   'queue-cancel': 'Hủy lượt chờ',
   'visit-open': 'Mở hồ sơ khám',

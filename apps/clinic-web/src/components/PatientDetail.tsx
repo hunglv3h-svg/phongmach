@@ -2,30 +2,51 @@ import { PRIORITIES, PRIORITY_LABEL, SPECIALTIES, SPECIALTY_LABEL, type AllergyV
 import type { PatientSummary } from '@phongmach/fhir-vn-model';
 import { ageInYears } from '@phongmach/rules';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { api } from '../api';
+import { ApiError, api } from '../api';
 import { GENDER_LABEL, ageText, formatDate, pad3, shortId } from '../format';
+import { NEED_NETWORK } from '../local/client';
+import { isTmp } from '../local/ops';
+import { useOffline } from '../local/OfflineProvider';
 import { Allergies } from './Allergies';
 
 export function PatientDetail({ token, summary, onQueued }: { token: string; summary: PatientSummary; onQueued: (message: string) => void }) {
+  const { client, online } = useOffline();
   const [patient, setPatient] = useState(summary);
   const [error, setError] = useState<string>();
   const [allergies, setAllergies] = useState<AllergyView[]>();
+  /** Hồ sơ đang hiện từ dữ liệu trên máy (mất mạng, hoặc bệnh nhân tạo trên máy chưa đồng bộ). */
+  const [fromCache, setFromCache] = useState<{ allergiesKnown: boolean; unsynced: boolean }>();
 
-  // Mở hồ sơ là một lần truy cập được ghi nhật ký (đọc theo id).
+  // Có mạng: mở hồ sơ là một lần truy cập được ghi nhật ký (đọc theo id), và giữ tóm tắt cùng dị ứng trên máy cho lúc mất mạng (OFF-4).
+  // Mất mạng hoặc bệnh nhân mới có trên máy: dùng bộ đệm trên máy.
   useEffect(() => {
     let live = true;
-    api.readPatient(token, summary.id).then(
-      (r) => live && setPatient(r.patient),
-      (e: Error) => live && setError(e.message)
-    );
-    api.allergies(token, summary.id).then(
-      (r) => live && setAllergies(r.allergies),
-      (e: Error) => live && setError(e.message)
-    );
+    const fromLocal = async () => {
+      const cached = await client.cachedPatient(summary.id);
+      if (!live) return;
+      if (cached) setPatient(cached.patient);
+      setAllergies(cached?.allergies ?? []);
+      setFromCache({ allergiesKnown: cached?.allergies !== undefined, unsynced: !(await client.serverId(summary.id)) });
+    };
+    void (async () => {
+      const serverId = await client.serverId(summary.id);
+      if (!online || !serverId) return fromLocal();
+      try {
+        const [p, a] = await Promise.all([client.call(() => api.readPatient(token, serverId)), client.call(() => api.allergies(token, serverId))]);
+        if (!live) return;
+        setPatient(p.patient);
+        setAllergies(a.allergies);
+        setFromCache(undefined);
+        await client.cachePatient(p.patient, a.allergies);
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 0) return fromLocal();
+        if (live) setError((e as Error).message);
+      }
+    })();
     return () => {
       live = false;
     };
-  }, [token, summary.id]);
+  }, [token, summary.id, client, online]);
 
   const age = ageText(patient.birthDate);
   const years = ageInYears(patient.birthDate);
@@ -42,10 +63,17 @@ export function PatientDetail({ token, summary, onQueued }: { token: string; sum
     setQueuing(true);
     setError(undefined);
     try {
-      const { item, created } = await api.checkIn(token, { clientUuid: checkInUuid.current, patientId: patient.id, specialty, priority, ...(reason.trim() ? { reason: reason.trim() } : {}) });
+      // Qua hàng đợi trên máy: mất mạng thì cấp số tạm (số lớn nhất máy này biết + 1), máy chủ cố giữ số đó khi đồng bộ (OFF-2).
+      const { item, created, tentative } = await client.checkIn(patient, { clientUuid: checkInUuid.current, specialty, priority, ...(reason.trim() ? { reason: reason.trim() } : {}) });
       checkInUuid.current = crypto.randomUUID();
       setReason('');
-      onQueued(created ? `Đã cấp số ${pad3(item.number)} cho ${patient.fullName}. Mời bệnh nhân ngồi chờ.` : `${patient.fullName} đã có số ${pad3(item.number)}, không cấp thêm.`);
+      onQueued(
+        tentative
+          ? `Mất mạng: đã cấp số ${pad3(item.number)} (tạm) cho ${patient.fullName}. Mời bệnh nhân ngồi chờ; số được xác nhận khi có mạng.`
+          : created
+            ? `Đã cấp số ${pad3(item.number)} cho ${patient.fullName}. Mời bệnh nhân ngồi chờ.`
+            : `${patient.fullName} đã có số ${pad3(item.number)}, không cấp thêm.`
+      );
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -56,6 +84,8 @@ export function PatientDetail({ token, summary, onQueued }: { token: string; sum
   const [fixCccd, setFixCccd] = useState('');
   const [fixBirth, setFixBirth] = useState('');
   const missing = !patient.cccdMasked || !patient.birthDate;
+  // Bổ sung CCCD, sửa dị ứng: cần mạng (N4); bệnh nhân mới có trên máy thì cần đồng bộ trước.
+  const locked = !online ? `${NEED_NETWORK}` : fromCache?.unsynced ? 'Cần đồng bộ bệnh nhân này lên máy chủ trước' : undefined;
   const complete = async (e: FormEvent) => {
     e.preventDefault();
     setError(undefined);
@@ -81,18 +111,25 @@ export function PatientDetail({ token, summary, onQueued }: { token: string; sum
         <div><dt>Mã hồ sơ</dt><dd className="mono">{shortId(patient.id)}</dd></div>
       </dl>
 
+      {fromCache && (
+        <p className="offline-note small" data-testid="from-cache">
+          {fromCache.unsynced ? 'Bệnh nhân mới tạo trên máy này, chưa đồng bộ.' : 'Mất mạng: hồ sơ từ dữ liệu trên máy này.'}
+          {!fromCache.allergiesKnown && ' Máy chưa có dữ liệu dị ứng của người này: bác sĩ sẽ phải hỏi lại trước khi kê đơn.'}
+        </p>
+      )}
       {missing && (
         <form className="inline-form" onSubmit={complete} aria-label="Bổ sung thông tin" data-testid="complete-form">
+          {locked && <small data-testid="needs-network">{locked}</small>}
           <small className="muted">Thiếu {[!patient.cccdMasked && 'CCCD', !patient.birthDate && 'ngày sinh'].filter(Boolean).join(' và ')}: cần để kê đơn liên thông.</small>
           <div className="row">
             {!patient.cccdMasked && <input inputMode="numeric" placeholder="Số CCCD (12 số)" aria-label="Số CCCD" value={fixCccd} onChange={(e) => setFixCccd(e.target.value)} data-testid="fix-cccd" />}
             {!patient.birthDate && <input type="date" aria-label="Ngày sinh" value={fixBirth} onChange={(e) => setFixBirth(e.target.value)} data-testid="fix-birth" />}
           </div>
-          <button className="secondary" disabled={!fixCccd.trim() && !fixBirth} data-testid="fix-save">Lưu bổ sung</button>
+          <button className="secondary" disabled={!!locked || (!fixCccd.trim() && !fixBirth)} data-testid="fix-save">Lưu bổ sung</button>
         </form>
       )}
 
-      {allergies && <Allergies token={token} patientId={patient.id} allergies={allergies} onChange={setAllergies} />}
+      {allergies && <Allergies token={token} patientId={patient.id} allergies={allergies} onChange={setAllergies} {...(locked ? { locked } : {})} {...(fromCache && !fromCache.allergiesKnown ? { unknown: true } : {})} />}
 
       <form className="checkin" onSubmit={checkIn} aria-label="Cho vào hàng chờ">
         <h3>Cho vào hàng chờ</h3>

@@ -11,6 +11,7 @@ export type AuditAction =
   | 'update'
   | 'audit-read'
   | 'queue-read'
+  | 'queue-prefetch'
   | 'check-in'
   | 'queue-cancel'
   | 'visit-open'
@@ -40,9 +41,12 @@ export interface AuditEntry {
   role: Role | 'system';
   action: AuditAction;
   outcome: 'ok' | 'denied' | 'error';
+  /** Loại truy vấn; 'offline' khi thao tác được làm lúc mất mạng và gửi lên lúc đồng bộ. */
   queryKind?: string;
   resultCount?: number;
   resourceIds?: string[];
+  /** Thao tác làm lúc mất mạng: giờ thao tác theo máy khách (máy khách khai, không kiểm chứng được); `ts` là lúc máy chủ nhận. */
+  clientTs?: string;
 }
 
 export interface AuditSink {

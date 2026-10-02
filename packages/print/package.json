@@ -1,0 +1,27 @@
+{
+  "name": "@phongmach/print",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Mẫu in đơn thuốc A5 có mã QR: hàm thuần dùng chung cho BFF (in khi có mạng) và trình duyệt (in từ dữ liệu trên máy khi mất mạng)",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@phongmach/clinical": "workspace:*",
+    "@phongmach/rules": "workspace:*",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.5",
+    "typescript": "^6.0.0",
+    "vitest": "^5.0.0"
+  }
+}

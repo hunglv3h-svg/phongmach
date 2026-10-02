@@ -2,12 +2,15 @@ import { clock } from '../format';
 import { useState } from 'react';
 import { api, type AuthState } from '../api';
 import { usePoll } from '../hooks';
+import { NEED_NETWORK } from '../local/client';
+import { useOffline } from '../local/OfflineProvider';
 
 const Value = ({ seconds, target }: { seconds?: number; target: number }) =>
   seconds === undefined ? <span className="muted">—</span> : <span className={seconds <= target ? 'badge ok' : 'badge bad'}>{clock(seconds)} <small>({seconds} giây)</small></span>;
 
 export function Metrics({ auth }: { auth: AuthState }) {
   const [days, setDays] = useState(14);
+  const { online } = useOffline();
   const m = usePoll(() => api.metrics(auth.token, days), 10_000, [auth.token, days]);
   const data = m.data;
   return (
@@ -24,13 +27,14 @@ export function Metrics({ auth }: { auth: AuthState }) {
           </select>
         </label>
       </div>
-      <p className="muted">Từ lúc bác sĩ mở hồ sơ đến lúc ký và in đơn, do máy chủ đo (không tin đồng hồ trình duyệt). Mục tiêu: trung vị ≤ 60 giây, p90 ≤ 120 giây (TL34 B.5).{auth.user.role === 'doctor' ? ' Bạn chỉ thấy số của chính mình.' : ''}</p>
-      {m.error && <p className="error" role="alert">{m.error}</p>}
+      <p className="muted">Từ lúc bác sĩ mở hồ sơ đến lúc ký và in đơn, do máy chủ đo. Lượt mở hoặc ký lúc mất mạng được đo bằng đồng hồ của máy khám (máy chủ kiểm tra hợp lý khi đồng bộ) và đếm riêng ở cột "Đo ở máy khám". Mục tiêu: trung vị ≤ 60 giây, p90 ≤ 120 giây (TL34 B.5).{auth.user.role === 'doctor' ? ' Bạn chỉ thấy số của chính mình.' : ''}</p>
+      {!online && <p className="offline-note" data-testid="needs-network">{NEED_NETWORK}: số đo do máy chủ tính.</p>}
+      {m.error && online && <p className="error" role="alert">{m.error}</p>}
       {data && (
         <>
           <div className="table-wrap">
             <table data-testid="metrics-table">
-              <thead><tr><th>Bác sĩ</th><th>Số lượt</th><th>Trung vị (p50)</th><th>p90</th><th>Phiên bị loại</th></tr></thead>
+              <thead><tr><th>Bác sĩ</th><th>Số lượt</th><th>Trung vị (p50)</th><th>p90</th><th>Phiên bị loại</th><th>Đo ở máy khám</th><th>Giờ không hợp lý</th></tr></thead>
               <tbody>
                 {data.doctors.map((d) => (
                   <tr key={d.name} data-testid="metrics-row">
@@ -38,6 +42,8 @@ export function Metrics({ auth }: { auth: AuthState }) {
                     <td><Value seconds={d.p50Seconds} target={data.targetP50Seconds} /></td>
                     <td><Value seconds={d.p90Seconds} target={data.targetP90Seconds} /></td>
                     <td>{d.excluded}</td>
+                    <td>{d.clientMeasured}</td>
+                    <td>{d.invalidClock}</td>
                   </tr>
                 ))}
                 <tr className="total" data-testid="metrics-total">
@@ -45,12 +51,14 @@ export function Metrics({ auth }: { auth: AuthState }) {
                   <td><Value seconds={data.all.p50Seconds} target={data.targetP50Seconds} /></td>
                   <td><Value seconds={data.all.p90Seconds} target={data.targetP90Seconds} /></td>
                   <td>{data.all.excluded}</td>
+                  <td>{data.all.clientMeasured}</td>
+                  <td>{data.all.invalidClock}</td>
                 </tr>
               </tbody>
             </table>
           </div>
           {data.all.visits === 0 && <p className="muted">Chưa có lượt khám nào trong khoảng này.</p>}
-          <p className="muted small">Phiên dài hơn {Math.round(data.excludedLongerThanSeconds / 60)} phút (thường là bỏ dở) không tính vào phân vị nhưng được đếm ở cột "Phiên bị loại".{data.truncated ? ' Số liệu bị cắt vì quá nhiều lượt: hãy chọn khoảng ngắn hơn.' : ''}</p>
+          <p className="muted small">Phiên dài hơn {Math.round(data.excludedLongerThanSeconds / 60)} phút (thường là bỏ dở) không tính vào phân vị nhưng được đếm ở cột "Phiên bị loại". Lượt làm lúc mất mạng có giờ máy khám không hợp lý (âm, ở tương lai, dài hơn khoảng máy chủ thấy) vẫn được lưu nhưng không tính, đếm ở cột "Giờ không hợp lý".{data.truncated ? ' Số liệu bị cắt vì quá nhiều lượt: hãy chọn khoảng ngắn hơn.' : ''}</p>
         </>
       )}
     </main>

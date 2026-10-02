@@ -1,12 +1,16 @@
 import { classifyQuery, type PatientSummary } from '@phongmach/fhir-vn-model';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { api } from '../api';
+import { ApiError, api } from '../api';
 import { INTENT_LABEL, ageText } from '../format';
+import { useOffline } from '../local/OfflineProvider';
 import { PatientDetail } from './PatientDetail';
 import { PatientForm, type FormInitial } from './PatientForm';
 
-/** `forQuery` là chuỗi tìm mà `results` trả lời; khác với ô nhập hiện tại nghĩa là kết quả đã cũ. */
-type Search = { status: 'idle' | 'loading' | 'done' | 'error'; results: PatientSummary[]; forQuery?: string; error?: string };
+/**
+ * `forQuery` là chuỗi tìm mà `results` trả lời; khác với ô nhập hiện tại nghĩa là kết quả đã cũ.
+ * `local`: mất mạng, tìm trong `total` hồ sơ trên máy này (OFF-4).
+ */
+type Search = { status: 'idle' | 'loading' | 'done' | 'error'; results: PatientSummary[]; forQuery?: string; error?: string; local?: { total: number } };
 type Panel = { kind: 'none' } | { kind: 'detail'; patient: PatientSummary } | { kind: 'new'; initial: FormInitial; key: number };
 
 /** Mô tả cách ô tìm kiếm hiểu những gì đang gõ (4 số cuối khác với đoạn số khác). */
@@ -23,6 +27,7 @@ function hint(query: string): string | undefined {
 }
 
 export function Reception({ token }: { token: string }) {
+  const { client, online } = useOffline();
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState<Search>({ status: 'idle', results: [] });
   const [active, setActive] = useState(0);
@@ -40,19 +45,29 @@ export function Reception({ token }: { token: string }) {
     // Chờ 150 ms sau lần gõ cuối (TL34 D.5) và bỏ kết quả của truy vấn cũ khi gõ tiếp.
     const timer = setTimeout(async () => {
       setSearch((s) => ({ ...s, status: 'loading' }));
+      // Mất mạng (hoặc vừa gọi thì mất mạng): tìm trong bộ đệm trên máy, không có chỉ mục tên dạng rõ trên đĩa.
+      const searchLocal = async () => {
+        const r = await client.searchCache(query);
+        if (abort.signal.aborted) return;
+        setSearch({ status: 'done', results: r.results, forQuery: query, local: { total: r.total } });
+        setActive(0);
+      };
       try {
-        const r = await api.search(token, query, abort.signal);
+        if (!online) return await searchLocal();
+        const r = await client.call(() => api.search(token, query, abort.signal));
         setSearch({ status: 'done', results: r.results, forQuery: query });
         setActive(0);
       } catch (e) {
-        if ((e as Error).name !== 'AbortError') setSearch({ status: 'error', results: [], error: (e as Error).message });
+        if ((e as Error).name === 'AbortError') return;
+        if (e instanceof ApiError && e.status === 0) return void (await searchLocal().catch(() => undefined));
+        setSearch({ status: 'error', results: [], error: (e as Error).message });
       }
     }, 150);
     return () => {
       clearTimeout(timer);
       abort.abort();
     };
-  }, [query, token]);
+  }, [query, token, client, online]);
 
   const open = (patient: PatientSummary) => {
     setNotice(undefined);
@@ -118,7 +133,9 @@ export function Reception({ token }: { token: string }) {
             : !hintText
               ? 'Gõ tên (có dấu hay không đều được), số điện thoại, 4 số cuối hoặc CCCD'
               : fresh
-                ? `${search.results.length} kết quả`
+                ? search.local
+                  ? `Mất mạng: chỉ tìm trong ${search.local.total} hồ sơ trên máy này · ${search.results.length} kết quả`
+                  : `${search.results.length} kết quả`
                 : 'Đang tìm…'}
           {hintText && <span className="chip">{hintText}</span>}
         </p>
@@ -151,8 +168,14 @@ export function Reception({ token }: { token: string }) {
             token={token}
             initial={panel.initial}
             onCancel={() => setPanel({ kind: 'none' })}
-            onCreated={(patient, created) => {
-              setNotice(created ? 'Đã tạo bệnh nhân mới.' : 'Bệnh nhân này đã được tạo trước đó, không tạo trùng.');
+            onCreated={(patient, created, tentative) => {
+              setNotice(
+                tentative
+                  ? 'Mất mạng: đã tạo bệnh nhân trên máy này (đã mã hóa), sẽ gửi lên máy chủ khi có mạng.'
+                  : created
+                    ? 'Đã tạo bệnh nhân mới.'
+                    : 'Bệnh nhân này đã được tạo trước đó, không tạo trùng.'
+              );
               setPanel({ kind: 'detail', patient });
               input.current?.focus();
             }}

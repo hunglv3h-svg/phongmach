@@ -20,7 +20,10 @@ const browser = await chromium.launch({ executablePath: chromiumPath() });
 const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'vi-VN' });
 const page = await context.newPage();
 const problems = [];
-page.on('console', (m) => m.type() === 'error' && problems.push(`console: ${m.text()}`));
+// Khi cố ý ngắt mạng, trình duyệt ghi lỗi tải tài nguyên vào console: đó là điều được chờ đợi, không phải lỗi ứng dụng.
+let offline = false;
+const expectedOffline = (text) => offline && /ERR_INTERNET_DISCONNECTED|Failed to fetch/.test(text);
+page.on('console', (m) => m.type() === 'error' && !expectedOffline(m.text()) && problems.push(`console: ${m.text()}`));
 page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
 
 let step = 0;
@@ -86,6 +89,40 @@ async function pickDiagnosis(query) {
   await page.getByTestId('dx-search').press('Enter');
 }
 const pendingState = () => page.getByTestId('gateway-status').getAttribute('data-status');
+/** Đọc thẳng mọi kho IndexedDB của ứng dụng trong trình duyệt (không qua mã ứng dụng): tên kho, số bản ghi từng bảng, mọi byte dưới dạng chữ. */
+const rawLocalDump = () =>
+  page.evaluate(async () => {
+    const out = { names: [], rows: {}, keys: 0, text: '' };
+    const decoder = new TextDecoder();
+    const req = (r) => new Promise((resolve, reject) => ((r.onsuccess = () => resolve(r.result)), (r.onerror = () => reject(r.error))));
+    for (const { name } of (await indexedDB.databases()).filter((d) => d.name?.startsWith('phongmach:'))) {
+      out.names.push(name);
+      const db = await req(indexedDB.open(name));
+      for (const store of db.objectStoreNames) {
+        const rows = await req(db.transaction(store).objectStore(store).getAll());
+        out.rows[store] = (out.rows[store] ?? 0) + rows.length;
+        if (store === 'meta') out.keys += rows.filter((r) => r.k === 'key').length;
+        for (const row of rows) for (const v of Object.values(row)) out.text += `${v instanceof ArrayBuffer || ArrayBuffer.isView(v) ? decoder.decode(v) : JSON.stringify(v)}\n`;
+      }
+      db.close();
+    }
+    return out;
+  });
+/** Xuất PDF như khi in: phải đúng một trang khổ A5 (148×210 mm ≈ 419,5×595,3 pt). */
+async function assertOneA5Page(html, name) {
+  const printPage = await context.newPage();
+  try {
+    await printPage.setContent(html);
+    const pdf = (await printPage.pdf({ preferCSSPageSize: true })).toString('latin1');
+    const pages = (pdf.match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+    assert.equal(pages, 1, `đơn phải vừa một trang A5, thực tế ${pages}`);
+    const box = /MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)\s*\]/.exec(pdf);
+    assert.ok(box && Math.abs(Number(box[1]) - 419.5) < 1.5 && Math.abs(Number(box[2]) - 595.3) < 1.5, `khổ A5, thực tế ${box?.slice(1, 3)}`);
+    await printPage.screenshot({ path: `${shots}${name}.png` });
+  } finally {
+    await printPage.close();
+  }
+}
 
 try {
   await resetQueue();
@@ -136,6 +173,15 @@ try {
   assert.equal(await page.getByTestId('vital-pulse').getAttribute('aria-invalid'), 'true');
   await page.getByTestId('vital-pulse').fill('96');
   ok('gõ tắt "viem hong" chọn bằng bàn phím ra J02.9; sinh hiệu sai (chữ) bị đánh dấu, dấu phẩy "38,5" được hiểu');
+
+  // Bản nháp nằm trong kho mã hóa trên máy (IndexedDB): chờ lưu xong rồi đọc thẳng kho như người mở tệp của trình duyệt.
+  await page.locator('[data-testid="draft-saved"][data-dirty="false"][data-persistent="true"]').waitFor();
+  const raw = await rawLocalDump();
+  assert.ok(raw.names.includes('phongmach:noi-tong-quat:noi-doctor'), `có kho của bác sĩ, thực tế ${raw.names}`);
+  assert.ok(raw.rows.drafts >= 1 && raw.keys === 1, `kho có bản nháp và đúng một khóa: ${JSON.stringify(raw)}`);
+  for (const secret of ['Đau họng, sốt nhẹ, không ho', 'Họng đỏ', 'J02.9', 'Nguyễn Văn An', 'symptoms']) assert.ok(!raw.text.includes(secret), `kho trên máy không được có "${secret}" ở dạng rõ`);
+  assert.deepEqual(await page.evaluate(() => Object.keys(sessionStorage).filter((k) => k.startsWith('phongmach.draft.'))), [], 'không còn bản nháp trong sessionStorage');
+  ok('bản nháp lưu trong IndexedDB đã mã hóa: đọc thẳng kho không thấy triệu chứng, chẩn đoán, tên; sessionStorage không còn bản nháp');
 
   // Mô phỏng tải lại trang giữa chừng: bản nháp phải còn.
   await page.reload();
@@ -201,16 +247,27 @@ try {
   const printed = await frame.locator('body').innerText();
   assert.ok(printed.includes(signed.prescription.code) && printed.includes('BẢN MÔ PHỎNG') && printed.includes('Nguyễn Văn An'));
   const html = (await api('GET', `/api/prescriptions/${signed.prescription.id}/print`)).text;
-  const printPage = await context.newPage();
-  await printPage.setContent(html);
-  const pdf = await printPage.pdf({ preferCSSPageSize: true });
-  const pages = (pdf.toString('latin1').match(/\/Type\s*\/Page[^s]/g) ?? []).length;
-  assert.equal(pages, 1, `đơn phải vừa một trang A5, thực tế ${pages}`);
-  const box = /MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)\s*\]/.exec(pdf.toString('latin1'));
-  assert.ok(box && Math.abs(Number(box[1]) - 419.5) < 1.5 && Math.abs(Number(box[2]) - 595.3) < 1.5, `khổ A5 (148×210 mm ≈ 419,5×595,3 pt), thực tế ${box?.slice(1, 3)}`);
-  await printPage.screenshot({ path: `${shots}14-print-a5.png` });
-  await printPage.close();
+  await assertOneA5Page(html, '14-print-a5');
   ok('in A5: có mã QR (SVG), mã đơn, nhãn mô phỏng; xuất PDF đúng 1 trang khổ A5');
+
+  // Mất mạng ngay sau khi ký: "In lại đơn" dựng trang in ngay trong trình duyệt từ dữ liệu trên máy, cùng mẫu với BFF.
+  const framesBefore = await page.locator('iframe[data-testid="print-frame"]').count();
+  offline = true;
+  await context.setOffline(true);
+  await page.getByTestId('reprint').click();
+  await page.getByTestId('printed-locally').waitFor();
+  const localHtml = await page.locator('iframe[data-testid="print-frame"]').nth(framesBefore).getAttribute('srcdoc');
+  await context.setOffline(false);
+  offline = false;
+  // Dòng cuối (trạng thái liên thông) được phép khác: lúc này đơn có thể đã "Đã gửi"; bản in từ máy ghi rõ có thể chưa cập nhật.
+  const gatewayLine = /<div class="row" style="font:8pt sans-serif;margin-top:2mm">.*?<\/div>/s;
+  assert.match(localHtml, gatewayLine);
+  assert.match(localHtml.match(gatewayLine)[0], /In khi mất mạng từ dữ liệu trên máy/);
+  const compared = html.replace(gatewayLine, '');
+  for (const part of ['<svg', signed.prescription.code, 'Nguyễn Văn An', 'Amoxicillin', '<b>Tuổi:</b>']) assert.ok(compared.includes(part), `phần đem so phải có "${part}"`);
+  assert.equal(localHtml.replace(gatewayLine, ''), compared, 'trang in dựng ở trình duyệt phải giống từng ký tự trang do BFF dựng (trừ dòng liên thông)');
+  await assertOneA5Page(localHtml, '14b-print-a5-local');
+  ok('mất mạng, "In lại đơn": in từ dữ liệu trên máy, giống từng ký tự bản BFF (trừ dòng liên thông), PDF đúng 1 trang A5');
 
   // Liên thông: cổng đang chạy nên đơn sang "Đã gửi"
   await page.getByTestId('gateway-status').filter({ hasText: 'Đã gửi' }).waitFor({ timeout: 20_000 });
@@ -259,6 +316,8 @@ try {
 
   // ================================================================== Số đo, nhật ký, cách ly
   await logout();
+  assert.ok(!(await rawLocalDump()).names.includes('phongmach:noi-tong-quat:noi-doctor'), 'đăng xuất phải xóa kho trên máy của bác sĩ');
+  ok('bác sĩ đăng xuất: kho trên máy (bản nháp và khóa) bị xóa');
   await login('noi-owner');
   await page.getByTestId('tab-metrics').click();
   await page.getByTestId('metrics-row').first().waitFor();
@@ -321,6 +380,7 @@ try {
 } finally {
   // Trả cổng mô phỏng về trạng thái chạy và dọn hàng chờ, kể cả khi kịch bản hỏng giữa chừng.
   try {
+    await context.setOffline(false);
     await resetQueue();
     await logout().catch(() => {});
     await login('noi-doctor');

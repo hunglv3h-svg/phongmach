@@ -2,6 +2,7 @@ import type { Bundle, BundleEntry, ClinicalImpression, Condition, Encounter, Lis
 import { DomainError, EXTENSIONS, SYSTEMS } from '@phongmach/fhir-vn-model';
 import type { Icd10Entry } from '@phongmach/catalogs';
 import type { AckView, DiagnosisView, ExamInput, PrescriptionSummary, Specialty, VisitSummary } from './dto.js';
+import type { VisitSecondsSource } from './clientTime.js';
 import { buildSendTask } from './outbox.js';
 import { priorityOf, specialtyOf } from './queue.js';
 import { acksToExtensions, buildMedicationRequest, canonicalContent, toPrescriptionSummary, type SignedLine } from './prescription.js';
@@ -30,6 +31,8 @@ export interface CompletionInput {
   diagnoses: Icd10Entry[];
   prescription?: PrescriptionToSign | undefined;
   visitSeconds?: number | undefined;
+  /** Thời gian phiên khám đo ở đâu (OFF-3). */
+  visitSecondsSource?: VisitSecondsSource | undefined;
 }
 
 const part = (clientUuid: string, role: string) => `${clientUuid.toLowerCase()}:${role}`;
@@ -174,8 +177,9 @@ export function buildCompletionBundle(input: CompletionInput): Bundle {
     period: { ...encounter.period, start: encounter.period?.start ?? nowIso, end: nowIso },
     ...(reason ? { reasonCode: [{ text: reason }] } : {}),
     extension: [
-      ...(encounter.extension ?? []).filter((e) => e.url !== EXTENSIONS.visitSeconds),
+      ...(encounter.extension ?? []).filter((e) => e.url !== EXTENSIONS.visitSeconds && e.url !== EXTENSIONS.visitSecondsSource),
       ...(input.visitSeconds !== undefined ? [{ url: EXTENSIONS.visitSeconds, valueInteger: input.visitSeconds }] : []),
+      ...(input.visitSecondsSource ? [{ url: EXTENSIONS.visitSecondsSource, valueCode: input.visitSecondsSource }] : []),
     ],
   };
   entries.push({

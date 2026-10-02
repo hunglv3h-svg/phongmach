@@ -3,10 +3,12 @@ import { useState } from 'react';
 import { api, type AuthState } from '../api';
 import { formatTime, shortId } from '../format';
 import { useNow, usePoll } from '../hooks';
+import { NEED_NETWORK } from '../local/client';
+import { useOffline } from '../local/OfflineProvider';
 
 const BADGE: Record<GatewayStatus, string> = { signed: 'warn', sending: 'warn', retry: 'warn', sent: 'ok', failed: 'bad' };
 
-function Pending({ p, token, onChanged, now }: { p: PendingPrescription; token: string; onChanged: () => void; now: number }) {
+function Pending({ p, token, onChanged, now, online }: { p: PendingPrescription; token: string; onChanged: () => void; now: number; online: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const g = p.gateway;
@@ -24,7 +26,7 @@ function Pending({ p, token, onChanged, now }: { p: PendingPrescription; token: 
         {error && <small className="error"> · {error}</small>}
       </td>
       <td>
-        <button className="secondary" disabled={busy || g.status === 'sending'} onClick={() => { setBusy(true); setError(undefined); api.retry(token, p.prescriptionId).then(onChanged, (e: Error) => setError(e.message)).finally(() => setBusy(false)); }} data-testid="retry">
+        <button className="secondary" disabled={busy || g.status === 'sending' || !online} title={online ? undefined : NEED_NETWORK} onClick={() => { setBusy(true); setError(undefined); api.retry(token, p.prescriptionId).then(onChanged, (e: Error) => setError(e.message)).finally(() => setBusy(false)); }} data-testid="retry">
           Gửi lại ngay
         </button>
       </td>
@@ -34,11 +36,12 @@ function Pending({ p, token, onChanged, now }: { p: PendingPrescription; token: 
 
 export function Gateway({ auth }: { auth: AuthState }) {
   const { token, user } = auth;
+  const { online } = useOffline();
   const pending = usePoll((signal) => api.pending(token, signal), 2000, [token]);
   const sim = usePoll(() => api.simGet(token).catch((e: Error & { status?: number }) => (e.status === 404 ? undefined : Promise.reject(e))), 3000, [token]);
   const now = useNow(1000);
   const [error, setError] = useState<string>();
-  const canControl = user.role !== 'assistant';
+  const canControl = user.role !== 'assistant' && online;
   const state = sim.data?.state;
 
   const set = async (body: { mode?: 'up' | 'down'; failNext?: number }) => {
@@ -56,6 +59,7 @@ export function Gateway({ auth }: { auth: AuthState }) {
     <main className="page">
       <h1>Liên thông cổng đơn thuốc quốc gia</h1>
       <p className="muted">Mỗi đơn đã ký được ghi vào hộp thư đi cùng lúc với đơn. Cổng lỗi thì đơn vẫn nằm đây và tự thử lại: không mất đơn.</p>
+      {!online && <p className="offline-note" data-testid="needs-network">{NEED_NETWORK}: danh sách dưới đây là lần tải cuối; đơn ký khi mất mạng chỉ liên thông được sau khi đồng bộ.</p>}
 
       {state && (
         <section className="card sim" aria-label="Cổng mô phỏng" data-testid="sim-panel">
@@ -83,7 +87,7 @@ export function Gateway({ auth }: { auth: AuthState }) {
         <div className="table-wrap">
           <table data-testid="pending-table">
             <thead><tr><th>Mã đơn</th><th>Bệnh nhân</th><th>Ký lúc</th><th>Trạng thái</th><th /></tr></thead>
-            <tbody>{rows.map((p) => <Pending key={p.prescriptionId} p={p} token={token} now={now} onChanged={pending.reload} />)}</tbody>
+            <tbody>{rows.map((p) => <Pending key={p.prescriptionId} p={p} token={token} now={now} online={online} onChanged={pending.reload} />)}</tbody>
           </table>
         </div>
       )}

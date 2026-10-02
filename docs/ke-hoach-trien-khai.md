@@ -91,7 +91,7 @@ Thông lượng bão hòa quanh 700 req/s; ở lần đo đầu là 758 req/s v�
 Giao diện web Medplum, Bot, Subscription (webhook), xác thực hai lớp, chạy nhiều bản server, nâng cấp phiên bản, PITR, ảnh Docker 3.x, mã hóa cấp trường,
 lưu trữ S3/MinIO, mọi bộ nối (Cổng Đơn thuốc, ký số, Zalo, thanh toán, hóa đơn điện tử), ngoại tuyến, phương án B.
 
-### Phát hiện từ việc cài đặt và xây dựng (F1–F11)
+### Phát hiện từ việc cài đặt và xây dựng (F1–F12)
 
 | # | Phát hiện | Mức | Tác động | Công việc |
 |---|---|---|---|---|
@@ -106,6 +106,7 @@ lưu trữ S3/MinIO, mọi bộ nối (Cổng Đơn thuốc, ký số, Zalo, tha
 | F9 | Migration chạy khi server khởi động (hơn 100 bước tiền triển khai, cộng hàng đợi hậu triển khai) | [Đã đo] qua log | Nâng cấp cuốn chiếu nhiều bản phải được kiểm chứng | T-UPG |
 | F10 | Dev dùng lưu trữ tệp cục bộ (`binaryStorage: file:`) | [Đã đo] | Không dùng được khi chạy nhiều bản server; production cần S3/MinIO [Chưa kiểm chứng] | T-HA |
 | F11 | `Bundle` loại `transaction` của Medplum 5.2.0 **không nguyên tử**: một mục lỗi (412 do `If-Match` cũ, 400, 404) được báo riêng trong phản hồi **HTTP 200**, còn các mục khác vẫn được ghi. Tạo có điều kiện (`ifNoneExist`) trong gói hoạt động: mục đã có trả 200 và tham chiếu `urn:uuid:` nối vào bản ghi đã có | [Đã đo] 5 ca trên server thật: `PUT` id lạ (201,400), `GET` id lạ (201,404), `If-Match` cũ (201,201,412 và 2 bản ghi vẫn được tạo), tạo có điều kiện trùng (201,200); chạy lại cùng gói sau lỗi 412 cho toàn 200, không bản ghi trùng, mọi tham chiếu đúng | Không được dựa vào hoàn tác hay vào `If-Match` trong gói để chặn ghi đồng thời. Mọi gói ghi nhiều bản ghi phải **chạy lại được** (định danh xác định + `ifNoneExist`), có một mục "điểm chốt" đứng cuối, và người gọi phải kiểm tra từng mục của phản hồi | T-IDEM, T-OUTBOX |
+| F12 | Chromium (bản không giao diện, Playwright) **bỏ mất sự kiện trả về của yêu cầu IndexedDB đang dở** khi trang gọi `print()` trên iframe: lời hứa của yêu cầu đó không bao giờ xong, kể cả sau 10 giây. fetch, hẹn giờ và WebCrypto không bị. Với kho chạy lần lượt, một yêu cầu bị mất làm treo mọi thao tác sau nó, và hàng đợi đồng bộ không gửi được nữa cho tới khi tải lại trang | [Đã đo] IndexedDB thuần mất 8–14 trên 200 yêu cầu đang dở; với kho của ứng dụng: 3 trong 6 lần thử một lần đọc rồi in bị treo; trình duyệt có giao diện [Chưa thử] | Ký khi mất mạng rồi in ngay, đúng lúc hàng đợi đang đọc kho: lần chạy đầu của bài e2e và hai lần chạy gỡ lỗi đều treo đồng bộ | M0-S3 lát 3b: hàng rào in (`whileLocalStoreQuiet`) và hạn 20 giây cho mỗi thao tác kho; e2e đo bất biến "không in khi còn yêu cầu đang dở" |
 
 ---
 
@@ -411,12 +412,249 @@ Mục này viết cho người (hoặc phiên làm việc) tiếp nhận M0-S3 m
 **Bẫy đã gặp, đừng lặp lại:**
 
 - **F11:** `transaction` của Medplum không nguyên tử; luôn kiểm tra từng mục bằng `failedEntries`; không dựa vào `If-Match` trong gói; `PUT` với id tự chọn trả 404 (dùng `ifNoneExist`).
+- **F12: không gọi `print()` khi còn yêu cầu IndexedDB đang dở.** Mọi lần in đi qua `printHtml`, hàm này chờ kho yên (`whileLocalStoreQuiet`). Đừng gọi `window.print()` thẳng. Bài `e2e:offline` đếm yêu cầu IndexedDB đang dở lúc gọi `print()`; bỏ hàng rào thì bài này đỏ (2/2 lần), còn các bước khác vẫn có thể xanh vì việc mất sự kiện tùy thời điểm.
 - **Hạn mức đăng nhập 5 lần/phút theo IP (F5).** Mỗi file kiểm thử tích hợp đăng nhập quản trị một lần, nên chạy bộ tích hợp ba lần liền sẽ gặp 429 ở khâu dựng dữ liệu; đó không phải lỗi mã. Thêm file kiểm thử mới thì tính lại. Nếu gặp, chờ một phút.
 - **Kiểm thử hẹn giờ phải dùng thời gian ảo, không `sleep`**: CI chậm hơn máy dev (một bài thử lại hạn 40 ms đã làm đỏ CI). Bài hỏng giữa chừng không được để lại trạng thái chung cho các bài sau (đặt lại trong `beforeEach`).
 - **Không thăm dò trên phòng khám demo**: các lần thử ban đầu đã làm sai số thứ tự và lịch sử. Tạo phòng khám tạm như các kiểm thử tích hợp (`createTenantProject`). Bài e2e `visit.mjs` tự dọn hàng chờ ở đầu và cuối để chạy lại được kể cả sau lần hỏng.
 - **Không dùng `pkill -f` theo mẫu chữ** (đã từng giết chính shell đang chạy lệnh); `infra/dev-up.sh` dùng file PID và nhóm tiến trình. Tiến trình nền phải bỏ stdout của lệnh gọi, nếu không nó giữ đầu ống và lệnh không bao giờ kết thúc.
 - **Quy tắc đã thành nếp, giữ cho mọi tính năng mới**: log không chứa chuỗi truy vấn; nhật ký truy cập không chứa dữ liệu bệnh nhân; ghi nhật ký trước khi trả dữ liệu; tenant lấy từ phiên, không từ tham số; mọi phần mô phỏng có nhãn. Kiểm thử an toàn phải được xác nhận **thất bại khi gỡ biện pháp** tương ứng.
 - **Khi xong M0-S3, cập nhật chỗ nói "ngoại tuyến chưa có"**: `components/Scope.tsx`, `components/DemoBanner.tsx`, `README.md` (mục "Giới hạn"), mục 5.2 và 5.7 của kế hoạch, và bước kiểm tra trang Phạm vi trong `e2e/visit.mjs`.
+
+#### Thiết kế ngoại tuyến M0-S3 [Đã duyệt 02/10/2026] (02/10/2026)
+
+Điểm xuất phát đã chạy lại trên sandbox mới bằng `infra/dev-up.sh`: kiểu đạt, 217 kiểm thử đơn vị, 35 tích hợp, e2e 13 + 21 bước, tất cả xanh. Đã thử nhanh (không phải mã sản phẩm) trên Chromium: `context.setOffline` phát sự kiện `offline`/`online` và làm `fetch` lỗi; `route.fetch()` rồi `route.abort()` tạo được ca "máy chủ đã ghi (HTTP 200) nhưng trình duyệt thấy lỗi mạng"; WebCrypto và Web Locks có trên `127.0.0.1`. Chủ dự án đã duyệt thiết kế ngày 02/10/2026: không dùng mã PIN ở M0, chấp nhận giới hạn N5 (đoạn ngắt mạng khi trình diễn làm trên một máy).
+
+**Nguyên tắc chung (N1–N5)**
+
+- **N1. Lưu bền trước, gửi sau.** Thao tác ghi được phép khi mất mạng đi qua một hàng đợi cục bộ (IndexedDB, mã hóa): ghi mục vào hàng đợi cùng dữ liệu hiển thị trong một giao dịch, rồi mới gửi. Có mạng thì gửi ngay, nên đường ngoại tuyến cũng là đường trực tuyến và được dùng hằng ngày, không chỉ khi mất mạng. **Không in khi chưa lưu bền**: ghi cục bộ lỗi (đầy bộ nhớ) thì báo lỗi và không in.
+- **N2. Một thao tác, một `clientUuid`**, sinh một lần và giữ qua mọi lần gửi lại, tải lại trang, hết phiên. Máy chủ đã idempotent theo UUID (mục này, "Đã có"), nên "0 trùng" dựa vào cơ chế đã có kiểm thử; hàng đợi lo phần "0 mất".
+- **N3. Không âm thầm.** Mỗi mục có trạng thái: chờ, đang gửi, thử lại (lỗi tạm), cần xử lý (xung đột, quy tắc, lỗi dữ liệu), xong. Mục "cần xử lý" không tự bỏ, không tự ghi đè, luôn hiện cho tới khi người dùng xử lý.
+- **N4. Phạm vi ngoại tuyến:** tìm (trong dữ liệu trên máy), tạo bệnh nhân, cấp số, gọi vào khám, khám, ký hoặc kết thúc khám, in, in lại. Các thao tác khác (hủy lượt, dị ứng/tiền sử, bổ sung CCCD, liên thông, số đo, nhật ký) bị khóa khi mất mạng, có ghi "cần mạng".
+- **N5. Ngoại tuyến là của từng máy.** Mọi đồng bộ đi qua BFF; khi Internet của phòng khám mất, các máy không thấy nhau. Người được cấp số ngoại tuyến ở máy lễ tân chỉ hiện ở máy bác sĩ khi một trong hai máy có mạng lại (câu hỏi 2 bên dưới).
+
+**OFF-1. In khi mất mạng.** *Quyết định:* tách mẫu đơn A5 ra gói `@phongmach/print` (hàm thuần: dữ liệu → HTML, QR dạng SVG bằng `qrcode`, chạy được cả Node và trình duyệt, giữ nguyên thoát ký tự và CSP `default-src 'none'`). BFF `/print` dùng chính gói này cho in lại khi có mạng (giữ dòng nhật ký `prescription-print`). Ký khi mất mạng thì trình duyệt dựng trang in từ dữ liệu cục bộ: thuốc và chẩn đoán từ danh mục đã đóng gói, bệnh nhân từ bộ đệm, tên phòng khám và bác sĩ từ phiên. Mã đơn sinh ở máy khách bằng cùng `makePrescriptionCode`: ngày theo **giờ ký của máy khách**, 6 ký tự từ SHA-256(`clientUuid`) (WebCrypto). Máy chủ tính lại theo `signedAt` của máy khách nên mã trên giấy trùng mã lưu trên máy chủ. Trang in ngoại tuyến thêm nhãn "Ký khi mất mạng, chưa đồng bộ, chưa liên thông". Mỗi lần in ngoại tuyến thành một mục hàng đợi ghi nhật ký `prescription-print` khi có mạng.
+
+*Lý do:* một mẫu duy nhất nên bản in trực tuyến và ngoại tuyến giống nhau, một bài kiểm tra PDF A5 dùng cho cả hai; mã đơn xác định nên không cần chờ máy chủ.
+
+*Rủi ro:* đồng hồ máy khách sai thì ngày trên mã và trên giấy sai theo (máy chủ lưu đúng cái đã in và gắn cờ, xem OFF-3); giá trị pháp lý của đơn in khi chưa liên thông vẫn là Q3 (trang in ghi rõ mô phỏng); bundle lớn thêm phần `qrcode`: 312 → 343 KB, nén 96,7 → 109,3 KB [Đã đo, bản build lát 1]; dòng nhật ký in có thể bị ghi hai lần nếu mất phản hồi (nhật ký chỉ ghi thêm; chấp nhận và ghi chú).
+
+*Loại:* in thẳng trang ứng dụng (không kiểm soát được khổ A5, lộ giao diện); lưu sẵn HTML do BFF dựng (không có khi ký lúc mất mạng); sinh PDF ở trình duyệt (thư viện lớn, không cần).
+
+**OFF-2. Số thứ tự khi ngoại tuyến.** *Quyết định:* máy khách cấp **số tạm** = số lớn nhất nó biết trong ngày (hàng chờ đã lưu và số tạm đã cấp) + 1, hiện "007 (tạm)" ở hàng chờ và màn hình chờ của máy đó. Khi đồng bộ, yêu cầu cấp số mang `proposedNumber` và `arrivedAt` (giờ máy khách); máy chủ **thử giữ đúng số tạm** bằng tạo có điều kiện theo mã lượt khám (cơ chế chống trùng số đang có), số đã bị lấy thì cấp số kế tiếp như hiện nay và giao diện báo rõ "Số 007 (cấp khi mất mạng) đã đổi thành 009". Ngày của lượt khám lấy theo `arrivedAt` (đồng bộ sang hôm sau không đẩy bệnh nhân sang hàng chờ hôm sau); `arrivedAt` ở tương lai thì dùng giờ máy chủ.
+
+*Phản biện gợi ý:* giữ "số tạm, máy chủ gán số thật", chỉ thêm "máy chủ ưu tiên giữ số tạm". Phòng mạch một quầy tiếp đón (trường hợp phổ biến) thì số không bao giờ đổi, bệnh nhân không bị gọi bằng số khác số đã được báo.
+
+*Rủi ro:* hai máy cùng cấp số khi mất mạng sẽ trùng số tạm; máy đồng bộ sau bị đổi số (có thông báo). Trên máy chủ không bao giờ trùng số.
+
+*Loại:* số dạng "T1" (luôn đổi, thứ tự gọi phải xử lý riêng); chỉ khám người đã có số (không đạt "tiếp đón khi mất mạng"); dải số riêng cho từng máy (số nhảy cóc, thêm cấu hình).
+
+**OFF-3. Đồng hồ phiên khám.** *Quyết định:* máy khách luôn ghi `openedAt` theo đồng hồ của chính nó (mở có mạng thì lấy lúc nhận phản hồi), lưu cùng bản nháp. Mở hồ sơ khi mất mạng thì yêu cầu mở mang `openedAt`; mở hoặc ký khi mất mạng thì yêu cầu hoàn tất mang `clientTimes: { openedAt, signedAt }`. Máy chủ:
+
+- không có `clientTimes` thì đo như hiện nay (nguồn `server`);
+- có thì thời lượng = `signedAt − openedAt` (cùng một đồng hồ nên độ lệch giờ triệt tiêu), nguồn `client`, kiểm tra: không âm, không vượt trần, `signedAt` không quá giờ máy chủ + 5 phút, và nếu máy chủ đã thấy lúc mở thật thì không dài hơn (giờ nhận − lúc mở) + 5 phút.
+
+Không hợp lý thì **vẫn lưu lượt khám**, không tính vào p50/p90, đếm riêng như phiên quá 30 phút. Giờ ký trên đơn, `authoredOn`, giờ kết thúc lượt khám lấy theo `signedAt` của máy khách (đúng với cái đã in và đã băm ký); giờ máy chủ nhận vẫn có ở `meta.lastUpdated`. Trang "Thời gian khám" ghi số lượt đo ở máy khách và số lượt bị loại vì giờ không hợp lý.
+
+*Rủi ro:* máy khách có thể khai giờ ký lùi (vấn đề pháp lý khi có ký số và xác thực thật, ghi vào T-SIGN, Q3); không phát hiện được việc khai thời lượng ngắn hơn thực tế.
+
+*Loại:* dùng giờ máy chủ lúc đồng bộ (thời lượng gần 0 hoặc dài bằng cả lúc mất mạng); từ chối yêu cầu có giờ không hợp lý (mất bản ghi đã ký và đã in).
+
+**OFF-4. Tìm bệnh nhân ngoại tuyến.** *Quyết định:* bộ đệm cục bộ chỉ chứa (a) người trong hàng chờ hôm nay, (b) hồ sơ đã mở trong ngày (Tiếp đón, Khám), (c) bệnh nhân tạo trên máy này. Không lưu kết quả tìm kiếm chưa mở. Khi có mạng, ứng dụng nạp trước tóm tắt và **dị ứng** của người mới vào hàng chờ qua điểm cuối gộp mới `GET /api/queue/prefetch` (một dòng nhật ký `queue-prefetch` kèm danh sách id). Điểm cuối này mở cho mọi vai trò, vì phụ tá cần số điện thoại để tìm khi mất mạng và mọi vai trò vốn đã xem được dị ứng. Nó chỉ trả người đang chờ hoặc đang khám hôm nay, kể cả khi hỏi đích danh người khác. Tìm ngoại tuyến giải mã bộ đệm (vài trăm người là cùng) vào bộ nhớ rồi lọc bằng `classifyQuery` + `foldName`: tên không dấu theo tiền tố từng từ, số điện thoại, 4 số cuối. **Không có chỉ mục tên dạng rõ trên đĩa.** CCCD không tìm được ngoại tuyến (máy khách chỉ có CCCD đã che), trừ bệnh nhân tạo trên máy này. Bộ đệm ngày cũ bị dọn khi mở ứng dụng. Ô tìm ghi "Mất mạng: chỉ tìm trong N hồ sơ trên máy này" và giữ quy tắc kết quả cũ bị mờ (bài học 1 của M0-S1).
+
+*An toàn:* mở hồ sơ ngoại tuyến của người **chưa có dữ liệu dị ứng trên máy** sinh phát hiện mới `allergy-unknown`, mức "xác nhận kèm lý do" như `no-birthdate`: bác sĩ phải hỏi bệnh nhân rồi xác nhận mới ký được; yêu cầu hoàn tất báo cờ này để máy chủ lưu xác nhận cùng đơn. Máy chủ chạy lại quy tắc với dị ứng thật khi đồng bộ (OFF-7).
+
+*Rủi ro:* dị ứng nạp trước có thể đã cũ (phụ tá ghi thêm sau đó), máy chủ bắt lại khi đồng bộ; nhật ký nhiều dòng hơn.
+
+*Loại:* lưu toàn bộ bệnh nhân (ngoài phạm vi, lộ nhiều dữ liệu); chỉ mục không dấu dạng rõ trong IndexedDB (lộ tên ra đĩa).
+
+**OFF-5. Kho cục bộ có mã hóa.** *Quyết định:* IndexedDB qua Dexie, một CSDL cho mỗi (phòng khám, người dùng). Mọi bản ghi có dữ liệu bệnh nhân lưu dạng `{iv, ciphertext}` AES-GCM 256 bit, IV 96 bit ngẫu nhiên mỗi lần ghi, dữ liệu kèm (AAD) là tên bảng + id để không tráo được bản ghi giữa các chỗ. Khóa là `CryptoKey` sinh bằng WebCrypto lúc đăng nhập, `extractable: false`, lưu trong chính CSDL đó. Trường dạng rõ chỉ gồm id, trạng thái, thời điểm, loại thao tác (không tên, chẩn đoán, thuốc). Kho này thay `sessionStorage` của bản nháp. Đăng xuất xóa cả CSDL lẫn khóa **nếu không còn mục chờ đồng bộ** (còn thì xem OFF-6). Gọi `navigator.storage.persist()` để giảm khả năng trình duyệt tự dọn; dùng Web Locks để chỉ một tab gửi đồng bộ. Trình duyệt không có IndexedDB hoặc WebCrypto thì ứng dụng chạy như hiện nay (chỉ trực tuyến) và ghi rõ.
+
+*Giới hạn bảo vệ khi chưa có xác thực thật (T-IDP), nói thẳng:* khóa nằm cùng máy với dữ liệu.
+
+- Ai mở được trình duyệt đó (cùng tài khoản hệ điều hành, phiên còn hạn) là xem được, vì ứng dụng tự giải mã.
+- Ai lấy được ổ đĩa thì lấy được cả khóa từ tệp của trình duyệt: `extractable: false` chỉ chặn JavaScript xuất khóa, không chặn đọc đĩa [Phân tích].
+- Mã độc hoặc XSS trên cùng origin dùng được khóa.
+
+Ở M0, mã hóa chỉ chống việc xem lướt (DevTools, chép tệp IndexedDB rồi tìm chữ) và làm dữ liệu sót trên đĩa sau khi xóa trở nên vô dụng, mà điều này cũng chỉ một phần vì khóa cũng có thể sót. Nó **không** thay cho khóa màn hình, mã hóa ổ đĩa của hệ điều hành và xác thực thật.
+
+*Nếu thêm mã PIN* (câu hỏi 1): khóa dữ liệu được bọc bằng khóa dẫn xuất từ PIN (PBKDF2, ít nhất 600.000 vòng), chỉ nằm trong bộ nhớ khi đã mở khóa, tự khóa sau N phút không thao tác. Thêm được: người khác ngồi vào máy đang mở không xem được; lấy ổ đĩa phải dò PIN (PIN 6 số dò ngoại tuyến được trong vài phút trên GPU [Phân tích], nên chỉ là vật cản). Cái giá: thêm một bước mỗi lần tải lại hoặc bị khóa; **quên PIN khi còn mục chưa đồng bộ là mất các mục đó** (không có cách khôi phục nếu không giữ khóa ở máy chủ). Khuyến nghị: **không thêm PIN ở M0**; định dạng lưu cho phép M1 bọc khóa bằng PIN hoặc bằng khóa do IdP cấp (T-IDP) mà không đổi cách lưu dữ liệu.
+
+*Loại:* `localStorage`/`sessionStorage` (không mã hóa, dung lượng nhỏ); khóa dẫn xuất từ token phiên (token đổi mỗi lần đăng nhập và hết hạn, hàng đợi sẽ không giải mã được nữa, tức là mất dữ liệu).
+
+**OFF-6. Phiên đăng nhập hết hạn.** *Quyết định:* hàng đợi gắn với người tạo (phòng khám + id người dùng), không gắn với token. Mất mạng thì không gửi gì, nên token hết hạn trong lúc đó không ảnh hưởng. Có mạng lại mà token đã hết hạn thì BFF trả 401 và ứng dụng **tạm dừng đồng bộ** (không xóa, không bỏ mục nào), hiện "Phiên đã hết hạn: đăng nhập lại để đồng bộ N mục". Màn hình đăng nhập ghi "máy này còn N mục chưa đồng bộ của BS. A"; số đếm và tên nhân viên lưu dạng rõ (không phải dữ liệu bệnh nhân). Đăng nhập lại đúng người thì đồng bộ tiếp. Đăng xuất khi còn mục chờ thì hỏi "Chờ đồng bộ" hoặc "Đăng xuất, giữ dữ liệu đã mã hóa trên máy để đồng bộ lần đăng nhập sau"; **ở M0 không có nút hủy dữ liệu chưa đồng bộ**. Không tự gia hạn token ở M0 (T-IDP sẽ thay cơ chế phiên).
+
+*Rủi ro:* đóng tab khi đang mất mạng làm mất token (`sessionStorage`), phải chờ có mạng để đăng nhập lại mới làm tiếp; dữ liệu không mất. Mục chờ của người nghỉ việc nằm lại trên máy: M1 cần quy trình quản trị.
+
+*Loại:* token lâu dài trong `localStorage` (lộ token, vẫn hết hạn); cho người đang đăng nhập gửi hộ mục của người khác (sai người ký, BFF từ chối hoặc ghi sai danh tính).
+
+**OFF-7. Quyền và xung đột khi đồng bộ.** *Quyết định:* mỗi mục chỉ được gửi bằng phiên của chính người tạo (máy khách: CSDL theo người dùng; BFF: giữ nguyên kiểm tra người đã mở lượt khám, không nới). Gửi theo thứ tự phụ thuộc: tạo bệnh nhân → cấp số → mở hồ sơ → hoàn tất → ghi nhận in. Id cục bộ được thay bằng id máy chủ ngay trước khi gửi, bảng ánh xạ lưu bền. Phân loại phản hồi:
+
+- lỗi mạng, 5xx, 503 `incomplete`, 429: gửi lại cùng `clientUuid`, chờ theo lũy thừa 2 có trần, gửi ngay khi có sự kiện `online` (F11 hội tụ nhờ gói chạy lại được);
+- 401: tạm dừng (OFF-6);
+- 409 `taken`, `closed`, `already-closed`, `not-open`: **xung đột**. Không gửi lại, không ghi đè; giữ bản khám cục bộ (in lại được) và báo "Lượt khám 005 đã do BS. B mở hoặc kết thúc khi bạn mất mạng; kết quả khám của bạn chưa được lưu lên hệ thống". Giải quyết xung đột (gộp, tách thành lượt khám riêng) ngoài phạm vi M0;
+- 422 `rules-not-satisfied` (ví dụ phụ tá vừa ghi dị ứng mới ở máy khác): **cần bác sĩ xử lý**. Danh sách chờ đồng bộ hiện phát hiện của máy chủ; bác sĩ nhập lý do xác nhận rồi gửi lại cùng `clientUuid`. Đơn đã in, nên điều quan trọng là bác sĩ biết để liên hệ bệnh nhân. Đây là lần đầu có tình huống "đã in đơn rồi mới thấy cảnh báo", cần cố vấn y khoa duyệt trước M1;
+- 400, 403, 404, 422 khác: cần xử lý, hiện nguyên thông điệp.
+
+Mục phụ thuộc vào một mục "cần xử lý" được giữ lại ("chờ mục trước"); các chuỗi khác vẫn chạy.
+
+*Rủi ro:* bác sĩ bỏ qua mục 422 thì bản ghi không lên máy chủ; giảm bằng huy hiệu luôn hiện và không cho đăng xuất xóa dữ liệu.
+
+*Loại:* "người gửi sau thắng" (âm thầm ghi đè); máy chủ tự nhận đơn vi phạm quy tắc (không ai biết có dị ứng mới).
+
+**Thay đổi ở BFF** (mọi trường mới đều tùy chọn, không trường nào nới quyền; giữ `failedEntries`, tenant từ phiên, nhật ký không có dữ liệu bệnh nhân, ghi nhật ký trước khi trả dữ liệu): `POST /api/queue` thêm `arrivedAt`, `proposedNumber`; `POST /api/visits/:id/open` thêm `openedAt`; `POST /api/visits/:id/complete` thêm `clientTimes` và cờ `allergiesUnknown`, mã đơn theo ngày của `signedAt`; mới `GET /api/queue/prefetch` (mọi vai trò, chỉ người trong hàng chờ hôm nay); mới `POST /api/prescriptions/:id/printed` (ghi nhật ký lần in ngoại tuyến); số đo tách nguồn `server`/`client`/`client-invalid`; dòng nhật ký của thao tác làm lúc mất mạng có `queryKind: 'offline'` và `clientTs` (giờ máy khách khai).
+
+**Cách đo M0-2 (chi tiết hóa đoạn "Cách đo" ở trên).**
+
+- Bài `e2e/offline.mjs` tạo một phòng khám thử mới mỗi lần chạy (`createTenantProject` qua một script của BFF), chạy một BFF riêng (cổng 8111, tệp phòng khám tạm) và bản build giao diện riêng (cổng 4174) nên không đụng phòng khám demo.
+- 20 chu kỳ, mỗi chu kỳ một bệnh nhân mới đi hết đường: tạo → cấp số → gọi vào khám → khám → ký & in. Bộ sinh ngẫu nhiên có hạt giống (in ra để chạy lại đúng như cũ) chọn lúc ngắt và lúc bật lại mạng, cộng hai kiểu lỗi khó hơn `setOffline`: **mất phản hồi** (`route.fetch()` rồi `route.abort()`, đã thử được) và **tải lại trang khi đang mất mạng** (vỏ ứng dụng từ service worker, chỉ có ở bản build).
+- Chờ theo điều kiện (danh sách chờ đồng bộ về 0), không ngủ cố định. Cuối bài đếm bằng tài khoản máy của phòng khám thử: Patient = Encounter = List = Task = Provenance = 20, Encounter đều `finished`; MedicationRequest, Condition, Observation đúng bằng số đã nhập; mỗi bệnh nhân đúng 1 lượt khám; 20 số thứ tự khác nhau; mỗi mã đơn đã in có đúng một đơn trên máy chủ; không còn mục chờ hay xung đột trên máy.
+- Đột biến thử, mỗi cái phải làm một bài đỏ: (a) sinh `clientUuid` mới khi gửi lại (trùng); (b) bỏ mục khi gặp lỗi mạng (thiếu); (c) gửi mục của người khác bằng phiên hiện tại; (d) ghi dạng rõ vào IndexedDB (bài "kho không chứa tên bệnh nhân"); (e) gỡ quy tắc `allergy-unknown`; (f) xung đột 409 bị ghi đè hoặc bị bỏ âm thầm.
+- Bài này chạy trong job e2e của CI (thêm vài phút [Chưa đo]).
+
+**Lát cắt sau khi duyệt:** (1) gói in dùng chung, in từ dữ liệu cục bộ; (2) kho cục bộ có mã hóa thay `sessionStorage`; (3a) BFF: giờ máy khách, số tạm, nạp trước, ghi nhận in, kèm kiểm thử tích hợp; (3b) hàng đợi đồng bộ và luồng ngoại tuyến ở giao diện; (4) chỉ báo trực tuyến/ngoại tuyến, danh sách chờ đồng bộ, thông báo lỗi và xung đột; (5) bài e2e 20 chu kỳ và CI; (6) tài liệu, mục 5.9. Mỗi lát một commit, xanh trước khi sang lát sau.
+
+**Tiến độ.** Lát 1 xong:
+- Gói `@phongmach/print` dùng chung cho BFF và trình duyệt. Tuổi trên đơn nay tính tại lúc ký thay vì lúc in, để cùng dữ liệu luôn cho cùng một trang.
+- `localPrescriptionDetail` dựng đơn từ dữ liệu trên máy qua đúng các hàm của gói hoàn tất và của đường đọc ngược; có kiểm thử so với đường máy chủ.
+- `localPrescriptionCode` sinh mã đơn ở máy khách, dùng cùng vectơ kiểm tra với BFF.
+- "In lại đơn" khi mất mạng in từ dữ liệu trên máy. Bước e2e mới so trang in dựng ở trình duyệt với trang BFF dựng: giống từng ký tự, trừ dòng liên thông. Xuất PDF được đúng một trang A5; chạy được cả trên bản dev lẫn bản build.
+- Đột biến thử đã làm: bỏ thoát ký tự, tính tuổi theo giờ hiện tại, không cắt khoảng trắng lời dặn, không hạ chữ thường UUID, lấy ngày theo UTC. Mỗi đột biến làm đúng một bài đỏ. Bài về chữ hoa/thường ban đầu vẫn xanh khi bị đột biến vì UUID mẫu chỉ có chữ số; đã thêm vectơ có chữ cái.
+
+Lát 2 xong:
+- Bản nháp lượt khám chuyển từ `sessionStorage` sang kho IndexedDB (Dexie) mã hóa AES-GCM. Mỗi (phòng khám, người dùng) một kho. Khóa không xuất được. Mỗi lần ghi một IV mới. Bản mã gắn với bảng + id. Mọi thao tác với kho chạy lần lượt. Đăng xuất xóa kho và khóa; hết phiên (401) chỉ đóng kho, không xóa. Bản nháp dạng rõ của bản trước còn trong `sessionStorage` bị xóa khi khởi động. Trình duyệt không có kho mã hóa thì giữ nháp trong bộ nhớ của tab và báo rõ trên màn hình khám.
+- Màn hình khám có chỉ báo "Đã lưu nháp trên máy (mã hóa)". IndexedDB ghi bất đồng bộ, nên bài e2e chờ chỉ báo này rồi mới tải lại trang.
+- Kiểm thử: 11 bài đơn vị trên IndexedDB giả lập. e2e có thêm hai bước: đọc thẳng IndexedDB trong Chromium không thấy chữ nào của bản nháp ở dạng rõ; đăng xuất thì kho biến mất.
+- Đột biến thử: ghi dạng rõ, IV cố định, bỏ AAD, bỏ chạy lần lượt, đăng xuất chỉ đóng kho, khóa xuất được, tab sau ghi đè khóa. Mỗi cái làm một bài đỏ; "ghi dạng rõ" làm đỏ cả bài e2e. Bài "hai tab cùng mở" ban đầu không bắt được việc ghi đè khóa; đã viết lại cho tất định (tab kia ghi nháp đúng lúc tab này sinh khóa).
+- Cái giá: gói JS 343 → 447 KB, nén 109 → 144 KB [Đã đo]; gần như toàn bộ phần tăng là Dexie. Nếu cần nhẹ hơn, `idb` (khoảng 1 KB) thay được vì kho chỉ dùng đọc/ghi theo khóa.
+
+Lát 3a xong (BFF, chưa nối vào giao diện):
+- `POST /api/queue` nhận `arrivedAt` và `proposedNumber`. Ngày của lượt khám tính theo giờ đến. Số tạm được giữ nếu còn trống, đã có người lấy thì cấp số kế tiếp; số tạm vượt quá số kế tiếp bị bỏ qua để không tạo lỗ hổng trong dãy số.
+- `POST /api/visits/:id/open` nhận `openedAt`; mốc mở được gắn nguồn `client`.
+- `POST /api/visits/:id/complete` nhận `clientTimes` và `allergiesUnknown`. Mã đơn, tuổi và mọi mốc thời gian của bản ghi lấy theo giờ ký của máy khách. Thời gian phiên khám đo bằng hàm thuần `measureVisit` (gói `clinical`); giờ không hợp lý thì vẫn lưu, gắn cờ `client-invalid` và đếm riêng ở số đo.
+- Hai điểm cuối mới: `GET /api/queue/prefetch` và `POST /api/prescriptions/:id/printed`.
+- Quy tắc mới `allergy-unknown` trong gói `rules`. Máy chủ vẫn chạy kiểm tra dị ứng thật kể cả khi máy khách khai "chưa rõ dị ứng".
+- Trang "Thời gian khám" có thêm cột "Đo ở máy khám" và "Giờ không hợp lý". Nhật ký truy cập ghi rõ thao tác làm lúc mất mạng và giờ theo máy khách.
+- Kiểm thử: 12 bài đơn vị BFF mới, 5 bài `clinical`, 2 bài quy tắc, 6 bài tích hợp trên Medplum thật (giữ số tạm, ngày theo giờ đến, ký lúc mất mạng rồi gửi lại không trùng, giờ không hợp lý, nạp trước, ghi nhận in). Các bài tích hợp đặt trong tệp có sẵn để không thêm lần đăng nhập quản trị.
+- Đột biến thử (9): mã đơn theo giờ máy chủ, bỏ cờ chưa rõ dị ứng, ghi dòng in không kiểm đơn, nhận giờ đến ở tương lai, bỏ so với khoảng máy chủ thấy, đo cả giờ ký ở tương lai, nhận số tạm vượt số kế tiếp, kho bỏ giờ máy khách, nạp trước cả người đã khám xong. Mỗi đột biến làm ít nhất một bài đỏ. Bài "nạp trước không có người đã khám xong" ban đầu dựa vào kết quả của bài trước nên đúng một cách vô nghĩa khi bài trước hỏng; đã sửa cho độc lập.
+- `infra/dev-up.sh`: sau khi sandbox khởi động lại, tệp `/var/run/docker.pid` cũ làm `dockerd` từ chối chạy. Script nay xóa tệp đó khi không còn `dockerd` nào.
+
+Còn lại cho lát 3b: giao diện chưa gọi các trường và điểm cuối mới; lần in ngoại tuyến chưa có dòng nhật ký cho tới khi hàng đợi gửi `printed`. Trang in có nhãn "ký khi mất mạng" mới được kiểm qua kiểm thử đơn vị; kiểm PDF một trang A5 cho trang này làm khi ký ngoại tuyến chạy được qua giao diện.
+
+Lát 3b tách làm hai commit. **Lát 3b-1 xong** (kho, bộ máy đồng bộ, hàm API; chưa nối vào giao diện):
+- Kho trên máy lên version 2. Bảng mới: `ops` (hàng đợi), `ids` (id tạm → id máy chủ), `patients` (bộ đệm `QueuePatient` và ngữ cảnh hồ sơ đã mở), `snapshots` (hàng chờ theo ngày), `signed` (đơn ký khi mất mạng, để in lại). Phần dữ liệu luôn mã hóa. Dạng rõ chỉ có: id, `seq` (thứ tự), `kind`, `status`, `deps`, các mốc thời gian, `day` và số lần thử. Bản nháp của version 1 đọc lại được sau khi nâng cấp (có kiểm thử).
+- `commit(changes)`: mã hóa mọi giá trị trước, rồi ghi tất cả trong **một** giao dịch Dexie. Một thay đổi lỗi thì không thay đổi nào được ghi. Đây là chỗ dựa cho "ghi mục hoàn tất và xóa nháp cùng lúc, trước khi in" ở lát 3b-2.
+- Dọn ngày cũ (`purgeBefore`): xóa bộ đệm, ảnh chụp hàng chờ, đơn ký khi mất mạng và các mục **đã xong** của ngày trước. Mục chưa xong không bao giờ bị dọn; ánh xạ id cũ được giữ khi còn mục cũ chưa xong.
+- `pendingOnDevice()` cho màn hình đăng nhập: đọc số mục chưa xong và tên nhân viên (lưu dạng rõ trong `meta`), không đọc dữ liệu bệnh nhân.
+- Bộ máy đồng bộ `local/sync.ts`:
+  - Gửi theo thứ tự hàng đợi và phụ thuộc, quét nhiều lượt trong một lần chạy. Id tạm (`tmp-…`) được thay bằng id máy chủ ngay trước khi gửi và không bao giờ lên máy chủ.
+  - Phân loại đúng OFF-7: lỗi mạng, 5xx, 503, 429 thì gửi lại, chờ 2 s · 2^(n−1), trần 60 s. 401 thì tạm dừng tới khi có token mới. 409 thành "xung đột", 422 `rules-not-satisfied` thành "chờ xác nhận" (`acknowledge` gửi lại cùng UUID kèm lý do), lỗi khác thành "cần xử lý". Mục phụ thuộc vào mục cần xử lý bị giữ; chuỗi khác vẫn chạy.
+  - Kích hoạt: `wake()` (sự kiện `online`), `syncNow()` (nút "Đồng bộ ngay"), bộ hẹn giờ (lúc mục thử lại sớm nhất hết hạn, tối đa 30 s). Một tab gửi nhờ Web Locks; trình duyệt không có Web Locks thì dùng khóa trong tab.
+  - Đồng hồ, bộ hẹn giờ và khóa đều tiêm vào được. Bộ máy dừng nếu phiên hiện tại không phải chủ kho.
+  - Trạng thái "đang gửi" chỉ nằm trong bộ nhớ: trình duyệt sập giữa chừng thì mục vẫn là "chờ" và được gửi lại cùng UUID.
+- Kiểm thử: 20 bài cho bộ máy, dùng BFF giả trong bộ nhớ và đồng hồ ảo. Các bài phủ:
+  - gửi lại cùng UUID; mất phản hồi;
+  - lũy thừa 2 có trần;
+  - sập giữa "lưu" và "gửi"; sập sau khi máy chủ đã ghi;
+  - thứ tự phụ thuộc và thay id tạm;
+  - 409, 422, 401, lỗi khác;
+  - phiên của người khác;
+  - gửi ngay rồi chuyển sang dạng ngoại tuyến;
+  - hai tab có Web Locks, kèm một bài đối chứng không khóa để chứng minh bài kia không đúng một cách vô nghĩa.
+
+  Thêm 6 bài kho (nâng cấp version, không có dạng rõ trong mọi bảng mới, giao dịch nguyên tử, dọn ngày cũ, nháp mới nhất, đếm mục chờ trên máy), 9 bài cho tìm trong bộ đệm và gộp hàng chờ, 1 bài cho các hàm API mới.
+- Đột biến thử (17, mỗi cái làm ít nhất một bài đỏ):
+  - (a) sinh `clientUuid` mới khi gửi lại, ở mục tạo bệnh nhân và ở mục hoàn tất;
+  - (b) bỏ mục khi lỗi mạng;
+  - (c) gửi bằng phiên của người khác;
+  - (f) 409 bị gửi lại, bị xóa, hoặc bị coi là lỗi khác;
+  - 422 không chờ xác nhận; 401 không tạm dừng;
+  - bỏ thay id tạm; bỏ kiểm tra phụ thuộc; chờ cố định thay vì lũy thừa; bỏ Web Locks;
+  - `commit` không trong một giao dịch;
+  - dọn cả mục chưa xong;
+  - ghi dạng rõ phần dữ liệu.
+
+  Script đột biến kiểm cả số bài đã chạy, để tránh lặp lại lỗi trỏ sai thư mục của lát trước.
+- **Bổ sung so với thiết kế:** `submit(id, promote)`. Thao tác lúc có mạng được lưu vào hàng đợi rồi gửi ngay. Nếu chưa tới được máy chủ vì mất mạng, thao tác được chuyển sang dạng ngoại tuyến **cùng id, cùng `clientUuid`**: thêm `arrivedAt`/`proposedNumber` khi cấp số, `openedAt` khi mở hồ sơ, `clientTimes` khi ký. Việc chuyển làm ngay trong lúc giữ khóa, để không tab nào kịp gửi bản cũ. Chỉ chuyển khi lỗi mạng, không chuyển khi máy chủ trả 5xx/503: với 503 máy chủ có thể đã ghi dở, đổi giờ ký lúc đó có thể làm lệch mã đơn giữa các phần đã ghi. Ca mất phản hồi có giới hạn tương tự nhưng nhỏ: lần gửi đầu đã ghi xong với giờ máy chủ, gửi lại thì máy chủ trả kết quả cũ. Mã đơn trên giấy (theo giờ máy khách) chỉ lệch với mã trên máy chủ nếu đồng hồ máy khách lệch qua nửa đêm; lát 3b-2 so mã và báo nếu khác.
+- **Bổ sung so với thiết kế:** `discard(id)` chỉ bỏ được mục máy chủ vừa từ chối, và chỉ khi không có mục nào phụ thuộc vào nó. Dùng cho thao tác gửi ngay lúc có mạng mà dữ liệu vẫn còn trên màn hình (biểu mẫu, bản nháp): giữ hành vi hiện tại là hiện lỗi tại chỗ để người dùng sửa rồi gửi lại. Mục làm lúc mất mạng thì không bao giờ bị bỏ.
+- Gói JS 447 → 451 KB, nén 144 → 146 KB [Đã đo]. Bộ máy đồng bộ chưa được giao diện nạp nên chưa tính vào số này.
+
+**Lát 3b-2 xong** (luồng ngoại tuyến ở giao diện). Mọi thao tác ghi trong phạm vi N4 đi qua cùng hàng đợi, có mạng hay không: tạo bệnh nhân, cấp số, mở hồ sơ, ký hoặc kết thúc khám, ghi nhận in.
+- `local/client.ts` (`OfflineClient`) gom các luồng. Không phụ thuộc React nên có kiểm thử đơn vị trên IndexedDB giả. `OfflineProvider` tạo bộ máy đồng bộ cho người đang đăng nhập và nối sự kiện `online`/`offline`. Nó nạp trước hàng chờ và hồ sơ mỗi 30 giây khi có mạng (OFF-4) và khi có mạng lại.
+- Tiếp đón:
+  - Mất mạng (hoặc gọi mà gặp lỗi mạng) thì tìm trong bộ đệm bằng `classifyQuery` + `foldName`, ghi "Mất mạng: chỉ tìm trong N hồ sơ trên máy này"; quy tắc kết quả cũ bị mờ giữ nguyên.
+  - Hồ sơ mở lúc có mạng được giữ tóm tắt và dị ứng trên máy.
+  - Tạo bệnh nhân khi mất mạng thì có id tạm, CCCD đầy đủ nằm trong bộ đệm mã hóa nên tìm được bằng CCCD.
+  - Cấp số khi mất mạng: số tạm = số lớn nhất máy biết + 1, hiện "007 (tạm)", gửi kèm `arrivedAt` và `proposedNumber`.
+  - Bổ sung CCCD, sửa dị ứng thì ghi "Cần mạng"; với bệnh nhân chưa đồng bộ thì ghi "cần đồng bộ trước".
+- Hàng chờ và màn hình chờ:
+  - Gộp hàng chờ của máy chủ (hoặc ảnh chụp lần cuối) với các thao tác chưa đồng bộ (`mergeQueue`). Dòng có thao tác chờ hiện "Chờ đồng bộ"; dòng bị từ chối hiện "Cần xử lý". Máy chủ đổi số thì báo "Số 007 (cấp khi mất mạng) … đã đổi thành 009".
+  - Nút "Hủy" bị khóa khi mất mạng.
+  - Màn hình chờ dựng từ dữ liệu trên máy khi mất mạng hoặc khi có lượt chưa đồng bộ; số tạm có nhãn "tạm".
+- Khám:
+  - Bản nháp luôn ghi `openedAt` theo đồng hồ máy, kể cả khi mở có mạng.
+  - Mở khi mất mạng: không có dị ứng trong bộ đệm thì `allergiesKnown = false`, quy tắc `allergy-unknown` đòi xác nhận. Tiền sử và lịch sử khám không có trên máy thì ghi "Chưa tải". Thêm/xóa tiền sử, dị ứng ghi "Cần mạng".
+  - Ký khi mất mạng làm theo thứ tự:
+    1. dựng đơn bằng `localPrescriptionDetail`, mã bằng `localPrescriptionCode`;
+    2. trong **một** giao dịch: ghi mục hoàn tất (`clientTimes`, `allergiesUnknown`), mục ghi nhận in (phụ thuộc mục hoàn tất), đơn để in lại, và xóa bản nháp;
+    3. sau đó mới `printLocal(…, true)`. Ghi lỗi thì báo "CHƯA in" và giữ nháp.
+  - Màn hình kết quả theo dõi mục hoàn tất: chờ đồng bộ, đã đồng bộ, xung đột, chờ xác nhận, hoặc bị giữ. Nó báo nếu mã trên máy chủ khác mã đã in. Nút "In lại đơn" in từ máy (kèm mục ghi nhận in) hoặc qua máy chủ khi đã đồng bộ.
+  - Có mạng: gửi ngay, giữ hành vi cũ (422 hiện tại chỗ, nháp còn). Gửi mà mất mạng (kể cả mất phản hồi) thì chuyển sang ký khi mất mạng cùng UUID.
+- Phiên đăng nhập (OFF-6):
+  - Đăng xuất khi còn mục chờ thì hỏi "Chờ đồng bộ" hoặc "Đăng xuất, giữ dữ liệu đã mã hóa trên máy", không có nút hủy.
+  - Màn hình đăng nhập ghi "Máy này còn N mục chưa đồng bộ của BS. …".
+  - Đăng nhập lại đúng người thì tự gửi tiếp. Hết mục chờ thì đăng xuất xóa kho như trước.
+  - Hết phiên (401) giữa lúc đồng bộ thì về màn hình đăng nhập, ở đó có thông báo này.
+- Liên thông, Thời gian khám, Nhật ký: ghi "Cần mạng" khi mất mạng; nút chèn lỗi cổng và "Gửi lại ngay" bị khóa.
+- **Phát hiện F12, đã sửa.** Chromium bỏ mất sự kiện của yêu cầu IndexedDB đang dở khi gọi `print()`. Lần chạy đầu của bài e2e ngoại tuyến treo hàng đợi đúng lúc ký rồi in. Đã sửa bằng hai việc:
+  - hàng rào in: chờ kho yên, chặn thao tác mới trong lúc in;
+  - hạn 20 giây cho mỗi thao tác kho; bộ máy đồng bộ luôn hẹn lần chạy sau khi gặp lỗi.
+
+  Thử ứng dụng 20 vòng, mỗi vòng 10 lần đọc kho chen ngang lúc in: 0/200 bị mất khi có hàng rào, 83/200 khi gọi `print()` thẳng.
+- Kiểm thử:
+  - 10 bài đơn vị mới cho `OfflineClient`: lưu bền rồi mới in; ghi lỗi thì không in; mất phản hồi; có mạng; 422 có mạng; `allergy-unknown`; nạp trước có dị ứng; nạp trước chỉ người mới; tạo bệnh nhân và cấp số tạm rồi đồng bộ; bị từ chối khi có mạng.
+  - 3 bài cho hàng rào in và hạn thao tác kho.
+  - e2e mới `e2e/offline-sign.mjs`, 13 bước, ngắt mạng thật bằng `context.setOffline`:
+    - tìm trong bộ đệm;
+    - tạo bệnh nhân và cấp số tạm;
+    - hàng chờ, màn hình chờ;
+    - khám có `allergy-unknown`;
+    - ký: trang in có "KÝ KHI MẤT MẠNG", PDF đúng 1 trang A5;
+    - đọc thẳng IndexedDB không thấy dạng rõ;
+    - có mạng lại: đúng 1 bệnh nhân, 1 lượt khám, 1 đơn trùng mã đã in, giữ số tạm;
+    - mất phản hồi (`route.fetch()` rồi `route.abort()`): vẫn 1 lượt khám mới, mã trùng;
+    - bất biến của hàng rào in;
+    - đăng xuất khi còn mục chờ;
+    - không lỗi console.
+
+    Đạt trên bản dev và bản build. Bài này chạy trong job e2e của CI, ngay sau `e2e:visit`.
+- Đột biến thử lát 3b-2 (15, mỗi cái làm ít nhất một bài đỏ):
+  - (e) gỡ `allergy-unknown` ở máy khách, theo 4 cách: trong `evaluate`, khi mở ngoại tuyến, cờ gửi máy chủ, màn hình khám không chuyển cờ (cách cuối do e2e bắt);
+  - in trước khi lưu bền;
+  - không xóa nháp cùng giao dịch;
+  - mục ghi nhận in không phụ thuộc mục hoàn tất;
+  - không gửi giờ máy khách khi ký ngoại tuyến;
+  - số tạm không cộng 1;
+  - hàng rào không chờ thao tác đang dở; bỏ hạn thao tác kho;
+  - tìm khớp giữa từ;
+  - nạp trước hỏi lại người đã có;
+  - in không qua hàng rào (e2e, 2/2 lần đỏ);
+  - nút "Hủy" không khóa khi mất mạng (e2e).
+
+  Một đột biến lúc đầu không đỏ do chính đột biến viết sai (vẫn để bộ hẹn giờ); đã viết lại và chạy lại.
+- **Đi khác thiết kế, hoặc chi tiết thêm:**
+  1. Bệnh nhân tạo khi mất mạng cũng bị coi là "chưa rõ dị ứng": máy không có dữ liệu dị ứng của họ, theo đúng câu chữ OFF-4.
+  2. Nhật ký truy cập: mỗi lần tải hàng chờ là một dòng `queue-read`. Bài `e2e:visit` bước 20 đỏ lần đầu: 50 dòng cuối của nhật ký bị lấp bởi các lần tải trùng (React ở bản dev chạy hiệu ứng hai lần, nạp trước nền, màn hàng chờ). Đã gộp các lần tải cách nhau dưới 4 giây; lần nạp nền dùng lại kết quả nếu màn hàng chờ vừa tải. Nhật ký vẫn nhiều hơn trước: thêm `queue-prefetch` và một `queue-read` mỗi 30 giây khi màn hàng chờ không mở.
+  3. Màn hình chờ khi có lượt chưa đồng bộ dựng từ ảnh chụp trên máy, cũ tối đa 30 giây, thay vì `/api/display`.
+  4. Bài e2e chạy trên phòng khám demo với bệnh nhân tên `Zq…` và tự dọn hàng chờ, như `e2e:visit`. Bài 20 chu kỳ trên phòng khám thử riêng vẫn là lát 5.
+  5. Chưa có giao diện xác nhận lại mục 422 của hàng đợi (`SyncEngine.acknowledge` đã có và có kiểm thử), chưa có danh sách chờ đồng bộ. Cả hai thuộc lát 4.
+- Gói JS 451 → 494 KB, nén 146 → 159 KB [Đã đo, bản build].
+
+**Quyết định của chủ dự án (02/10/2026):**
+
+1. **Không dùng mã PIN cho kho cục bộ ở M0** (lý do ở OFF-5).
+2. **Chấp nhận giới hạn N5 cho M0.** Kịch bản 4 trên sân khấu làm đoạn ngắt mạng trên một máy (bác sĩ tự tiếp đón người mới đến). Để hai máy thấy nhau khi mất Internet cần một trạm đồng bộ trong mạng LAN của phòng khám: ngoài M0, thuộc T-OFF-3.
+
+Các điểm mặc định đã nêu và được duyệt cùng thiết kế: số tạm được ưu tiên giữ (OFF-2); giờ không hợp lý thì vẫn lưu, chỉ không tính số đo (OFF-3); đơn ngoại tuyến bị quy tắc chặn khi đồng bộ thì chờ bác sĩ xác nhận (OFF-7); đăng xuất khi còn mục chờ thì giữ dữ liệu đã mã hóa thay vì xóa (OFF-6).
 
 ---
 

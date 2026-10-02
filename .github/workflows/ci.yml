@@ -83,6 +83,8 @@ jobs:
           curl --silent --fail --retry 30 --retry-delay 2 --retry-connrefused --retry-all-errors http://127.0.0.1:4173/
       - run: pnpm --filter @phongmach/clinic-web e2e
       - run: pnpm --filter @phongmach/clinic-web e2e:visit
+      - name: Ngoại tuyến (ngắt mạng thật, ký khi mất mạng, mất phản hồi, đồng bộ)
+        run: pnpm --filter @phongmach/clinic-web e2e:offline
       - name: Ảnh chụp màn hình
         if: always()
         uses: actions/upload-artifact@v4

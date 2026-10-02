@@ -7,6 +7,7 @@ import type {
   PrescriptionDetail,
   PrescriptionSummary,
   QueueItem,
+  QueuePatient,
   QueuePriority,
   Specialty,
   VisitContext,
@@ -41,6 +42,8 @@ export interface AuditEntry {
   queryKind?: string;
   resultCount?: number;
   resourceIds?: string[];
+  /** Thao tác làm lúc mất mạng: giờ theo máy khách (máy khách khai). */
+  clientTs?: string;
 }
 
 export interface NewPatient {
@@ -119,6 +122,17 @@ async function request<T>(method: string, path: string, options: { body?: unknow
   throw new ApiError(res.status, code, message, parsed);
 }
 
+export interface CheckInRequest {
+  clientUuid: string;
+  patientId: string;
+  specialty: Specialty;
+  priority: QueuePriority;
+  reason?: string;
+  /** Cấp số lúc mất mạng (OFF-2): giờ đến theo máy khách và số tạm đã báo cho bệnh nhân. */
+  arrivedAt?: string;
+  proposedNumber?: number;
+}
+
 export interface CompleteRequest {
   clientUuid: string;
   exam: ExamInput;
@@ -129,6 +143,10 @@ export interface CompleteRequest {
     followUpDays?: number;
     acknowledgements: Array<{ key: string; reason: string }>;
   };
+  /** Mở hoặc ký lúc mất mạng (OFF-3): cả hai mốc theo đồng hồ của máy này. */
+  clientTimes?: { openedAt: string; signedAt: string };
+  /** Máy không có dữ liệu dị ứng lúc ký (OFF-4): máy chủ đòi xác nhận 'allergy-unknown' như máy khách đã đòi. */
+  allergiesUnknown?: boolean;
 }
 
 export interface CompleteResponse {
@@ -161,12 +179,15 @@ export const api = {
   patchPatient: (token: string, id: string, patch: { cccd?: string; birthDate?: string }) => request<{ patient: PatientSummary }>('PATCH', `/api/patients/${id}`, { token, body: patch }),
 
   queue: (token: string, signal?: AbortSignal) => request<{ day: string; items: QueueItem[] }>('GET', '/api/queue', { token, ...(signal ? { signal } : {}) }),
-  checkIn: (token: string, body: { clientUuid: string; patientId: string; specialty: Specialty; priority: QueuePriority; reason?: string }) =>
-    request<{ item: QueueItem; created: boolean }>('POST', '/api/queue', { token, body }),
+  checkIn: (token: string, body: CheckInRequest) => request<{ item: QueueItem; created: boolean }>('POST', '/api/queue', { token, body }),
   cancelVisit: (token: string, id: string) => request<{ ok: true }>('POST', `/api/queue/${id}/cancel`, { token }),
   display: (token: string, signal?: AbortSignal) => request<DisplayBoard>('GET', '/api/display', { token, ...(signal ? { signal } : {}) }),
+  /** Tóm tắt và dị ứng của người đang chờ hoặc đang khám hôm nay, để tìm và khám khi mất mạng (OFF-4). */
+  prefetch: (token: string, patientIds: string[], signal?: AbortSignal) =>
+    request<{ day: string; patients: QueuePatient[] }>('GET', `/api/queue/prefetch?patients=${patientIds.map(encodeURIComponent).join(',')}`, { token, ...(signal ? { signal } : {}) }),
 
-  openVisit: (token: string, id: string) => request<VisitContext>('POST', `/api/visits/${id}/open`, { token }),
+  /** `openedAt`: mở lúc mất mạng, mốc theo đồng hồ máy này (OFF-3). Không có thì không gửi body (Fastify từ chối JSON rỗng). */
+  openVisit: (token: string, id: string, body?: { openedAt: string }) => request<VisitContext>('POST', `/api/visits/${id}/open`, { token, ...(body ? { body } : {}) }),
   completeVisit: (token: string, id: string, body: CompleteRequest) => request<CompleteResponse>('POST', `/api/visits/${id}/complete`, { token, body }),
 
   allergies: (token: string, patientId: string) => request<{ allergies: AllergyView[] }>('GET', `/api/patients/${patientId}/allergies`, { token }),
@@ -180,6 +201,8 @@ export const api = {
   prescription: (token: string, id: string) => request<PrescriptionDetail>('GET', `/api/prescriptions/${id}`, { token }),
   printHtml: (token: string, id: string) => request<string>('GET', `/api/prescriptions/${id}/print`, { token, text: true }),
   pending: (token: string, signal?: AbortSignal) => request<{ pending: PendingPrescription[] }>('GET', '/api/prescriptions/pending', { token, ...(signal ? { signal } : {}) }),
+  /** Ghi nhật ký một lần in làm lúc mất mạng (trình duyệt in từ dữ liệu trên máy, không qua /print). */
+  printed: (token: string, id: string, body: { printedAt: string }) => request<{ ok: true }>('POST', `/api/prescriptions/${id}/printed`, { token, body }),
   retry: (token: string, id: string) => request<{ ok: true }>('POST', `/api/prescriptions/${id}/retry`, { token }),
 
   simGet: (token: string) => request<{ simulated: boolean; state: SimState }>('GET', '/api/sim/gateway', { token }),
