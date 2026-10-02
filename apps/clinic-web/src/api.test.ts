@@ -54,6 +54,24 @@ describe('api', () => {
     await expect(api.demoUsers()).rejects.toMatchObject({ name: 'AbortError' });
   });
 
+  it('các trường và điểm cuối cho thao tác lúc mất mạng (lát 3a): mở hồ sơ không có giờ máy khách thì không gửi body', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => json(200, { ok: true }));
+    vi.stubGlobal('fetch', fetchMock);
+    await api.openVisit('tok', 'v1');
+    await api.openVisit('tok', 'v1', { openedAt: '2026-10-20T03:00:00.000Z' });
+    await api.prefetch('tok', ['a', 'b']);
+    await api.printed('tok', 'r1', { printedAt: '2026-10-20T03:00:00.000Z' });
+    await api.checkIn('tok', { clientUuid: 'u', patientId: 'p', specialty: 'noi', priority: 'normal', arrivedAt: '2026-10-20T03:00:00.000Z', proposedNumber: 7 });
+    const calls = fetchMock.mock.calls.map(([url, init]) => [url, (init as RequestInit).method, (init as RequestInit).body, ((init as RequestInit).headers as Record<string, string>)['content-type']]);
+    expect(calls).toEqual([
+      ['/api/visits/v1/open', 'POST', undefined, undefined],
+      ['/api/visits/v1/open', 'POST', '{"openedAt":"2026-10-20T03:00:00.000Z"}', 'application/json'],
+      ['/api/queue/prefetch?patients=a,b', 'GET', undefined, undefined],
+      ['/api/prescriptions/r1/printed', 'POST', '{"printedAt":"2026-10-20T03:00:00.000Z"}', 'application/json'],
+      ['/api/queue', 'POST', JSON.stringify({ clientUuid: 'u', patientId: 'p', specialty: 'noi', priority: 'normal', arrivedAt: '2026-10-20T03:00:00.000Z', proposedNumber: 7 }), 'application/json'],
+    ]);
+  });
+
   it('lưu phiên không ném lỗi khi trình duyệt chặn sessionStorage', () => {
     expect(() => saveAuth(undefined)).not.toThrow();
     expect(loadAuth()).toBeUndefined();

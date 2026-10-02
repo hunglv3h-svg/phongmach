@@ -538,6 +538,44 @@ Lát 3a xong (BFF, chưa nối vào giao diện):
 
 Còn lại cho lát 3b: giao diện chưa gọi các trường và điểm cuối mới; lần in ngoại tuyến chưa có dòng nhật ký cho tới khi hàng đợi gửi `printed`. Trang in có nhãn "ký khi mất mạng" mới được kiểm qua kiểm thử đơn vị; kiểm PDF một trang A5 cho trang này làm khi ký ngoại tuyến chạy được qua giao diện.
 
+Lát 3b tách làm hai commit. **Lát 3b-1 xong** (kho, bộ máy đồng bộ, hàm API; chưa nối vào giao diện):
+- Kho trên máy lên version 2. Bảng mới: `ops` (hàng đợi), `ids` (id tạm → id máy chủ), `patients` (bộ đệm `QueuePatient` và ngữ cảnh hồ sơ đã mở), `snapshots` (hàng chờ theo ngày), `signed` (đơn ký khi mất mạng, để in lại). Phần dữ liệu luôn mã hóa. Dạng rõ chỉ có: id, `seq` (thứ tự), `kind`, `status`, `deps`, các mốc thời gian, `day` và số lần thử. Bản nháp của version 1 đọc lại được sau khi nâng cấp (có kiểm thử).
+- `commit(changes)`: mã hóa mọi giá trị trước, rồi ghi tất cả trong **một** giao dịch Dexie. Một thay đổi lỗi thì không thay đổi nào được ghi. Đây là chỗ dựa cho "ghi mục hoàn tất và xóa nháp cùng lúc, trước khi in" ở lát 3b-2.
+- Dọn ngày cũ (`purgeBefore`): xóa bộ đệm, ảnh chụp hàng chờ, đơn ký khi mất mạng và các mục **đã xong** của ngày trước. Mục chưa xong không bao giờ bị dọn; ánh xạ id cũ được giữ khi còn mục cũ chưa xong.
+- `pendingOnDevice()` cho màn hình đăng nhập: đọc số mục chưa xong và tên nhân viên (lưu dạng rõ trong `meta`), không đọc dữ liệu bệnh nhân.
+- Bộ máy đồng bộ `local/sync.ts`:
+  - Gửi theo thứ tự hàng đợi và phụ thuộc, quét nhiều lượt trong một lần chạy. Id tạm (`tmp-…`) được thay bằng id máy chủ ngay trước khi gửi và không bao giờ lên máy chủ.
+  - Phân loại đúng OFF-7: lỗi mạng, 5xx, 503, 429 thì gửi lại, chờ 2 s · 2^(n−1), trần 60 s. 401 thì tạm dừng tới khi có token mới. 409 thành "xung đột", 422 `rules-not-satisfied` thành "chờ xác nhận" (`acknowledge` gửi lại cùng UUID kèm lý do), lỗi khác thành "cần xử lý". Mục phụ thuộc vào mục cần xử lý bị giữ; chuỗi khác vẫn chạy.
+  - Kích hoạt: `wake()` (sự kiện `online`), `syncNow()` (nút "Đồng bộ ngay"), bộ hẹn giờ (lúc mục thử lại sớm nhất hết hạn, tối đa 30 s). Một tab gửi nhờ Web Locks; trình duyệt không có Web Locks thì dùng khóa trong tab.
+  - Đồng hồ, bộ hẹn giờ và khóa đều tiêm vào được. Bộ máy dừng nếu phiên hiện tại không phải chủ kho.
+  - Trạng thái "đang gửi" chỉ nằm trong bộ nhớ: trình duyệt sập giữa chừng thì mục vẫn là "chờ" và được gửi lại cùng UUID.
+- Kiểm thử: 20 bài cho bộ máy, dùng BFF giả trong bộ nhớ và đồng hồ ảo. Các bài phủ:
+  - gửi lại cùng UUID; mất phản hồi;
+  - lũy thừa 2 có trần;
+  - sập giữa "lưu" và "gửi"; sập sau khi máy chủ đã ghi;
+  - thứ tự phụ thuộc và thay id tạm;
+  - 409, 422, 401, lỗi khác;
+  - phiên của người khác;
+  - gửi ngay rồi chuyển sang dạng ngoại tuyến;
+  - hai tab có Web Locks, kèm một bài đối chứng không khóa để chứng minh bài kia không đúng một cách vô nghĩa.
+
+  Thêm 6 bài kho (nâng cấp version, không có dạng rõ trong mọi bảng mới, giao dịch nguyên tử, dọn ngày cũ, nháp mới nhất, đếm mục chờ trên máy), 9 bài cho tìm trong bộ đệm và gộp hàng chờ, 1 bài cho các hàm API mới.
+- Đột biến thử (17, mỗi cái làm ít nhất một bài đỏ):
+  - (a) sinh `clientUuid` mới khi gửi lại, ở mục tạo bệnh nhân và ở mục hoàn tất;
+  - (b) bỏ mục khi lỗi mạng;
+  - (c) gửi bằng phiên của người khác;
+  - (f) 409 bị gửi lại, bị xóa, hoặc bị coi là lỗi khác;
+  - 422 không chờ xác nhận; 401 không tạm dừng;
+  - bỏ thay id tạm; bỏ kiểm tra phụ thuộc; chờ cố định thay vì lũy thừa; bỏ Web Locks;
+  - `commit` không trong một giao dịch;
+  - dọn cả mục chưa xong;
+  - ghi dạng rõ phần dữ liệu.
+
+  Script đột biến kiểm cả số bài đã chạy, để tránh lặp lại lỗi trỏ sai thư mục của lát trước.
+- **Bổ sung so với thiết kế:** `submit(id, promote)`. Thao tác lúc có mạng được lưu vào hàng đợi rồi gửi ngay. Nếu chưa tới được máy chủ vì mất mạng, thao tác được chuyển sang dạng ngoại tuyến **cùng id, cùng `clientUuid`**: thêm `arrivedAt`/`proposedNumber` khi cấp số, `openedAt` khi mở hồ sơ, `clientTimes` khi ký. Việc chuyển làm ngay trong lúc giữ khóa, để không tab nào kịp gửi bản cũ. Chỉ chuyển khi lỗi mạng, không chuyển khi máy chủ trả 5xx/503: với 503 máy chủ có thể đã ghi dở, đổi giờ ký lúc đó có thể làm lệch mã đơn giữa các phần đã ghi. Ca mất phản hồi có giới hạn tương tự nhưng nhỏ: lần gửi đầu đã ghi xong với giờ máy chủ, gửi lại thì máy chủ trả kết quả cũ. Mã đơn trên giấy (theo giờ máy khách) chỉ lệch với mã trên máy chủ nếu đồng hồ máy khách lệch qua nửa đêm; lát 3b-2 so mã và báo nếu khác.
+- **Bổ sung so với thiết kế:** `discard(id)` chỉ bỏ được mục máy chủ vừa từ chối, và chỉ khi không có mục nào phụ thuộc vào nó. Dùng cho thao tác gửi ngay lúc có mạng mà dữ liệu vẫn còn trên màn hình (biểu mẫu, bản nháp): giữ hành vi hiện tại là hiện lỗi tại chỗ để người dùng sửa rồi gửi lại. Mục làm lúc mất mạng thì không bao giờ bị bỏ.
+- Gói JS 447 → 451 KB, nén 144 → 146 KB [Đã đo]. Bộ máy đồng bộ chưa được giao diện nạp nên chưa tính vào số này.
+
 **Quyết định của chủ dự án (02/10/2026):**
 
 1. **Không dùng mã PIN cho kho cục bộ ở M0** (lý do ở OFF-5).
