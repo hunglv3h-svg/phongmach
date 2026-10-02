@@ -310,6 +310,11 @@ describe('hộp thư đi', () => {
     expect(attemptsOf(again)).toBe(0);
     expect(isDue(again, later(1000))).toBe(true);
   });
+  it('lỗi do nội dung đơn (không thử lại được) thì chuyển thẳng sang lỗi', () => {
+    const t = markFailed(claim(task, NOW), 'đơn không hợp lệ', NOW, DEFAULT_RETRY, true);
+    expect(t.status).toBe('failed');
+    expect(toGatewayView(t)).toMatchObject({ status: 'failed', attempts: 1, lastError: 'đơn không hợp lệ' });
+  });
   it('gửi được: đã gửi, có mã quốc gia, xóa lỗi cũ khỏi hiển thị', () => {
     const failed = markFailed(claim(task, NOW), 'lỗi tạm', NOW);
     const sent = markSent(claim(failed, later(3000)), 'QG-123', later(3500));

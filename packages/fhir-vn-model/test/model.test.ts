@@ -12,6 +12,7 @@ import {
   normalizeCccd,
   normalizePhone,
   parseFullName,
+  patchPatient,
   rankByPhoneSuffix,
   stripDiacritics,
   toPatientSummary,
@@ -128,5 +129,25 @@ describe('xếp hạng theo 4 số cuối', () => {
   it('số kết thúc bằng đoạn đó lên trước', () => {
     const ranked = rankByPhoneSuffix([{ phone: '0956781234' }, { phone: '0912345678' }, { phone: '0907785678' }], '5678');
     expect(ranked.map((r) => r.phone)).toEqual(['0912345678', '0907785678', '0956781234']);
+  });
+});
+
+describe('patchPatient', () => {
+  const base = buildPatient({ clientUuid: '11111111-1111-4111-8111-111111111111', fullName: 'Nguyễn Văn An' });
+  it('bổ sung CCCD và ngày sinh, giữ nguyên phần còn lại', () => {
+    const p = patchPatient(base, { cccd: '000 123 456 789', birthDate: '1985-03-15' });
+    expect(p.birthDate).toBe('1985-03-15');
+    expect(p.identifier?.map((i) => i.value)).toEqual(['11111111-1111-4111-8111-111111111111', '000123456789']);
+    expect(p.name).toEqual(base.name);
+  });
+  it('thay CCCD cũ chứ không thêm bản thứ hai', () => {
+    const once = patchPatient(base, { cccd: '000123456789' });
+    const twice = patchPatient(once, { cccd: '000987654321' });
+    expect(twice.identifier?.filter((i) => i.system === SYSTEMS.cccd).map((i) => i.value)).toEqual(['000987654321']);
+  });
+  it('từ chối dữ liệu sai và không đụng vào bản gốc', () => {
+    expect(() => patchPatient(base, { cccd: '123' })).toThrow(DomainError);
+    expect(() => patchPatient(base, { birthDate: '2999-01-01' })).toThrow(DomainError);
+    expect(base.identifier).toHaveLength(1);
   });
 });

@@ -40,6 +40,13 @@ export class DomainError extends Error {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+function validBirthDate(birthDate: string): string {
+  const date = new Date(`${birthDate}T00:00:00Z`);
+  const valid = /^\d{4}-\d{2}-\d{2}$/.test(birthDate) && !Number.isNaN(date.getTime()) && date.toISOString().startsWith(birthDate) && date <= new Date();
+  if (!valid) throw new DomainError('invalid-birth-date', 'Ngày sinh không hợp lệ (YYYY-MM-DD, không ở tương lai)');
+  return birthDate;
+}
+
 /**
  * Dựng tài nguyên Patient từ dữ liệu nhập nhanh ở quầy tiếp đón.
  * Thêm một HumanName thứ hai không dấu (đánh dấu bằng extension) để tìm "nguyen" ra "Nguyễn" (T-NAME).
@@ -82,12 +89,7 @@ export function buildPatient(input: NewPatientInput): Patient {
     patient.identifier!.push({ system: SYSTEMS.cccd, value: cccd });
   }
 
-  if (input.birthDate) {
-    const date = new Date(`${input.birthDate}T00:00:00Z`);
-    const valid = /^\d{4}-\d{2}-\d{2}$/.test(input.birthDate) && !Number.isNaN(date.getTime()) && date.toISOString().startsWith(input.birthDate) && date <= new Date();
-    if (!valid) throw new DomainError('invalid-birth-date', 'Ngày sinh không hợp lệ (YYYY-MM-DD, không ở tương lai)');
-    patient.birthDate = input.birthDate;
-  }
+  if (input.birthDate) patient.birthDate = validBirthDate(input.birthDate);
 
   if (input.gender) patient.gender = input.gender;
   return patient;
@@ -124,3 +126,15 @@ export function rankByPhoneSuffix<T extends { phone?: string }>(items: T[], digi
   return [...items].sort((a, b) => score(a.phone) - score(b.phone));
 }
 
+
+/** Bổ sung CCCD hoặc ngày sinh cho bệnh nhân đã có (cùng kiểm tra như lúc tạo). Số CCCD đã có sẽ bị thay bằng số mới. */
+export function patchPatient(patient: Patient, patch: { cccd?: string | undefined; birthDate?: string | undefined }): Patient {
+  const next: Patient = { ...patient };
+  if (patch.cccd?.trim()) {
+    const cccd = normalizeCccd(patch.cccd);
+    if (!cccd) throw new DomainError('invalid-cccd', 'CCCD phải gồm 12 chữ số');
+    next.identifier = [...(patient.identifier ?? []).filter((i) => i.system !== SYSTEMS.cccd), { system: SYSTEMS.cccd, value: cccd }];
+  }
+  if (patch.birthDate?.trim()) next.birthDate = validBirthDate(patch.birthDate);
+  return next;
+}

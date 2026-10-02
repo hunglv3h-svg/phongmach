@@ -72,9 +72,10 @@ export function markSent(t: Task, nationalCode: string, now: Date): Task {
 
 export const backoffMs = (attempts: number, policy: RetryPolicy = DEFAULT_RETRY): number => Math.min(policy.capMs, policy.baseMs * 2 ** Math.max(0, attempts - 1));
 
-export function markFailed(t: Task, error: string, now: Date, policy: RetryPolicy = DEFAULT_RETRY): Task {
+/** `permanent`: lỗi do nội dung đơn (cổng từ chối) nên thử lại vô ích, chuyển thẳng sang "lỗi". */
+export function markFailed(t: Task, error: string, now: Date, policy: RetryPolicy = DEFAULT_RETRY, permanent = false): Task {
   const attempts = attemptsOf(t) + 1;
-  const giveUp = attempts >= policy.maxAttempts;
+  const giveUp = permanent || attempts >= policy.maxAttempts;
   let next = withExt({ ...t, status: giveUp ? 'failed' : 'on-hold' }, EXTENSIONS.claimedAt, undefined);
   next = withExt(next, EXTENSIONS.attempts, { valueInteger: attempts });
   next = withExt(next, EXTENSIONS.lastError, { valueString: error.slice(0, 300) });

@@ -2,8 +2,13 @@ import { randomUUID } from 'node:crypto';
 import { DomainError, classifyQuery, type PatientSummary } from '@phongmach/fhir-vn-model';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { z, ZodError } from 'zod';
+import type { RulesConfig } from '@phongmach/rules';
 import type { AuditAction, AuditEntry, AuditSink } from './audit.js';
+import type { SimulatedGateway } from './gateway.js';
+import { registerClinicalRoutes } from './routes/clinical.js';
+import type { RouteContext } from './routes/context.js';
 import type { Session, SessionService } from './session.js';
+import type { Role } from './tenants.js';
 import type { StoreFactory } from './store.js';
 import type { TenantsFile } from './tenants.js';
 
@@ -18,6 +23,12 @@ export interface AppDeps {
   stores: StoreFactory;
   audit: AuditSink;
   sessions: SessionService;
+  /** Cổng mô phỏng (chỉ demo): có thì mở các điều khiển chèn lỗi. */
+  simulator?: SimulatedGateway;
+  /** Ngưỡng quy tắc kê đơn ghi đè mặc định (T-RULE). */
+  rules?: Partial<RulesConfig>;
+  /** Đồng hồ, để kiểm thử xác định. */
+  now?: () => Date;
   logLevel?: string;
   /** Dùng trong kiểm thử để bắt log. */
   logStream?: NodeJS.WritableStream;
@@ -115,8 +126,25 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     return { token: await deps.sessions.sign(session), user: { id: user.id, name: user.name, role: user.role }, tenant: { slug: tenant.slug, name: tenant.name } };
   });
 
+  const ctx: RouteContext = {
+    tenants: deps.tenants,
+    audit: deps.audit,
+    simulator: deps.simulator,
+    rules: deps.rules,
+    now: deps.now ?? (() => new Date()),
+    stores: deps.stores,
+    store: (req) => deps.stores(req.session!.tenant),
+    record,
+    guard: (action: AuditAction, ...roles: Role[]) => async (req, reply) => {
+      if (roles.includes(req.session!.role)) return;
+      await record(req, action, { outcome: 'denied' });
+      return reply.code(403).send({ error: 'forbidden' });
+    },
+  };
+
   app.register(async (api) => {
     api.addHook('onRequest', requireSession);
+    registerClinicalRoutes(api, ctx);
 
     api.get('/api/patients/search', async (req) => {
       const { q, limit } = searchQuery.parse(req.query);

@@ -169,6 +169,7 @@ export function buildCompletionBundle(input: CompletionInput): Bundle {
   const reason = input.exam.reason?.trim();
   const finished: Encounter = {
     ...encounter,
+    identifier: [...(encounter.identifier ?? []).filter((i) => i.value !== part(clientUuid, 'complete')), identifier(clientUuid, 'complete')],
     status: 'finished',
     period: { ...encounter.period, start: encounter.period?.start ?? nowIso, end: nowIso },
     ...(reason ? { reasonCode: [{ text: reason }] } : {}),
@@ -240,3 +241,7 @@ export function toVisitSummary(p: VisitParts): VisitSummary | undefined {
 }
 
 export { priorityOf };
+
+/** Lượt khám đã được đóng bởi đúng lần hoàn tất mang `clientUuid` này (để nhận ra gửi lại). */
+export const wasCompletedBy = (e: Encounter, clientUuid: string): boolean =>
+  e.status === 'finished' && (e.identifier ?? []).some((i) => i.system === SYSTEMS.clientUuid && i.value === part(clientUuid, 'complete'));

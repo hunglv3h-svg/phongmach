@@ -3,7 +3,28 @@ import { open, type FileHandle } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { Role } from './tenants.js';
 
-export type AuditAction = 'login' | 'search' | 'read' | 'create' | 'audit-read';
+export type AuditAction =
+  | 'login'
+  | 'search'
+  | 'read'
+  | 'create'
+  | 'update'
+  | 'audit-read'
+  | 'queue-read'
+  | 'check-in'
+  | 'queue-cancel'
+  | 'visit-open'
+  | 'visit-read'
+  | 'visit-complete'
+  | 'history-read'
+  | 'note-read'
+  | 'note-write'
+  | 'prescription-read'
+  | 'prescription-print'
+  | 'prescription-retry'
+  | 'gateway-send'
+  | 'gateway-sim'
+  | 'metrics-read';
 
 /**
  * Nhật ký truy cập do BFF ghi (T-AUD, A3). KHÔNG chứa nội dung truy vấn hay dữ liệu bệnh nhân:
@@ -15,7 +36,8 @@ export interface AuditEntry {
   tenant: string;
   userId: string;
   userName?: string;
-  role: Role;
+  /** `system`: việc nền của BFF (hộp thư đi), không do người dùng gọi. */
+  role: Role | 'system';
   action: AuditAction;
   outcome: 'ok' | 'denied' | 'error';
   queryKind?: string;
