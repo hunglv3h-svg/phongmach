@@ -127,6 +127,14 @@ describe('trẻ em', () => {
   });
 });
 
+describe('thiếu ngày sinh', () => {
+  it('không bỏ qua trong im lặng: phải xác nhận', () => {
+    const f = checkPrescription([AMOX], ctx({ patient: { ageYears: undefined, hasCccd: false } }));
+    expect(rules(f)).toEqual(['no-birthdate']);
+    expect(f[0]!.severity).toBe('ack');
+  });
+});
+
 describe('xác nhận (judge)', () => {
   const allergy: Allergy = { kind: 'class', value: 'penicillin', label: 'Penicillin' };
   it('block thì không ký được dù có xác nhận', () => {

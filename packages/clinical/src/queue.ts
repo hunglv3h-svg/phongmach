@@ -65,6 +65,7 @@ export function toQueueItem(e: Encounter, patient: Patient | undefined): QueueIt
   const summary = patient ? toPatientSummary(patient) : undefined;
   const opened = e.extension?.find((x) => x.url === EXTENSIONS.examOpened)?.valueDateTime;
   const doctor = e.participant?.[0]?.individual?.display;
+  const doctorUserId = e.participant?.[0]?.individual?.identifier?.value;
   const reason = e.reasonCode?.[0]?.text;
   return {
     id: e.id,
@@ -79,6 +80,7 @@ export function toQueueItem(e: Encounter, patient: Patient | undefined): QueueIt
     arrivedAt: e.period.start,
     ...(opened ? { calledAt: opened } : {}),
     ...(doctor ? { doctorName: doctor } : {}),
+    ...(doctorUserId ? { doctorUserId } : {}),
     ...(reason ? { reason } : {}),
   };
 }
@@ -121,12 +123,20 @@ export function toDisplayBoard(clinic: string, items: QueueItem[], now: Date): D
 }
 
 /** Lượt khám sau khi bác sĩ mở hồ sơ. Gọi lại bởi cùng bác sĩ thì giữ nguyên (không đặt lại mốc thời gian). */
-export function markCalled(e: Encounter, doctor: { id?: string | undefined; name: string }, now: Date): Encounter {
+export function markCalled(e: Encounter, doctor: { id?: string | undefined; name: string; userId?: string | undefined }, now: Date): Encounter {
   const extension = [...(e.extension ?? []).filter((x) => x.url !== EXTENSIONS.examOpened), { url: EXTENSIONS.examOpened, valueDateTime: now.toISOString() }];
   return {
     ...e,
     status: 'in-progress',
-    participant: [{ individual: { ...(doctor.id ? { reference: `Practitioner/${doctor.id}` } : {}), display: doctor.name } }],
+    participant: [
+      {
+        individual: {
+          ...(doctor.id ? { reference: `Practitioner/${doctor.id}` } : {}),
+          ...(doctor.userId ? { identifier: { system: SYSTEMS.user, value: doctor.userId } } : {}),
+          display: doctor.name,
+        },
+      },
+    ],
     extension,
   };
 }

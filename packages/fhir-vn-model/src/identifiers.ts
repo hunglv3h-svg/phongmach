@@ -14,6 +14,8 @@ export const SYSTEMS = {
   specialty: 'urn:phongmach:chuyen-khoa',
   priority: 'urn:phongmach:uu-tien',
   task: 'urn:phongmach:task',
+  /** Người dùng ứng dụng (nhân viên phòng khám). */
+  user: 'urn:phongmach:nguoi-dung',
 } as const;
 
 export const EXTENSIONS = {

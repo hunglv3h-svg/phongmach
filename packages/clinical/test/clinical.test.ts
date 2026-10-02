@@ -14,6 +14,7 @@ import {
   buildSendTask,
   buildVitalObservations,
   claim,
+  failedEntries,
   cleanVitals,
   initialsOf,
   isDue,
@@ -186,6 +187,7 @@ describe('gói hoàn tất lượt khám', () => {
   const called = markCalled(encounter, { id: 'dr1', name: 'BS. Hà' }, NOW);
   const dx = [getIcd10('J02.9')!];
   const base = {
+    clientUuid: UUID,
     patientId: 'p1',
     encounter: called,
     doctor: { id: 'dr1', name: 'BS. Hà' },
@@ -200,15 +202,15 @@ describe('gói hoàn tất lượt khám', () => {
   it('khám không kê đơn: không có List, Task, Provenance', () => {
     const b = buildCompletionBundle(base);
     expect(b.type).toBe('transaction');
-    expect(types(b)).toEqual(['Encounter', 'Observation', 'Observation', 'Condition', 'ClinicalImpression']);
-    const enc = b.entry![0]!;
+    expect(types(b)).toEqual(['Observation', 'Observation', 'Condition', 'ClinicalImpression', 'Encounter']);
+    const enc = b.entry!.at(-1)!;
     expect(enc.request).toMatchObject({ method: 'PUT', url: 'Encounter/e1', ifMatch: 'W/"v7"' });
     expect(enc.resource).toMatchObject({ status: 'finished', reasonCode: [{ text: 'Đau họng 2 ngày' }], period: { end: base.now.toISOString() } });
   });
   it('kê đơn: List, thuốc, chữ ký mô phỏng và Task cùng một giao dịch, tham chiếu urn khớp', () => {
     const lines = [line('Amoxicillin 500 mg', { perDose: 1, timesPerDay: 3, days: 5 }), line('Paracetamol 500 mg', { perDose: 1, quantity: 10 })];
-    const b = buildCompletionBundle({ ...base, prescription: { code: 'PM-261020-ABC123', clientUuid: UUID, lines, advice: 'Uống nhiều nước', followUpDays: 3, acks: [{ key: 'k', message: 'm', reason: 'đã cân nhắc' }], digestBase64 } });
-    expect(types(b)).toEqual(['Encounter', 'Observation', 'Observation', 'Condition', 'ClinicalImpression', 'MedicationRequest', 'MedicationRequest', 'List', 'Provenance', 'Task']);
+    const b = buildCompletionBundle({ ...base, prescription: { code: 'PM-261020-ABC123', lines, advice: 'Uống nhiều nước', followUpDays: 3, acks: [{ key: 'k', message: 'm', reason: 'đã cân nhắc' }], digestBase64 } });
+    expect(types(b)).toEqual(['Observation', 'Observation', 'Condition', 'ClinicalImpression', 'MedicationRequest', 'MedicationRequest', 'List', 'Provenance', 'Task', 'Encounter']);
     const list = b.entry!.find((e) => e.resource?.resourceType === 'List')!;
     const mrUrls = b.entry!.filter((e) => e.resource?.resourceType === 'MedicationRequest').map((e) => e.fullUrl);
     expect((list.resource as List).entry?.map((x) => x.item?.reference)).toEqual(mrUrls);
@@ -218,13 +220,16 @@ describe('gói hoàn tất lượt khám', () => {
     expect(prov.signature[0]!.data).toMatch(/^digest\(/);
     const task = b.entry!.find((e) => e.resource?.resourceType === 'Task')!.resource as Task;
     expect(task.focus?.reference).toBe(list.fullUrl);
-    expect(task).toMatchObject({ status: 'requested', identifier: [{ value: 'PM-261020-ABC123' }] });
+    expect(task.status).toBe('requested');
+    expect(task.identifier?.map((i) => i.value)).toContain('PM-261020-ABC123');
     // Mọi mục đều là giao dịch hợp lệ: có request.
     expect(b.entry!.every((e) => e.request?.method && e.request.url)).toBe(true);
+    // Điểm chốt đứng cuối.
+    expect(b.entry!.at(-1)!.resource?.resourceType).toBe('Encounter');
   });
   it('khứ hồi toàn bộ: dựng gói, giả lập máy chủ gán id, đọc lại thành VisitSummary', () => {
     const lines = [line('Amoxicillin 500 mg', { perDose: 1, timesPerDay: 3, days: 5 })];
-    const b = buildCompletionBundle({ ...base, prescription: { code: 'PM-X', clientUuid: UUID, lines, advice: 'Nghỉ ngơi', followUpDays: 5, acks: [{ key: 'allergy:x', message: 'Dị ứng X', reason: 'đã dùng trước đây' }], digestBase64 } });
+    const b = buildCompletionBundle({ ...base, prescription: { code: 'PM-X', lines, advice: 'Nghỉ ngơi', followUpDays: 5, acks: [{ key: 'allergy:x', message: 'Dị ứng X', reason: 'đã dùng trước đây' }], digestBase64 } });
     const res = (t: string) => b.entry!.filter((e) => e.resource?.resourceType === t).map((e, i) => ({ ...e.resource!, id: t === 'Encounter' ? 'e1' : `${t}-${i}` }));
     const requests = res('MedicationRequest') as MedicationRequest[];
     const list = { ...(res('List')[0] as List), entry: requests.map((r) => ({ item: { reference: `MedicationRequest/${r.id}` } })) };
@@ -250,6 +255,26 @@ describe('gói hoàn tất lượt khám', () => {
     });
     expect(v.prescription!.lines).toHaveLength(1);
     expect(toPrescriptionSummary({ ...list, date: undefined }, requests)).toBeUndefined();
+  });
+  it('chạy lại được: mọi mục tạo mới có định danh xác định và ifNoneExist, hai lần dựng cho cùng khóa', () => {
+    const lines = [line('Amoxicillin 500 mg', { perDose: 1, timesPerDay: 3, days: 5 })];
+    const make = (clientUuid: string) => buildCompletionBundle({ ...base, clientUuid, prescription: { code: 'PM-X', lines, acks: [], digestBase64 } });
+    const a = make(UUID);
+    const keys = (b: Bundle) => b.entry!.filter((e) => e.request?.method === 'POST').map((e) => e.request!.ifNoneExist);
+    expect(keys(a)).toEqual(keys(make(UUID)));
+    expect(keys(a).every((k) => k && /^(identifier|_tag)=urn:phongmach:client-uuid\|/.test(k))).toBe(true);
+    expect(new Set(keys(a)).size).toBe(keys(a).length); // không mục nào dùng chung khóa
+    expect(keys(make('22222222-2222-4222-8222-222222222222'))).not.toEqual(keys(a));
+    // Điều kiện tạo trùng với định danh trên chính tài nguyên (nếu khác nhau, tạo có điều kiện sẽ không bao giờ khớp).
+    for (const e of a.entry!.filter((x) => x.request?.method === 'POST' && x.request.ifNoneExist!.startsWith('identifier='))) {
+      const values = ((e.resource as { identifier?: Array<{ value?: string }> }).identifier ?? []).map((i) => i.value);
+      expect(values.some((v) => e.request!.ifNoneExist!.endsWith(`|${v}`))).toBe(true);
+    }
+  });
+  it('phát hiện mục lỗi trong phản hồi dù HTTP 200', () => {
+    const response: Bundle = { resourceType: 'Bundle', type: 'transaction-response', entry: [{ response: { status: '201' } }, { response: { status: '412', outcome: { resourceType: 'OperationOutcome', issue: [{ severity: 'error', code: 'processing', details: { text: 'Precondition Failed' } }] } } }, { response: { status: '200' } }, { response: { status: '404' } }] };
+    expect(failedEntries(response)).toEqual([{ index: 1, status: '412', message: 'Precondition Failed' }, { index: 3, status: '404' }]);
+    expect(failedEntries({ resourceType: 'Bundle', type: 'transaction-response', entry: [{ response: { status: '201 Created' } }] })).toEqual([]);
   });
   it('lượt khám chưa có id thì từ chối', () => {
     expect(() => buildCompletionBundle({ ...base, encounter: { ...called, id: undefined } })).toThrow(DomainError);

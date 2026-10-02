@@ -85,6 +85,10 @@ export function checkPrescription(lines: LineInput[], ctx: RuleContext, config: 
   }
 
   const age = ctx.patient.ageYears;
+  if (age === undefined) {
+    // Không biết tuổi thì mọi quy tắc theo tuổi (trẻ em, CCCD) bị bỏ qua: không được bỏ qua trong im lặng.
+    findings.push({ key: 'no-birthdate', rule: 'no-birthdate', severity: 'ack', lines: [], message: 'Chưa có ngày sinh: không kiểm tra được các quy tắc theo tuổi (trẻ em, CCCD).' });
+  }
   if (cfg.requireCccd !== 'off' && !ctx.patient.hasCccd && age !== undefined && age >= cfg.cccdMinAgeYears) {
     findings.push({ key: 'no-cccd', rule: 'no-cccd', severity: cfg.requireCccd, lines: [], message: 'Bệnh nhân chưa có số CCCD (bắt buộc trên đơn thuốc liên thông).' });
   }

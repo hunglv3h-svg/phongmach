@@ -16,6 +16,7 @@ export type RuleId =
   | 'duplicate-ingredient'
   | 'allergy'
   | 'no-cccd'
+  | 'no-birthdate'
   | 'no-weight'
   | 'paediatric-form';
 

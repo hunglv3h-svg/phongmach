@@ -1,4 +1,5 @@
 // Kiểu dữ liệu dùng chung giữa BFF và giao diện (chỉ là hình dạng JSON; không phụ thuộc FHIR).
+import type { PatientSummary } from '@phongmach/fhir-vn-model';
 import type { Allergy } from '@phongmach/rules';
 
 export type Specialty = 'noi' | 'nhi';
@@ -26,6 +27,8 @@ export interface QueueItem {
   arrivedAt: string;
   calledAt?: string;
   doctorName?: string;
+  /** Người dùng đang giữ hồ sơ (để giao diện biết "bạn đang khám"). */
+  doctorUserId?: string;
   reason?: string;
 }
 
@@ -152,6 +155,36 @@ export interface VisitMetrics {
   targetP90Seconds: number;
   /** Phiên dài hơn ngưỡng bị loại (thường là bỏ dở hoặc đi ăn trưa), nêu rõ số lượng để không giấu. */
   excludedLongerThanSeconds: number;
+  /** Có nhiều lượt hơn số tối đa đọc được nên số liệu chưa đủ. */
+  truncated: boolean;
   doctors: Array<{ name: string; visits: number; excluded: number; p50Seconds?: number; p90Seconds?: number }>;
   all: { visits: number; excluded: number; p50Seconds?: number; p90Seconds?: number };
+}
+
+/** Mọi thứ bác sĩ cần thấy khi mở hồ sơ để khám. */
+export interface VisitContext {
+  visit: QueueItem;
+  patient: PatientSummary;
+  allergies: AllergyView[];
+  history: HistoryItem[];
+  /** Các lượt khám đã xong gần nhất, mới nhất trước (không gồm lượt hiện tại). */
+  previous: VisitSummary[];
+}
+
+/** Đơn thuốc kèm thông tin cần để in. */
+export interface PrescriptionDetail {
+  prescription: PrescriptionSummary;
+  patient: PatientSummary;
+  diagnoses: DiagnosisView[];
+  encounterId: string;
+}
+
+/** Một dòng ở màn hình "đơn chưa gửi được". */
+export interface PendingPrescription {
+  prescriptionId: string;
+  code: string;
+  signedAt: string;
+  patientName?: string;
+  doctorName?: string;
+  gateway: GatewayView;
 }

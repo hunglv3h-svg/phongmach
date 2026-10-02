@@ -15,13 +15,18 @@
   "dependencies": {
     "@medplum/core": "5.2.0",
     "@medplum/fhirtypes": "5.2.0",
+    "@phongmach/catalogs": "workspace:*",
+    "@phongmach/clinical": "workspace:*",
     "@phongmach/fhir-vn-model": "workspace:*",
+    "@phongmach/rules": "workspace:*",
     "fastify": "^5.0.0",
     "jose": "^6.0.0",
+    "qrcode": "^1.5.4",
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@types/qrcode": "^1.5.5",
     "tsx": "^4.0.0",
     "typescript": "^6.0.0",
     "vitest": "^5.0.0"
