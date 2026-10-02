@@ -3,6 +3,7 @@ import { loadAuth, saveAuth, setUnauthorizedHandler, type AuthState } from './ap
 import { DemoBanner } from './components/DemoBanner';
 import { Login } from './components/Login';
 import { Shell } from './components/Shell';
+import { OfflineProvider } from './local/OfflineProvider';
 import { purgeLegacySessionDrafts } from './local/store';
 import { useLocalStore } from './local/useLocalStore';
 
@@ -25,12 +26,17 @@ export function App() {
   }, [update]);
 
   // Đăng xuất: xóa dữ liệu trên máy của người này (bản nháp có dữ liệu lâm sàng) cùng khóa của nó.
-  const logout = async () => {
+  // Còn mục chưa đồng bộ thì người dùng đã chọn "giữ dữ liệu đã mã hóa trên máy" (OFF-6): chỉ đóng kho, không xóa.
+  const logout = async (keep: boolean) => {
     setNotice(undefined);
-    try {
-      await store?.destroy();
-    } catch {
-      setNotice('Không xóa được dữ liệu đã mã hóa trên máy khi đăng xuất. Đóng các tab khác của ứng dụng, đăng nhập rồi đăng xuất lại.');
+    if (keep) {
+      store?.close();
+    } else {
+      try {
+        await store?.destroy();
+      } catch {
+        setNotice('Không xóa được dữ liệu đã mã hóa trên máy khi đăng xuất. Đóng các tab khác của ứng dụng, đăng nhập rồi đăng xuất lại.');
+      }
     }
     update(undefined);
   };
@@ -39,7 +45,13 @@ export function App() {
     <>
       <DemoBanner />
       {auth ? (
-        store ? <Shell auth={auth} store={store} onLogout={() => void logout()} /> : <main className="page"><p className="muted">Đang mở dữ liệu trên máy…</p></main>
+        store ? (
+          <OfflineProvider auth={auth} store={store}>
+            <Shell auth={auth} store={store} onLogout={(keep) => void logout(keep)} />
+          </OfflineProvider>
+        ) : (
+          <main className="page"><p className="muted">Đang mở dữ liệu trên máy…</p></main>
+        )
       ) : (
         <Login onLogin={update} {...(notice ? { notice } : {})} />
       )}

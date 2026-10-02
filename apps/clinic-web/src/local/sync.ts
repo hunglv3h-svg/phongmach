@@ -179,13 +179,15 @@ export class SyncEngine {
   start(): Promise<void> {
     if (this.started) return this.idle();
     this.started = true;
+    this.stopped = false;
     return this.refreshCounts().then(() => this.run());
   }
 
+  /** Dừng hẹn giờ (rời phiên). Bắt đầu lại được (React chạy hiệu ứng hai lần ở bản dev). */
   stop(): void {
     this.stopped = true;
+    this.started = false;
     this.clock.clearTimeout(this.timer);
-    this.listeners.clear();
   }
 
   /** Có mạng lại (sự kiện `online`): gửi ngay, không chờ hết thời gian chờ. */
@@ -216,18 +218,32 @@ export class SyncEngine {
    * Mục đã có cùng id: đã xong thì giữ nguyên; chưa xong thì thay dữ liệu, giữ id (cùng `clientUuid`) và thứ tự.
    */
   async enqueue(entries: NewOp[], extra: Change[] = []): Promise<void> {
-    const day = vnDay(new Date(this.clock.now()));
     const changes: Change[] = [];
     for (const e of entries) {
       const existing = await this.store.get<'ops', OpBody>('ops', e.id);
       if (existing?.plain.status === 'done') continue;
-      const meta: OpMeta = existing
-        ? { ...existing.plain, status: 'pending', nextAt: 0, deps: e.deps ?? [] }
-        : { seq: this.nextSeq(), kind: e.kind, status: 'pending', deps: e.deps ?? [], day, createdAt: this.clock.now(), attempts: 0, nextAt: 0 };
-      changes.push({ table: 'ops', id: e.id, plain: meta, value: { payload: e.payload } satisfies OpBody });
+      changes.push(
+        existing
+          ? { table: 'ops', id: e.id, plain: { ...existing.plain, status: 'pending', nextAt: 0, deps: e.deps ?? [] }, value: { payload: e.payload } satisfies OpBody }
+          : this.newOpChange(e)
+      );
     }
     await this.store.commit([...changes, ...extra]);
     await this.refreshCounts();
+  }
+
+  /** Thay đổi thêm một mục mới, để ghi cùng giao dịch với việc khác (ví dụ trong `promote`). */
+  newOpChange(e: NewOp): Change {
+    const now = this.clock.now();
+    const meta: OpMeta = { seq: this.nextSeq(), kind: e.kind, status: 'pending', deps: e.deps ?? [], day: vnDay(new Date(now)), createdAt: now, attempts: 0, nextAt: 0 };
+    return { table: 'ops', id: e.id, plain: meta, value: { payload: e.payload } satisfies OpBody };
+  }
+
+  /** Giao diện vừa gọi máy chủ (ngoài hàng đợi): có phản hồi thì đang có mạng, lỗi mạng thì không. Có mạng lại thì gửi ngay. */
+  observe(reachable: boolean): void {
+    if (reachable === this.current.online) return;
+    this.emit({ online: reachable });
+    if (reachable) void this.syncNow();
   }
 
   /** Gửi ngay một mục vừa lưu (thao tác lúc có mạng) và cho biết kết quả. Lỗi mạng thì `promote` chuyển nó sang dạng ngoại tuyến. */
@@ -270,7 +286,16 @@ export class SyncEngine {
     const next = this.chain.then(async () => {
       this.queued = undefined;
       if (this.stopped) return;
-      await this.locks.request(this.lockName, () => this.runOnce());
+      try {
+        await this.locks.request(this.lockName, () => this.runOnce());
+      } catch {
+        // Kho lỗi giữa chừng (ví dụ quá hạn): mục nào chưa đánh dấu xong vẫn nằm trong kho; hẹn lần chạy sau, không bỏ cuộc.
+        this.emit({ sending: undefined });
+        if (!this.stopped) {
+          this.clock.clearTimeout(this.timer);
+          this.timer = this.clock.setTimeout(() => void this.run(), this.baseMs);
+        }
+      }
     });
     this.queued = next;
     this.chain = next.catch(() => undefined);

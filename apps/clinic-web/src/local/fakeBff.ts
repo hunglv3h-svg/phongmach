@@ -29,6 +29,8 @@ export class FakeBff {
   readonly visits = new Map<string, Visit>();
   readonly completions = new Map<string, Record<string, unknown>>();
   readonly printed: Array<{ id: string; printedAt?: string }> = [];
+  /** Dị ứng theo id bệnh nhân (cho nạp trước). */
+  readonly allergies = new Map<string, Array<{ id: string; kind: 'class' | 'ingredient'; value: string; label?: string }>>();
   /** Lỗi chèn cho các yêu cầu tới, theo thứ tự; mỗi lỗi dùng một lần cho yêu cầu khớp đầu tiên. */
   readonly faults: Array<{ match: RegExp; fault: Fault }> = [];
   /** Quy tắc kê đơn ở máy chủ: trả về các khóa phải được xác nhận (ví dụ dị ứng phụ tá vừa ghi ở máy khác). */
@@ -140,6 +142,17 @@ export class FakeBff {
       const response = { visit: { encounterId: v.item.id, date: new Date().toISOString(), specialty: 'noi', vitals: {}, diagnoses: [] }, ...(prescription ? { prescription } : {}) };
       this.completions.set(uuid, response);
       return json(201, { ...response, replayed: false });
+    }
+
+    if (method === 'GET' && path === '/api/queue') {
+      return json(200, { day: '2026-10-20', items: [...this.visits.values()].map((v) => v.item) });
+    }
+
+    if (method === 'GET' && path.startsWith('/api/queue/prefetch')) {
+      const ids = new URL(path, 'http://x').searchParams.get('patients')?.split(',') ?? [];
+      const active = new Set([...this.visits.values()].filter((v) => v.item.status === 'waiting' || v.item.status === 'in-exam').map((v) => v.item.patientId));
+      const patients = [...this.patients.values()].filter((p) => active.has(p.id) && ids.includes(p.id)).map((patient) => ({ patient, allergies: this.allergies.get(patient.id) ?? [] }));
+      return json(200, { day: '2026-10-20', patients });
     }
 
     if (method === 'POST' && (m = /^\/api\/prescriptions\/([^/]+)\/printed$/.exec(path))) {

@@ -11,7 +11,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "e2e": "node e2e/smoke.mjs",
-    "e2e:visit": "node e2e/visit.mjs"
+    "e2e:visit": "node e2e/visit.mjs",
+    "e2e:offline": "node e2e/offline-sign.mjs"
   },
   "dependencies": {
     "@phongmach/catalogs": "workspace:*",

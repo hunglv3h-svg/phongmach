@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { newDraft, type Draft } from '../visit/draft';
 import type { CachedPatient, QueueSnapshot, SignedOffline } from './cache';
 import { newKey, seal } from './crypto';
-import { dbName, LocalStoreError, MemoryStore, openEncryptedStore, pendingOnDevice, purgeLegacySessionDrafts, type LocalStore, type OpMeta } from './store';
+import { dbName, LocalStoreError, MemoryStore, openEncryptedStore, pendingOnDevice, purgeLegacySessionDrafts, localStoreInFlight, whileLocalStoreQuiet, type LocalStore, type OpMeta } from './store';
 
 const owner = { tenant: 'noi-tong-quat', userId: 'noi-doctor' };
 const SECRET_SYMPTOMS = 'Đau họng, sốt nhẹ, không ho';
@@ -298,5 +298,76 @@ describe('kho version 2: hàng đợi đồng bộ và bộ đệm ngoại tuy�
     doctor.close();
     assistant.close();
     expect(await pendingOnDevice()).toEqual([{ tenant: 'noi-tong-quat', userId: 'noi-doctor', userName: 'BS. Lê Thị Thu Hà', count: 2 }]);
+  });
+});
+
+/** Chờ (bằng vi nhiệm, không bằng thời gian) tới khi thao tác vừa gọi thật sự bắt đầu với IndexedDB. */
+async function untilInFlight(n: number) {
+  for (let i = 0; i < 50 && localStoreInFlight() !== n; i++) await Promise.resolve();
+  expect(localStoreInFlight()).toBe(n);
+}
+
+describe('hàng rào in (Chromium bỏ mất sự kiện IndexedDB đang dở khi gọi print())', () => {
+  it('chỉ in khi không còn thao tác kho nào đang dở, và không cho thao tác mới bắt đầu trong lúc in', async () => {
+    const s = await open();
+    await s.putDraft('v1', draft());
+    const busy = s.getDraft('v1');
+    await untilInFlight(1); // một yêu cầu IndexedDB đang dở đúng lúc muốn in
+    let atPrint = -1;
+    let during: Promise<unknown> | undefined;
+    await whileLocalStoreQuiet(() => {
+      atPrint = localStoreInFlight();
+      during = s.getDraft('v1'); // gọi trong lúc in: chưa được bắt đầu cho tới khi in xong
+    });
+    expect(atPrint).toBe(0);
+    expect((await busy)?.symptoms).toBe(SECRET_SYMPTOMS);
+    expect((await during) as Draft | undefined).toMatchObject({ symptoms: SECRET_SYMPTOMS });
+    expect(localStoreInFlight()).toBe(0);
+  });
+
+  it('thao tác đang dở không bao giờ xong (sự kiện bị mất): vẫn in sau thời hạn chờ, không treo việc in', async () => {
+    const s = await open();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    let release!: (v: unknown) => void;
+    const db = (s as unknown as { db: { drafts: { get: (id: string) => Promise<unknown> } } }).db;
+    const realGet = db.drafts.get.bind(db.drafts);
+    db.drafts.get = () => new Promise((r) => (release = r));
+    try {
+      const stuck = s.getDraft('treo');
+      await untilInFlight(1);
+      const fn = vi.fn();
+      const printing = whileLocalStoreQuiet(fn, 3000);
+      await vi.advanceTimersByTimeAsync(2999);
+      expect(fn).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      await printing;
+      expect(fn).toHaveBeenCalledTimes(1);
+      release(undefined);
+      expect(await stuck).toBeUndefined();
+    } finally {
+      db.drafts.get = realGet;
+      vi.useRealTimers();
+    }
+  });
+
+  it('thao tác kho quá hạn thì báo lỗi, chuỗi thao tác chạy tiếp (không treo hàng đợi đồng bộ mãi)', async () => {
+    const s = await open();
+    await s.putDraft('v1', draft());
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const db = (s as unknown as { db: { drafts: { get: (id: string) => Promise<unknown> } } }).db;
+    const realGet = db.drafts.get.bind(db.drafts);
+    db.drafts.get = () => new Promise(() => {});
+    try {
+      const stuck = s.getDraft('treo').catch((e: unknown) => e);
+      await untilInFlight(1);
+      db.drafts.get = realGet;
+      const next = s.getDraft('v1');
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(await stuck).toMatchObject({ code: 'stalled' });
+      expect((await next)?.symptoms).toBe(SECRET_SYMPTOMS);
+    } finally {
+      db.drafts.get = realGet;
+      vi.useRealTimers();
+    }
   });
 });

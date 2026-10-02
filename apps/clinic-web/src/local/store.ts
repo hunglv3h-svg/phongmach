@@ -106,7 +106,7 @@ class LocalDb extends Dexie {
 
 export class LocalStoreError extends Error {
   constructor(
-    readonly code: 'unsupported' | 'unreadable',
+    readonly code: 'unsupported' | 'unreadable' | 'stalled',
     message: string
   ) {
     super(message);
@@ -141,6 +141,59 @@ export interface LocalStore {
   destroy(): Promise<void>;
 }
 
+// ------------------------------------------------------------------------------------------------- hàng rào in
+// Chromium bỏ mất sự kiện trả về của yêu cầu IndexedDB đang dở khi trang gọi `print()` (vòng lặp sự kiện lồng nhau của hộp thoại
+// in): lời hứa của yêu cầu đó không bao giờ xong, chuỗi thao tác lần lượt của kho treo, hàng đợi đồng bộ không gửi được nữa.
+// [Đã đo trên Chromium không giao diện: 8–14 trên 200 yêu cầu đang dở bị mất, vẫn mất sau 10 giây; fetch, hẹn giờ, WebCrypto không bị.]
+// Cách tránh: trước khi in, đóng hàng rào (thao tác mới chờ), đợi các thao tác đang dở xong, in, rồi mở hàng rào.
+
+/** Mỗi thao tác với kho xong trong thời hạn này; quá hạn thì báo lỗi để chuỗi thao tác chạy tiếp thay vì treo mãi. */
+export const STALL_MS = 20_000;
+let inFlight = 0;
+let fence: Promise<void> | undefined;
+const drained: Array<() => void> = [];
+
+async function tracked<T>(fn: () => Promise<T>): Promise<T> {
+  while (fence) await fence;
+  inFlight++;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      fn(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new LocalStoreError('stalled', 'Kho trên máy không phản hồi: tải lại trang (dữ liệu đã lưu không mất)')), STALL_MS);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+    if (--inFlight === 0) for (const r of drained.splice(0)) r();
+  }
+}
+
+/** Số thao tác kho đang dở (IndexedDB), cho kiểm thử và chẩn đoán. */
+export const localStoreInFlight = (): number => inFlight;
+
+/**
+ * Chạy `fn` (đồng bộ, ví dụ `print()`) khi kho trên máy không có thao tác IndexedDB nào đang dở, và không cho thao tác mới bắt đầu
+ * trong lúc `fn` chạy. Thao tác đang dở quá `maxWaitMs` thì vẫn chạy `fn` (không để việc in chờ mãi).
+ */
+export async function whileLocalStoreQuiet(fn: () => void, maxWaitMs = 3000): Promise<void> {
+  while (fence) await fence;
+  let open!: () => void;
+  fence = new Promise<void>((r) => (open = r));
+  try {
+    if (inFlight > 0) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([new Promise<void>((r) => drained.push(r)), new Promise<void>((r) => (timer = setTimeout(r, maxWaitMs)))]);
+      clearTimeout(timer);
+    }
+    fn();
+  } finally {
+    fence = undefined;
+    open();
+  }
+}
+
 /** Tên cũ (lát 2), giữ để không phải đổi mọi chỗ dùng. */
 export type DraftStore = LocalStore;
 
@@ -160,7 +213,8 @@ class EncryptedStore implements LocalStore {
   ) {}
 
   private serial<T>(fn: () => Promise<T>): Promise<T> {
-    const next = this.chain.then(fn, fn);
+    const run = () => tracked(fn);
+    const next = this.chain.then(run, run);
     this.chain = next.catch(() => undefined);
     return next;
   }

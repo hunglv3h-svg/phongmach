@@ -1,9 +1,12 @@
 import { makePrescriptionCode, vnDay, type PrescriptionDetail } from '@phongmach/clinical';
 import { renderPrescriptionHtml } from '@phongmach/print';
 import { ApiError, api } from './api';
+import { whileLocalStoreQuiet } from './local/store';
 
 /**
  * In một trang HTML qua iframe ẩn. Trang in mang CSP `default-src 'none'` nên không chạy được script dù có dữ liệu độc.
+ * Gọi `print()` khi kho trên máy không có thao tác IndexedDB đang dở (xem `whileLocalStoreQuiet`): Chromium bỏ mất sự kiện của
+ * yêu cầu đang dở lúc in, làm treo hàng đợi đồng bộ.
  */
 export async function printHtml(html: string): Promise<void> {
   const frame = document.createElement('iframe');
@@ -13,12 +16,10 @@ export async function printHtml(html: string): Promise<void> {
   frame.srcdoc = html;
   await new Promise<void>((resolve) => {
     frame.onload = () => {
-      try {
+      void whileLocalStoreQuiet(() => {
         frame.contentWindow?.focus();
         frame.contentWindow?.print();
-      } finally {
-        resolve();
-      }
+      }).finally(resolve);
     };
     document.body.appendChild(frame);
   });

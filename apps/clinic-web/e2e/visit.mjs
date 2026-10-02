@@ -92,7 +92,7 @@ const pendingState = () => page.getByTestId('gateway-status').getAttribute('data
 /** Đọc thẳng mọi kho IndexedDB của ứng dụng trong trình duyệt (không qua mã ứng dụng): tên kho, số bản ghi từng bảng, mọi byte dưới dạng chữ. */
 const rawLocalDump = () =>
   page.evaluate(async () => {
-    const out = { names: [], rows: {}, text: '' };
+    const out = { names: [], rows: {}, keys: 0, text: '' };
     const decoder = new TextDecoder();
     const req = (r) => new Promise((resolve, reject) => ((r.onsuccess = () => resolve(r.result)), (r.onerror = () => reject(r.error))));
     for (const { name } of (await indexedDB.databases()).filter((d) => d.name?.startsWith('phongmach:'))) {
@@ -101,6 +101,7 @@ const rawLocalDump = () =>
       for (const store of db.objectStoreNames) {
         const rows = await req(db.transaction(store).objectStore(store).getAll());
         out.rows[store] = (out.rows[store] ?? 0) + rows.length;
+        if (store === 'meta') out.keys += rows.filter((r) => r.k === 'key').length;
         for (const row of rows) for (const v of Object.values(row)) out.text += `${v instanceof ArrayBuffer || ArrayBuffer.isView(v) ? decoder.decode(v) : JSON.stringify(v)}\n`;
       }
       db.close();
@@ -177,7 +178,7 @@ try {
   await page.locator('[data-testid="draft-saved"][data-dirty="false"][data-persistent="true"]').waitFor();
   const raw = await rawLocalDump();
   assert.ok(raw.names.includes('phongmach:noi-tong-quat:noi-doctor'), `có kho của bác sĩ, thực tế ${raw.names}`);
-  assert.ok(raw.rows.drafts >= 1 && raw.rows.meta === 1, `kho có bản nháp và đúng một khóa: ${JSON.stringify(raw.rows)}`);
+  assert.ok(raw.rows.drafts >= 1 && raw.keys === 1, `kho có bản nháp và đúng một khóa: ${JSON.stringify(raw)}`);
   for (const secret of ['Đau họng, sốt nhẹ, không ho', 'Họng đỏ', 'J02.9', 'Nguyễn Văn An', 'symptoms']) assert.ok(!raw.text.includes(secret), `kho trên máy không được có "${secret}" ở dạng rõ`);
   assert.deepEqual(await page.evaluate(() => Object.keys(sessionStorage).filter((k) => k.startsWith('phongmach.draft.'))), [], 'không còn bản nháp trong sessionStorage');
   ok('bản nháp lưu trong IndexedDB đã mã hóa: đọc thẳng kho không thấy triệu chứng, chẩn đoán, tên; sessionStorage không còn bản nháp');

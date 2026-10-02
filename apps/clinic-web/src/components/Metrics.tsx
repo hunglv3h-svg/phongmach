@@ -2,12 +2,15 @@ import { clock } from '../format';
 import { useState } from 'react';
 import { api, type AuthState } from '../api';
 import { usePoll } from '../hooks';
+import { NEED_NETWORK } from '../local/client';
+import { useOffline } from '../local/OfflineProvider';
 
 const Value = ({ seconds, target }: { seconds?: number; target: number }) =>
   seconds === undefined ? <span className="muted">—</span> : <span className={seconds <= target ? 'badge ok' : 'badge bad'}>{clock(seconds)} <small>({seconds} giây)</small></span>;
 
 export function Metrics({ auth }: { auth: AuthState }) {
   const [days, setDays] = useState(14);
+  const { online } = useOffline();
   const m = usePoll(() => api.metrics(auth.token, days), 10_000, [auth.token, days]);
   const data = m.data;
   return (
@@ -25,7 +28,8 @@ export function Metrics({ auth }: { auth: AuthState }) {
         </label>
       </div>
       <p className="muted">Từ lúc bác sĩ mở hồ sơ đến lúc ký và in đơn, do máy chủ đo. Lượt mở hoặc ký lúc mất mạng được đo bằng đồng hồ của máy khám (máy chủ kiểm tra hợp lý khi đồng bộ) và đếm riêng ở cột "Đo ở máy khám". Mục tiêu: trung vị ≤ 60 giây, p90 ≤ 120 giây (TL34 B.5).{auth.user.role === 'doctor' ? ' Bạn chỉ thấy số của chính mình.' : ''}</p>
-      {m.error && <p className="error" role="alert">{m.error}</p>}
+      {!online && <p className="offline-note" data-testid="needs-network">{NEED_NETWORK}: số đo do máy chủ tính.</p>}
+      {m.error && online && <p className="error" role="alert">{m.error}</p>}
       {data && (
         <>
           <div className="table-wrap">

@@ -4,6 +4,7 @@ import { api, type CompleteResponse } from '../api';
 import { usePoll } from '../hooks';
 import { clock } from '../format';
 import { printSaved } from '../print';
+import { useOffline } from '../local/OfflineProvider';
 
 const BADGE: Record<GatewayStatus, string> = { signed: 'warn', sending: 'warn', retry: 'warn', sent: 'ok', failed: 'bad' };
 
@@ -27,8 +28,15 @@ export function SignResult({
   onBack: () => void;
 }) {
   const rx = result.prescription;
-  const live = usePoll(async () => (rx ? (await api.prescription(token, rx.id)).prescription.gateway : undefined), 2000, [token, rx?.id]);
-  const gateway = live.data ?? rx?.gateway;
+  const { client, online } = useOffline();
+  // Mất mạng thì không hỏi trạng thái liên thông (giữ trạng thái đã biết).
+  const live = usePoll(async () => (rx && online ? (await api.prescription(token, rx.id)).prescription.gateway : undefined), 2000, [token, rx?.id, online]);
+  // Trạng thái liên thông mới nhất đã biết (giữ lại khi mất mạng).
+  const [known, setKnown] = useState(rx?.gateway);
+  useEffect(() => {
+    if (live.data) setKnown(live.data);
+  }, [live.data]);
+  const gateway = known;
   // Lần in ngay sau khi ký chạy song song với màn hình này: kết quả của nó đến sau khi màn hình đã dựng.
   const [printErr, setPrintErr] = useState(printError);
   const [via, setVia] = useState<'server' | 'local'>();
@@ -44,7 +52,11 @@ export function SignResult({
     // Trạng thái liên thông mới nhất đã biết đi kèm bản in từ máy.
     const latest = { ...detail, prescription: { ...detail.prescription, ...(gateway ? { gateway } : {}) } };
     printSaved(token, latest, clinicName).then(
-      (v) => setVia(v),
+      (v) => {
+        setVia(v);
+        // In từ dữ liệu trên máy khi mất mạng: máy chủ có dòng nhật ký khi hàng đợi gửi "đã in" (OFF-1).
+        if (v === 'local') void client.recordLocalPrint(latest.prescription.id);
+      },
       (e: Error) => setPrintErr(e.message)
     );
   };

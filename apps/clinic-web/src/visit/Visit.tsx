@@ -1,12 +1,15 @@
-import { SPECIALTY_LABEL, type PrescriptionDetail, type VisitContext, type VisitSummary } from '@phongmach/clinical';
+import { SPECIALTY_LABEL, type PrescriptionDetail, type VisitSummary } from '@phongmach/clinical';
 import { useEffect, useMemo, useState } from 'react';
-import { ApiError, api, type AuthState, type CompleteResponse, type RulesRejected } from '../api';
+import type { AuthState, CompleteResponse, RulesRejected } from '../api';
 import { ageText, clock, pad3 } from '../format';
 import { useNow } from '../hooks';
 import { printSaved } from '../print';
-import type { DraftStore } from '../local/store';
-import { addPrevious, evaluate, newDraft, toCompleteRequest, toVitals, type Draft } from './draft';
+import type { Opened, SignOutcome } from '../local/client';
+import { useOffline } from '../local/OfflineProvider';
+import type { LocalStore } from '../local/store';
+import { addPrevious, evaluate, newDraft, toVitals, type Draft } from './draft';
 import { ExamForm } from './ExamForm';
+import { OfflineSignResult } from './OfflineSignResult';
 import { PatientSide } from './PatientSide';
 import { PrescriptionEditor } from './PrescriptionEditor';
 import { RulesPanel } from './RulesPanel';
@@ -16,21 +19,29 @@ import { SignResult } from './SignResult';
  * Màn hình khám một trang: bên trái hồ sơ (dị ứng, tiền sử, lịch sử khám), giữa khám bệnh, phải kê đơn.
  * Đồng hồ ở đầu trang đếm từ lúc mở hồ sơ (T-TELE); con số chính thức do máy chủ đo khi ký.
  */
-export function Visit(props: { auth: AuthState; store: DraftStore; context: VisitContext; onDone: () => void }) {
-  const { store, context } = props;
+export function Visit(props: { auth: AuthState; store: LocalStore; opened: Opened; onDone: () => void }) {
+  const { opened } = props;
+  const { client } = useOffline();
+  const context = opened.context;
   const visitId = context.visit.id;
-  // Bản nháp nằm trong kho mã hóa trên máy: đọc bất đồng bộ trước khi hiện màn hình khám.
+  // Bản nháp nằm trong kho mã hóa trên máy: đọc bất đồng bộ trước khi hiện màn hình khám. Lượt mở lúc mất mạng rồi đã đồng bộ
+  // có thể có bản nháp dưới id tạm: lấy bản mới nhất. Bản nháp luôn mang lúc mở theo đồng hồ máy này (OFF-3).
   const [loaded, setLoaded] = useState<{ draft: Draft; stored: boolean; error?: string }>();
   useEffect(() => {
     let live = true;
-    store.getDraft(visitId).then(
-      (d) => live && setLoaded(d ? { draft: d, stored: true } : { draft: newDraft(context.visit.reason ?? ''), stored: false }),
-      () => live && setLoaded({ draft: newDraft(context.visit.reason ?? ''), stored: false, error: 'Không đọc được bản nháp đã lưu trên máy: đã mở bản nháp mới.' })
+    const fresh = (): Draft => ({ ...newDraft(context.visit.reason ?? ''), openedAt: opened.openedAt, openedOffline: opened.offline });
+    client.latestDraft(visitId).then(
+      (d) => {
+        if (!live) return;
+        if (!d) return setLoaded({ draft: fresh(), stored: false });
+        setLoaded(d.openedAt ? { draft: d, stored: true } : { draft: { ...d, openedAt: opened.openedAt, openedOffline: opened.offline }, stored: false });
+      },
+      () => live && setLoaded({ draft: fresh(), stored: false, error: 'Không đọc được bản nháp đã lưu trên máy: đã mở bản nháp mới.' })
     );
     return () => {
       live = false;
     };
-  }, [store, visitId, context.visit.reason]);
+  }, [client, visitId, context.visit.reason, opened.openedAt, opened.offline]);
 
   if (!loaded) return <main className="page"><p className="muted">Đang mở bản nháp…</p></main>;
   return <VisitEditor {...props} initialDraft={loaded.draft} draftStored={loaded.stored} {...(loaded.error ? { loadError: loaded.error } : {})} />;
@@ -39,23 +50,25 @@ export function Visit(props: { auth: AuthState; store: DraftStore; context: Visi
 function VisitEditor({
   auth,
   store,
-  context: initial,
+  opened,
   onDone,
   initialDraft,
   draftStored,
   loadError,
 }: {
   auth: AuthState;
-  store: DraftStore;
-  context: VisitContext;
+  store: LocalStore;
+  opened: Opened;
   onDone: () => void;
   initialDraft: Draft;
   draftStored: boolean;
   loadError?: string;
 }) {
   const { token } = auth;
-  const visit = initial.visit;
-  const [context, setContext] = useState(initial);
+  const { client, online } = useOffline();
+  const visit = opened.context.visit;
+  const [context, setContext] = useState(opened.context);
+  const [offlineResult, setOfflineResult] = useState<Extract<SignOutcome, { kind: 'offline' }>>();
   const [draft, setDraft] = useState<Draft>(initialDraft);
   // Bản nháp đã nằm trong kho (so theo đối tượng): khác `draft` nghĩa là còn thay đổi chưa lưu xong.
   const [savedDraft, setSavedDraft] = useState<Draft | undefined>(draftStored ? initialDraft : undefined);
@@ -69,7 +82,7 @@ function VisitEditor({
   const now = useNow(1000);
 
   useEffect(() => {
-    if (result || draft === savedDraft) return;
+    if (result || offlineResult || draft === savedDraft) return;
     // Kho chạy các lần ghi lần lượt, nên lần ghi xong sau cùng là bản mới nhất.
     store.putDraft(visit.id, draft).then(
       () => {
@@ -79,13 +92,20 @@ function VisitEditor({
       () => setSaveError(true)
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft, visit.id, result, store]);
+  }, [draft, visit.id, result, offlineResult, store]);
   const dirty = draft !== savedDraft;
 
   const allergies = context.allergies;
   const { findings, verdict } = useMemo(
-    () => evaluate(draft, { specialty: visit.specialty, patient: context.patient, allergies: allergies.map(({ kind, value, label }) => ({ kind, value, label })) }),
-    [draft, visit.specialty, context.patient, allergies]
+    () =>
+      evaluate(draft, {
+        specialty: visit.specialty,
+        patient: context.patient,
+        allergies: allergies.map(({ kind, value, label }) => ({ kind, value, label })),
+        // Mở khi mất mạng mà máy không có dữ liệu dị ứng: phải hỏi bệnh nhân và xác nhận 'allergy-unknown' (OFF-4).
+        allergiesKnown: opened.allergiesKnown,
+      }),
+    [draft, visit.specialty, context.patient, allergies, opened.allergiesKnown]
   );
   const { invalid } = toVitals(draft);
   const hasRx = draft.lines.length > 0;
@@ -103,28 +123,38 @@ function VisitEditor({
     setSaving(true);
     setError(undefined);
     setServer(undefined);
+    let out: SignOutcome;
     try {
-      const res = await api.completeVisit(token, visit.id, toCompleteRequest(draft, withRx));
-      setResult(res);
-      void store.deleteDraft(visit.id).catch(() => undefined);
-      const detail = toDetail(res);
-      if (detail && !res.replayed) {
-        printSaved(token, detail, auth.tenant.name).then(
-          (via) => via === 'local' && setPrintedLocally(true),
-          (e: Error) => setPrintError(e.message)
-        );
-      }
+      // Qua hàng đợi trên máy (N1): có mạng thì gửi ngay; mất mạng thì lưu bền trên máy rồi mới in từ dữ liệu trên máy.
+      out = await client.complete({ visit, patient: context.patient, draft, withRx, allergiesKnown: opened.allergiesKnown, acks: verdict.acknowledged.map(({ key, message, reason }) => ({ key, message, reason })) });
     } catch (e) {
-      if (e instanceof ApiError && e.code === 'rules-not-satisfied') {
-        setServer(e.body as RulesRejected);
-        setError('Máy chủ kiểm tra lại và không cho ký: xem các cảnh báo bên dưới.');
-      } else if (e instanceof ApiError && e.status === 0) {
-        setError('Mất kết nối. Bản nháp được giữ lại; bấm lại khi có mạng, đơn sẽ không bị lưu trùng.');
-      } else {
-        setError(e instanceof Error ? e.message : String(e));
+      out = { kind: 'failed', message: e instanceof Error ? e.message : String(e) };
+    }
+    setSaving(false);
+    switch (out.kind) {
+      case 'online': {
+        const res = out.response;
+        setResult(res);
+        if (out.detail && !res.replayed) {
+          const rxId = out.detail.prescription.id;
+          printSaved(token, out.detail, auth.tenant.name).then(
+            (via) => {
+              if (via !== 'local') return;
+              setPrintedLocally(true);
+              void client.recordLocalPrint(rxId);
+            },
+            (e: Error) => setPrintError(e.message)
+          );
+        }
+        return;
       }
-    } finally {
-      setSaving(false);
+      case 'offline':
+        return setOfflineResult(out);
+      case 'rules':
+        setServer(out.rejected);
+        return setError('Máy chủ kiểm tra lại và không cho ký: xem các cảnh báo bên dưới.');
+      case 'failed':
+        return setError(out.message);
     }
   };
 
@@ -133,6 +163,7 @@ function VisitEditor({
   const toDetail = (res: CompleteResponse): PrescriptionDetail | undefined =>
     res.prescription ? { prescription: res.prescription, patient: context.patient, diagnoses: res.visit.diagnoses, encounterId: visit.id } : undefined;
 
+  if (offlineResult) return <OfflineSignResult result={offlineResult} onBack={onDone} />;
   if (result) {
     const detail = toDetail(result);
     return (
@@ -168,6 +199,7 @@ function VisitEditor({
                   : 'Trình duyệt không cho lưu trên máy: nháp chỉ giữ trong tab này, mất khi tải lại'}
           </small>
           {loadError && <small className="error draft-state" role="alert">{loadError}</small>}
+          {opened.offline && <small className="offline-note draft-state" data-testid="opened-offline">Mở khi mất mạng: dùng dữ liệu trên máy này; ký xong sẽ đồng bộ khi có mạng.</small>}
         </div>
         <div className="timer" role="timer" aria-label="Thời gian khám" data-testid="visit-timer">
           <span>Đã khám</span>
@@ -176,7 +208,7 @@ function VisitEditor({
         <button className="ghost" onClick={onDone} title="Giữ hồ sơ đang khám, quay về hàng chờ" data-testid="leave-visit">Về hàng chờ</button>
       </header>
 
-      <PatientSide token={token} context={context} onContext={setContext} onRepeat={repeat} />
+      <PatientSide token={token} context={context} onContext={setContext} onRepeat={repeat} online={online} historyLoaded={opened.historyLoaded} allergiesKnown={opened.allergiesKnown} />
 
       <section className="visit-exam card">
         <ExamForm draft={draft} onChange={setDraft} invalid={invalid} />
