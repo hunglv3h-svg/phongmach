@@ -144,7 +144,7 @@ export function Reception({ token }: { token: string }) {
       <section className="detail-pane" aria-label="Chi tiết" aria-live="polite">
         {notice && <p className="notice" role="status" data-testid="notice">{notice}</p>}
         {panel.kind === 'none' && <p className="muted">Chọn một bệnh nhân hoặc thêm bệnh nhân mới.</p>}
-        {panel.kind === 'detail' && <PatientDetail key={panel.patient.id} token={token} summary={panel.patient} />}
+        {panel.kind === 'detail' && <PatientDetail key={panel.patient.id} token={token} summary={panel.patient} onQueued={(message) => { setNotice(message); input.current?.focus(); }} />}
         {panel.kind === 'new' && (
           <PatientForm
             key={panel.key}

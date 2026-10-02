@@ -14,6 +14,7 @@
     "stack:down": "docker compose -f infra/medplum/docker-compose.yml down",
     "seed": "pnpm --filter @phongmach/bff seed",
     "dev:bff": "pnpm --filter @phongmach/bff dev",
-    "dev:web": "pnpm --filter @phongmach/clinic-web dev"
+    "dev:web": "pnpm --filter @phongmach/clinic-web dev",
+    "e2e": "pnpm --filter @phongmach/clinic-web e2e && pnpm --filter @phongmach/clinic-web e2e:visit"
   }
 }

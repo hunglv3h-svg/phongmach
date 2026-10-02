@@ -168,9 +168,18 @@ importers:
 
   apps/clinic-web:
     dependencies:
+      '@phongmach/catalogs':
+        specifier: workspace:*
+        version: link:../../packages/catalogs
+      '@phongmach/clinical':
+        specifier: workspace:*
+        version: link:../../packages/clinical
       '@phongmach/fhir-vn-model':
         specifier: workspace:*
         version: link:../../packages/fhir-vn-model
+      '@phongmach/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
       react:
         specifier: ^19.0.0
         version: 19.3.0

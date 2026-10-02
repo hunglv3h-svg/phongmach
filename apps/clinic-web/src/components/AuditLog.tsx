@@ -9,6 +9,10 @@ function detail(e: AuditEntry): string {
   if (e.resultCount !== undefined) {
     if (e.action === 'audit-read') parts.push(`${e.resultCount} dòng nhật ký`);
     else if (e.action === 'create') parts.push(e.resultCount ? 'bệnh nhân mới' : 'đã có sẵn, không tạo trùng');
+    else if (e.action === 'check-in') parts.push(e.resultCount ? 'lượt mới' : 'đã có sẵn, không cấp thêm số');
+    else if (e.action === 'visit-complete') parts.push(`${e.resultCount} thuốc`);
+    else if (e.action === 'queue-read') parts.push(`${e.resultCount} lượt`);
+    else if (e.action === 'prescription-read' || e.action === 'history-read' || e.action === 'note-read') parts.push(`${e.resultCount} mục`);
     else parts.push(`${e.resultCount} hồ sơ`);
   }
   return parts.join(' · ');

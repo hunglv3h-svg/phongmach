@@ -3,17 +3,21 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Ứng dụng phòng khám (PWA): tiếp đón, tìm bệnh nhân. Khám và kê đơn: M0-S2.",
+  "description": "Ứng dụng phòng khám (PWA): tiếp đón, hàng chờ, khám một trang, kê đơn, in, liên thông (mô phỏng).",
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "e2e": "node e2e/smoke.mjs"
+    "e2e": "node e2e/smoke.mjs",
+    "e2e:visit": "node e2e/visit.mjs"
   },
   "dependencies": {
+    "@phongmach/catalogs": "workspace:*",
+    "@phongmach/clinical": "workspace:*",
     "@phongmach/fhir-vn-model": "workspace:*",
+    "@phongmach/rules": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
