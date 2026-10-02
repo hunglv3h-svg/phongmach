@@ -18,7 +18,13 @@ Phần mềm quản lý phòng mạch tư nhân (Việt Nam). Kế hoạch tri�
 
 ## Chạy thử cục bộ
 
-Cần Node >= 22, pnpm 12, Docker (có `docker compose`).
+Cần Node >= 22, pnpm 12, Docker (có `docker compose`). Cách nhanh nhất, chạy lại nhiều lần được (cài pnpm nếu thiếu, bật dockerd trong sandbox, dựng Medplum, nạp dữ liệu demo lần đầu, chạy BFF và giao diện):
+
+```bash
+infra/dev-up.sh               # --stop để dừng BFF và giao diện; log ở /tmp/phongmach-dev/
+```
+
+Hoặc từng bước:
 
 ```bash
 pnpm install

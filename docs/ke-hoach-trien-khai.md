@@ -381,6 +381,43 @@ Bài học từ M0-S2:
 4. **Dữ liệu thăm dò làm bẩn dữ liệu demo**: các lần thử ban đầu tạo lượt khám số 7xx–9xx trong phòng khám demo làm sai số thứ tự và lịch sử. Đã dọn; bài e2e nay tự dọn hàng chờ ở đầu và cuối để chạy lại được kể cả sau lần hỏng.
 5. **Giới hạn đã biết, cần quyết định cho M1**: (a) hộp thư đi hỏi Medplum theo chu kỳ, mỗi phòng khám mỗi lần 20 điểm hạn mức; đủ cho M0, nhưng 300 phòng khám mỗi 2 giây là 3.000 lần tìm mỗi phút nên M1 phải chuyển sang Subscription hoặc hàng đợi; (b) bản nháp lượt khám tạm lưu ở `sessionStorage` (có dữ liệu lâm sàng, xóa khi đăng xuất, chưa mã hóa), M0-S3 chuyển sang kho cục bộ có mã hóa cùng với ngoại tuyến; (c) màn hình chờ dùng chung phiên của máy lễ tân, M1 cần thiết bị màn hình có mã ghép riêng; (d) mã đơn nội bộ (`PM-YYMMDD-XXXXXX`, sinh xác định từ `clientUuid`) là giả định tạm cho đến khi có tài liệu cổng (TL34 Q1); (e) giới hạn 30/90 ngày và danh sách bệnh mạn tính là dữ liệu minh họa, cần cố vấn y khoa và pháp chế xác nhận trước M1.
 
+### 5.8 Bàn giao sang M0-S3: ngoại tuyến (02/10/2026)
+
+Mục này viết cho người (hoặc phiên làm việc) tiếp nhận M0-S3 mà không có ngữ cảnh của M0-S1/S2. Đọc cùng mục 5.2 (dòng "Ngoại tuyến"), tiêu chí M0-2 ở mục 5.3, và công việc T-OFF ở mục 8.
+
+**Dựng môi trường** (trên máy dev hoặc sandbox mới): `infra/dev-up.sh` cài pnpm nếu thiếu, bật dockerd nếu cần, dựng Medplum, nạp dữ liệu demo lần đầu rồi chạy BFF và giao diện (`--stop` để dừng, log ở `/tmp/phongmach-dev/`). Sau đó `pnpm e2e` chạy hai bài Chromium (13 + 21 bước); `pnpm test` và `pnpm --filter @phongmach/bff test:integration` chạy kiểm thử đơn vị và tích hợp. Nhánh: PR #1 vẫn là bản nháp và chưa merge, nên tạo nhánh M0-S3 từ `claude/beautiful-bardeen-ac5u1c` (hoặc từ `main` sau khi merge PR #1). Người dùng demo và kịch bản đi qua màn hình nằm ở `README.md`.
+
+**Phạm vi M0-S3 theo kế hoạch.** Tiếp đón, khám, kê đơn, in khi mất mạng; đồng bộ khi có mạng; 0 mất, 0 trùng; ngắt mạng ngay trên sân khấu (M0-2: 20 chu kỳ ngắt/khôi phục, kiểm thử tự động). Ngoài phạm vi M0: chờ ký và gửi ở mức đầy đủ, xung đột sửa đồng thời, cache toàn bộ 20.000 bệnh nhân.
+
+**Đã có, dùng lại được:**
+
+- Mọi lần ghi của ứng dụng đã idempotent theo `clientUuid` do client sinh: tạo bệnh nhân, cấp số, dị ứng, tiền sử, hoàn tất lượt khám. Gửi lại cùng UUID là an toàn và trả kết quả cũ (HTTP 200, `replayed`). Hàng đợi đồng bộ chỉ cần giữ UUID và gửi lại cho tới khi nhận 2xx.
+- Gói hoàn tất lượt khám chạy lại được (F11). Khi ghi dở BFF trả 503 `incomplete` kèm "bấm lại"; gửi lại cùng UUID thì hội tụ. Mã đơn nội bộ sinh xác định từ `clientUuid`.
+- Quy tắc kê đơn, danh mục, đơn mẫu và tìm tên không dấu (`foldName`) đã chạy ở trình duyệt. Bản nháp lượt khám đã có `clientUuid` ngay lúc mở (`apps/clinic-web/src/visit/draft.ts`).
+- Service worker chỉ lưu vỏ ứng dụng, **không** lưu `/api` (có dữ liệu bệnh nhân); giữ nguyên nguyên tắc này.
+
+**Khoảng trống phải thiết kế (chưa có, không tự có):**
+
+1. **In khi mất mạng.** Trang in A5 do BFF dựng phía máy chủ (`services/bff/src/print.ts`), nên ngoại tuyến không in được. Cần chuyển mẫu in sang gói dùng chung, sinh QR ở trình duyệt, và in từ dữ liệu cục bộ. Mã đơn lấy ngày theo giờ máy chủ; ngoại tuyến phải dùng giờ máy khách và quyết định cách chịu đồng hồ lệch.
+2. **Số thứ tự hàng chờ do máy chủ cấp** (lấy số lớn nhất rồi tạo có điều kiện). Ngoại tuyến không có số: chọn giữa số tạm cục bộ được gán số thật khi đồng bộ, hay chỉ cho khám người đã có số. Màn hình chờ cũng phụ thuộc quyết định này.
+3. **Đồng hồ phiên khám (T-TELE) dùng giờ máy chủ** cho cả lúc mở hồ sơ và lúc ký. Đồng bộ trễ làm số đo sai (kéo p50/p90 lên). Cần gửi thời điểm ký của client (kèm giới hạn hợp lý) hoặc đo ở client và để máy chủ kiểm tra.
+4. **Tìm bệnh nhân ngoại tuyến.** Phạm vi M0: chỉ người đang trong hàng chờ hôm nay và người vừa mở. Cần kho cục bộ có chỉ mục không dấu.
+5. **Kho cục bộ có mã hóa.** Hiện bản nháp ở `sessionStorage`, không mã hóa. Cần IndexedDB (Dexie theo mục 5.2) với WebCrypto (AES-GCM). Phải quyết định khóa lấy từ đâu khi chưa có xác thực thật (T-IDP), xóa khi đăng xuất, và dùng chung máy giữa nhiều người.
+6. **Phiên đăng nhập.** Token hết hạn sau 480 phút và không gia hạn được khi mất mạng. Hàng đợi chờ đồng bộ phải sống sót qua mất mạng dài, kể cả khi token đã hết hạn lúc có mạng lại.
+7. **Quyền khi đồng bộ.** BFF chỉ cho người đã mở lượt khám hoàn tất nó (so `participant.individual.identifier`); yêu cầu đồng bộ phải mang đúng danh tính lúc ký. Trường hợp lượt khám bị người khác đụng vào trong lúc ngoại tuyến thuộc "xung đột sửa đồng thời", ngoài phạm vi M0 nhưng phải được phát hiện và báo, không âm thầm ghi đè.
+
+**Cách đo M0-2 (đề xuất).** Playwright `context.setOffline(true/false)`, 20 chu kỳ ngắt/khôi phục ngẫu nhiên giữa lúc cấp số, khám và ký. Đếm bản ghi trong Medplum bằng tài khoản máy của phòng khám thử, theo mẫu hàm `count` ở `services/bff/test/integration/clinical.test.ts`: mỗi hành động có đúng một bản ghi (0 mất, 0 trùng). Bài này nên nằm trong job e2e của CI.
+
+**Bẫy đã gặp, đừng lặp lại:**
+
+- **F11:** `transaction` của Medplum không nguyên tử; luôn kiểm tra từng mục bằng `failedEntries`; không dựa vào `If-Match` trong gói; `PUT` với id tự chọn trả 404 (dùng `ifNoneExist`).
+- **Hạn mức đăng nhập 5 lần/phút theo IP (F5).** Mỗi file kiểm thử tích hợp đăng nhập quản trị một lần, nên chạy bộ tích hợp ba lần liền sẽ gặp 429 ở khâu dựng dữ liệu; đó không phải lỗi mã. Thêm file kiểm thử mới thì tính lại. Nếu gặp, chờ một phút.
+- **Kiểm thử hẹn giờ phải dùng thời gian ảo, không `sleep`**: CI chậm hơn máy dev (một bài thử lại hạn 40 ms đã làm đỏ CI). Bài hỏng giữa chừng không được để lại trạng thái chung cho các bài sau (đặt lại trong `beforeEach`).
+- **Không thăm dò trên phòng khám demo**: các lần thử ban đầu đã làm sai số thứ tự và lịch sử. Tạo phòng khám tạm như các kiểm thử tích hợp (`createTenantProject`). Bài e2e `visit.mjs` tự dọn hàng chờ ở đầu và cuối để chạy lại được kể cả sau lần hỏng.
+- **Không dùng `pkill -f` theo mẫu chữ** (đã từng giết chính shell đang chạy lệnh); `infra/dev-up.sh` dùng file PID và nhóm tiến trình. Tiến trình nền phải bỏ stdout của lệnh gọi, nếu không nó giữ đầu ống và lệnh không bao giờ kết thúc.
+- **Quy tắc đã thành nếp, giữ cho mọi tính năng mới**: log không chứa chuỗi truy vấn; nhật ký truy cập không chứa dữ liệu bệnh nhân; ghi nhật ký trước khi trả dữ liệu; tenant lấy từ phiên, không từ tham số; mọi phần mô phỏng có nhãn. Kiểm thử an toàn phải được xác nhận **thất bại khi gỡ biện pháp** tương ứng.
+- **Khi xong M0-S3, cập nhật chỗ nói "ngoại tuyến chưa có"**: `components/Scope.tsx`, `components/DemoBanner.tsx`, `README.md` (mục "Giới hạn"), mục 5.2 và 5.7 của kế hoạch, và bước kiểm tra trang Phạm vi trong `e2e/visit.mjs`.
+
 ---
 
 ## 6. Giai đoạn 1 — MVP pilot, M1 (11/2026 – 03/2027)
