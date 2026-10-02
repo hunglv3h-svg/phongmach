@@ -15,6 +15,7 @@
     "seed": "pnpm --filter @phongmach/bff seed",
     "dev:bff": "pnpm --filter @phongmach/bff dev",
     "dev:web": "pnpm --filter @phongmach/clinic-web dev",
-    "e2e": "pnpm --filter @phongmach/clinic-web e2e && pnpm --filter @phongmach/clinic-web e2e:visit && pnpm --filter @phongmach/clinic-web e2e:offline && pnpm --filter @phongmach/clinic-web e2e:conflict"
+    "e2e": "pnpm --filter @phongmach/clinic-web e2e && pnpm --filter @phongmach/clinic-web e2e:visit && pnpm --filter @phongmach/clinic-web e2e:offline && pnpm --filter @phongmach/clinic-web e2e:conflict",
+    "e2e:cycles": "node infra/e2e-cycles.mjs"
   }
 }

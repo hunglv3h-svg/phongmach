@@ -510,7 +510,7 @@ Mục phụ thuộc vào một mục "cần xử lý" được giữ lại ("ch�
 - 20 chu kỳ, mỗi chu kỳ một bệnh nhân mới đi hết đường: tạo → cấp số → gọi vào khám → khám → ký & in. Bộ sinh ngẫu nhiên có hạt giống (in ra để chạy lại đúng như cũ) chọn lúc ngắt và lúc bật lại mạng, cộng hai kiểu lỗi khó hơn `setOffline`: **mất phản hồi** (`route.fetch()` rồi `route.abort()`, đã thử được) và **tải lại trang khi đang mất mạng** (vỏ ứng dụng từ service worker, chỉ có ở bản build).
 - Chờ theo điều kiện (danh sách chờ đồng bộ về 0), không ngủ cố định. Cuối bài đếm bằng tài khoản máy của phòng khám thử: Patient = Encounter = List = Task = Provenance = 20, Encounter đều `finished`; MedicationRequest, Condition, Observation đúng bằng số đã nhập; mỗi bệnh nhân đúng 1 lượt khám; 20 số thứ tự khác nhau; mỗi mã đơn đã in có đúng một đơn trên máy chủ; không còn mục chờ hay xung đột trên máy.
 - Đột biến thử, mỗi cái phải làm một bài đỏ: (a) sinh `clientUuid` mới khi gửi lại (trùng); (b) bỏ mục khi gặp lỗi mạng (thiếu); (c) gửi mục của người khác bằng phiên hiện tại; (d) ghi dạng rõ vào IndexedDB (bài "kho không chứa tên bệnh nhân"); (e) gỡ quy tắc `allergy-unknown`; (f) xung đột 409 bị ghi đè hoặc bị bỏ âm thầm.
-- Bài này chạy trong job e2e của CI (thêm vài phút [Chưa đo]).
+- Bài này chạy trong job e2e của CI (thêm vài phút [Chưa đo]; lát 5 đã đo: thêm khoảng 1 phút, xem "Lát 5 xong").
 
 **Lát cắt sau khi duyệt:** (1) gói in dùng chung, in từ dữ liệu cục bộ; (2) kho cục bộ có mã hóa thay `sessionStorage`; (3a) BFF: giờ máy khách, số tạm, nạp trước, ghi nhận in, kèm kiểm thử tích hợp; (3b) hàng đợi đồng bộ và luồng ngoại tuyến ở giao diện; (4) chỉ báo trực tuyến/ngoại tuyến, danh sách chờ đồng bộ, thông báo lỗi và xung đột; (5) bài e2e 20 chu kỳ và CI; (6) tài liệu, mục 5.9. Mỗi lát một commit, xanh trước khi sang lát sau.
 
@@ -726,6 +726,74 @@ Lát 4 tách làm hai commit. **Lát 4-1 xong** (hàm thuần, chỉ báo, danh 
   - Cổng 5173 bị một dự án khác chiếm, nên giao diện dev chạy ở 5183 với `E2E_URL` tương ứng.
   - Chromium là bản `chrome-headless-shell` của Playwright, đặt qua `CHROMIUM_PATH`.
   - Số đo trên máy này: kiểu đạt 7 gói, 345 kiểm thử đơn vị, 41 tích hợp, e2e 13 + 24 + 13 + 12 bước trên cả bản dev và bản build.
+
+**Lát 5 xong (03/10/2026)** (bài e2e 20 chu kỳ ngắt và khôi phục mạng, đo tiêu chí M0-2; không sửa mã sản phẩm, không sửa BFF):
+- **Kết quả M0-2: đạt [Đã đo].** 20 chu kỳ ngắt và khôi phục mạng liên tiếp, 0 bản ghi mất, 0 bản ghi trùng.
+  - Trên máy dev, bản build: 4/4 lần chạy liên tiếp đạt 11/11 bước kiểm. Ba hạt giống ngẫu nhiên là 1204340693, 4025600034, 3101454767; hạt giống cố định là 12345.
+  - Sau lần đỏ đầu tiên ở CI (do chính bài kiểm thử, xem dòng "CI"), chạy thêm 8 lần trên máy dev, đều đạt 11/11: hai lần với hạt giống của CI (2533173637) và sáu hạt giống ngẫu nhiên (2623727053, 1479480661, 575007583, 1765272687, 366576775, 2878407743).
+  - Một lần chạy 100 chu kỳ (`E2E_CYCLES=100`, hạt giống 558698034) cũng đạt 11/11, mất 251 giây. Đây chưa phải T6 đầy đủ: T6 còn đòi đồng bộ 40 ca trong 60 giây.
+  - Thời gian: bài 20 chu kỳ 44–55 giây; cả lệnh `pnpm e2e:cycles` (tạo phòng khám thử, chạy BFF và bản build, bài, dừng) 46–57 giây khi đã build sẵn, 63 giây khi phải build. Máy chủ nhận lượt khám sau khi có mạng lại: trung vị 0,3–1,2 giây, lâu nhất 4,3 giây.
+  - Cấu hình máy đo: Windows 11, Intel i7-11800H (8 nhân, 16 luồng), 32 GB RAM, Medplum 5.2.0 trong Docker Desktop, `chrome-headless-shell` của Playwright.
+  - CI: xem dòng "CI" ở cuối mục này.
+- Bài nằm ở `apps/clinic-web/e2e/offline-cycles.mjs` (script `e2e:cycles` của `clinic-web`). Chạy trọn bằng `pnpm e2e:cycles` ở gốc kho (`infra/e2e-cycles.mjs`):
+  - tạo một phòng khám thử mới (`services/bff/scripts/e2e-clinic.ts`: Project, tài khoản máy, một bác sĩ có `Practitioner`), ghi tệp phòng khám tạm ở `services/bff/.data/e2e-cycles/` (đã gitignore);
+  - chạy một BFF riêng ở cổng 8111 với tệp phòng khám tạm và tệp nhật ký riêng, và bản build của giao diện ở cổng 4174 trỏ `/api` tới 8111;
+  - chạy bài rồi dừng hai tiến trình đó. Hai phòng khám demo, BFF 8110 và giao diện demo không bị đụng tới.
+  - `vite.config.ts` đọc `BFF_URL` và `PREVIEW_PORT` từ môi trường, mặc định như cũ.
+- Kế hoạch từng chu kỳ sinh từ một hạt giống (`e2e/cycles-plan.mjs`, hàm thuần, 8 kiểm thử đơn vị). Bài in hạt giống ở dòng đầu; `E2E_SEED=<số>` chạy lại đúng kế hoạch đó.
+  - Mỗi chu kỳ một bệnh nhân mới đi qua năm thao tác trên một máy: tạo bệnh nhân, cấp số, gọi vào khám, khám, ký và in.
+  - Mỗi chu kỳ có đúng một lần ngắt (`context.setOffline`) trước một thao tác và một lần bật lại trước một thao tác sau đó, nên luôn có ít nhất một thao tác làm lúc mất mạng.
+  - Mất phản hồi (`route.fetch()` rồi `route.abort()`) ở một thao tác ghi làm lúc có mạng. Với 20 chu kỳ, mỗi thao tác ghi (tạo bệnh nhân, cấp số, gọi vào khám, ký) bị mất phản hồi đúng 4 lần, hạt giống nào cũng vậy.
+  - Tải lại trang khi đang mất mạng ở khoảng 40% số chu kỳ (hạt giống 12345: 7 lần). Lần tải đầu có mạng và chờ service worker nắm trang.
+  - Máy sập đúng lúc tờ đơn ký khi mất mạng được in, ở một nửa số chu kỳ ký trong lúc mất mạng (hạt giống 12345: 3 lần); luôn có ít nhất một lần.
+  - Dữ liệu nhập cũng đổi theo hạt giống: 0–5 nhóm sinh hiệu, một trong năm đơn mẫu (2 hoặc 3 thuốc), có hoặc không có chẩn đoán thứ hai.
+- Kiểm cuối bài, 11 bước, đếm bằng tài khoản máy của phòng khám thử (đọc thẳng Medplum, không qua BFF). Đã mở mã để xác nhận từng loại bản ghi (`buildCompletionBundle`, `buildCheckIn`, `buildVitalObservations`); thực tế khác danh sách của thiết kế ở các điểm có ghi "khác":
+  1. cả 20 chu kỳ chạy hết, sau mỗi chu kỳ máy chủ có lượt khám hoàn tất;
+  2. Patient = Encounter = List = Task = Provenance = 20. **Khác:** gói hoàn tất còn tạo một `ClinicalImpression` khi có triệu chứng hoặc khám lâm sàng; bài luôn nhập triệu chứng nên đếm thêm ClinicalImpression = 20;
+  3. mọi Encounter là `finished`; bệnh nhân của mỗi chu kỳ (nhận theo số điện thoại riêng) có mặt đúng một lần và có đúng một lượt khám;
+  4. MedicationRequest, Condition, Observation đúng bằng số đã nhập, ở tổng số và ở từng lượt khám; AllergyIntolerance = 0. **Khác:** huyết áp là một Observation gồm hai thành phần, nên "số đã nhập" tính theo nhóm sinh hiệu;
+  5. 20 số thứ tự khác nhau. **Khác:** đếm theo mã lượt khám (ngày và số); khi cả lần chạy nằm trong một ngày thì các số còn phải liền nhau từ 1 đến 20 (phòng khám mới, một máy);
+  6. mỗi mã đơn đã in có đúng một đơn (List) và một việc gửi cổng (Task) trên máy chủ, đúng bệnh nhân. **Khác:** mã lấy từ chính trang in, không lấy từ màn hình; kiểm cả chiều ngược lại (máy chủ không có đơn nào ngoài các tờ đã in);
+  7. trên máy không còn mục chờ, mục xung đột hay mục cần xử lý: đọc thẳng bảng `ops` trong IndexedDB (mọi mục `done`), chỉ báo ghi 0, không có thông báo nào. Mục ghi nhận in không sinh bản ghi FHIR (chỉ là dòng nhật ký) nên được kiểm ở đây;
+  8. đọc thẳng IndexedDB trước mỗi lần bật lại mạng (lúc hàng đợi đầy nhất) và ở cuối bài: không có tên, số điện thoại, CCCD, triệu chứng, tên thuốc hay mã ICD ở dạng rõ;
+  9. hàng rào in (F12): cả 20 lần gọi `print()` đều không còn yêu cầu IndexedDB nào đang dở;
+  10. mọi lỗi đã định thật sự xảy ra (mỗi lần mất phản hồi cắt đúng một yêu cầu, đủ số lần tải lại và số lần máy sập);
+  11. console không có lỗi nào, kể cả phản hồi 4xx hay 5xx của máy chủ; chỉ trừ lỗi "không tới được máy chủ" do cố ý ngắt mạng và cắt phản hồi.
+- Đột biến trên mã sản phẩm, chạy với hạt giống 12345, mỗi cái làm bài đỏ ở bước đếm [Đã đo]:
+  - sinh `clientUuid` mới khi gửi lại: Patient 24/20 và Encounter 24/20 (trùng 4 mỗi loại, đúng bằng số lần mất phản hồi ở tạo bệnh nhân và ở cấp số), 4 lượt khám nằm lại ở `arrived`, 4 mục ký thành xung đột; 7/11 bước đỏ;
+  - bỏ mục khỏi hàng đợi khi gặp lỗi mạng: Encounter 13/20, List 5/20 (mất 15), hai chu kỳ đã in đơn mà máy chủ không có đơn; 8/11 bước đỏ;
+  - in trước khi lưu bền: List, Task, Provenance 17/20; ba tờ đã in ở ba chu kỳ máy sập không có đơn trên máy chủ, ba lượt khám nằm lại ở `in-progress`; 5/11 bước đỏ.
+  - Đột biến thứ hai lúc đầu không dịch được (TypeScript báo so sánh thừa), lệnh trả mã lỗi nên trông như "đỏ"; đọc log mới thấy 0 chu kỳ chạy. Đã viết lại rồi chạy lại. Lần chạy lại đầu tiên bài dừng ngay ở chu kỳ hỏng đầu tiên, số đếm khi đó chỉ phản ánh việc bài dừng; đã sửa bài để dựng lại máy và chạy tiếp sau một chu kỳ hỏng.
+- Bốn đột biến còn lại của thiết kế, chạy lại trên kiểm thử có sẵn, đều đỏ [Đã đo]:
+  - gửi mục của người khác bằng phiên hiện tại: `sync.test.ts`, bài "phiên của người khác: không gửi mục nào của kho này…";
+  - ghi dạng rõ vào IndexedDB: `store.test.ts`, hai bài "trên đĩa không có chữ nào của bản nháp ở dạng rõ" và "…trong mọi bảng mới";
+  - gỡ quy tắc `allergy-unknown`: 2 bài ở `rules.test.ts`, 1 bài ở `client.test.ts`, 1 bài ở `offline.test.ts` của BFF;
+  - 409 bị bỏ âm thầm: 1 bài ở `sync.test.ts` và 4 bài ở `syncList.test.ts`.
+- **Đi khác thiết kế, hoặc chi tiết thêm:**
+  1. Tên tệp là `offline-cycles.mjs` và script là `e2e:cycles`, không phải `offline.mjs` (script `e2e:offline` đang trỏ tới `offline-sign.mjs`).
+  2. Thêm kiểu lỗi thứ ba ngoài hai kiểu thiết kế nêu: máy sập đúng lúc in. Không có nó thì đột biến "in trước khi lưu bền" không làm lệch số đếm nào, vì bản ghi vẫn được lưu ngay sau khi in. Cách làm: mỗi lần `print()` gửi một yêu cầu đồng bộ tới bài kiểm thử kèm nguyên văn trang in; bài đóng trang trong lúc trang còn đứng yên bên trong `print()`, mở trang mới và đăng nhập lại (phiên mất theo tab, kho trên máy còn).
+  3. Hạn mức FHIR của phòng khám thử được nâng lên 500.000 điểm/phút (`Project.systemSetting`, tên `userFhirQuota`). Lý do ở phát hiện 1 bên dưới.
+  4. Thiết kế ghi "chờ danh sách chờ đồng bộ về 0"; bài chờ theo máy chủ (có lượt khám `finished` của bệnh nhân vừa khám), tối đa 100 giây vì bộ máy đồng bộ chờ gửi lại tới 60 giây và chạy định kỳ 30 giây.
+  5. Sau một chu kỳ hỏng giữa chừng, bài dựng lại máy (có mạng, trang mới, đăng nhập lại) và chạy tiếp, rồi vẫn đếm.
+  6. Khi "Ký & In" báo chưa ký được mà không in (phát hiện 3), bài bấm lại như bác sĩ sẽ làm và ghi số lần ở cuối bài. Khi hàng chờ hiện hai dòng cho cùng một lượt khám (phát hiện 5), bài bấm "Tiếp tục khám" nếu có, không thì "Gọi vào khám", và ghi lại chu kỳ đó ở cuối bài. Cả hai không làm bài đỏ: tiêu chí M0-2 tính trên bản ghi của máy chủ.
+  7. Không gộp vào `pnpm e2e`: bài cần BFF và bản build riêng, còn `pnpm e2e` chạy trên BFF và giao diện demo đang mở. Script điều phối viết bằng Node để chạy được cả trên Linux lẫn Windows.
+  8. Hàm trợ giúp của hai bài e2e ngoại tuyến có sẵn được tách ra `e2e/offline-helpers.mjs`; hai bài đó chuyển sang dùng tệp này.
+- **Phát hiện trong lúc làm, chưa sửa (ngoài phạm vi lát này):**
+  1. **Hạn mức FHIR mặc định chỉ đủ cho khoảng 20 lượt khám mỗi phút qua một tài khoản máy.** Một lượt khám đi hết đường tốn chừng 2.500 điểm (ghi 100, tìm 20) [Phân tích, từ mã]. Khi chưa nâng hạn mức, hai lần chạy đều bị Medplum trả 429 ở chu kỳ 17–18; log BFF ghi `_consumedPoints 50011, limit 50000` và BFF trả HTTP 500 bảy lần [Đã đo]. Ở cả hai lần đó số đếm cuối vẫn đúng 20/20: nhóm "gửi lại" của OFF-7 hội tụ. Hệ quả cho T6: "đồng bộ 40 ca trong 60 giây" cần khoảng 100.000 điểm trong một phút, gấp đôi hạn mức mặc định, nên T-QUOTA phải làm trước T6.
+  2. **Mục "thử lại" có thể nằm chờ thêm tới 30 giây.** `SyncEngine.schedule` chỉ hẹn theo các mục có `nextAt` còn ở tương lai. Mục hết thời gian chờ ngay trong lúc một lượt gửi đang chạy thì bị bỏ qua ở lượt đó và không được hẹn lại, phải chờ chu kỳ 30 giây [Đã đọc mã]. Ở bước thử, sau khi máy sập rồi đăng nhập lại ngay, 5 mục nằm yên hơn 16 giây dù có mạng [Đã đo]. Không mất dữ liệu.
+  3. **"Ký & In" có lúc báo đã giữ trên máy nhưng không in.** Xảy ra khi ký lúc ứng dụng coi là có mạng mà một thao tác trước của lượt khám còn trong thời gian chờ gửi lại. Câu báo là "Đang chờ thao tác trước đó của lượt khám này được máy chủ nhận…" hoặc "Mất kết nối. Đã giữ trên máy và sẽ tự gửi khi có mạng…". Mục ký đã vào hàng đợi và sẽ tự gửi, nhưng không có tờ đơn; bấm lại thì in. Gặp ở 1/100 chu kỳ của lần chạy 100, và 11–26 lần bấm liền ở một chu kỳ khi Medplum trả 429 [Đã đo]. Bác sĩ không bấm lại thì lượt khám được lưu mà bệnh nhân không có đơn giấy.
+  4. **Chế độ "Mất mạng" không tự thoát khi không còn mục chờ.** Sau một lần gọi lỗi mạng mà trình duyệt không phát sự kiện `online`, ứng dụng không còn lời gọi nào thăm dò lại máy chủ: tìm kiếm, hàng chờ và nạp trước đều chỉ gọi khi đang "có mạng". Nó chỉ thoát khi có lần ghi kế tiếp hoặc một mục chờ gửi lại thành công [Đã đọc mã; chưa đo riêng].
+  5. **Hàng chờ có lúc hiện hai dòng cho cùng một lượt khám.** Sau một lần mất phản hồi ở "cấp số", máy chủ đã có lượt khám còn mục cấp số trên máy chưa được gửi lại. Nếu lúc đó máy tải được hàng chờ của máy chủ thì `mergeQueue` không biết hai thứ là một (dòng của máy chủ không mang `clientUuid`), nên hiện cả dòng của máy chủ ("Gọi vào khám") lẫn dòng tạm trên máy ("Tiếp tục khám" nếu đã mở). Hết khi mục cấp số gửi lại xong. Máy chủ vẫn chỉ có một lượt khám. Gặp ở lần chạy CI đầu tiên (hạt giống 2533173637, chu kỳ 02), không gặp ở máy dev với cùng hạt giống (hai lần chạy) [Đã đo; cơ chế: Đã đọc mã]. Bấm "Gọi vào khám" ở dòng của máy chủ sẽ mở một bản nháp trống cho lượt đang khám dở [Đã đọc mã, chưa đo].
+- **Bẫy mới:**
+  - Playwright: sau khi tải lại trang lúc đang `setOffline(true)`, `navigator.onLine` trở lại `true` dù mọi yêu cầu vẫn lỗi, và bật mạng lại không phát sự kiện `online` [Đã đo, playwright-core 1.63]. Các chu kỳ có tải lại trang vì thế đi qua ca "trình duyệt tưởng có mạng nhưng gọi gì cũng lỗi"; các chu kỳ khác đi qua ca trình duyệt biết mình mất mạng.
+  - `route.fetch()` đi từ Node nên không chịu `setOffline`: bộ chặn phản hồi phải tự kiểm lúc đang ngắt mạng.
+  - Dòng lỗi console của một yêu cầu bị cắt phản hồi đến sau khi máy chủ đã ghi xong, nên không bật tắt "lỗi được chờ đợi" theo từng bước. Mẫu `Failed to load resource` khớp cả phản hồi 4xx và 5xx; bài này chỉ chờ `net::ERR_…`.
+  - Git Bash: số PID của MSYS trong tệp PID cũ có thể đã thuộc tiến trình khác. Trước khi dừng một tiến trình phải kiểm cổng và dòng lệnh của nó.
+- Số đo trên máy dev: kiểu đạt 7 gói; 363 kiểm thử đơn vị (355 + 8 bài của bộ sinh kế hoạch); 41 tích hợp; e2e 13 + 24 + 13 + 12 bước trên cả bản dev và bản build; bài 20 chu kỳ 11 bước, chỉ chạy trên bản build. Gói JS không đổi: 510 KB, nén 164 KB [Đã đo, bản build].
+- CI [Đã đo]: bước mới nằm trong job e2e, chạy sau bốn bài có sẵn và dùng lại bản build của job. Mỗi lần chạy một hạt giống ngẫu nhiên; dòng đầu của bước in lệnh chạy lại.
+  - Lần chạy đầu (hạt giống 2533173637) đỏ ở chu kỳ 02: bộ định vị của bài gặp hai nút khi hàng chờ hiện hai dòng cho một lượt khám (phát hiện 5). Lỗi là của bài kiểm thử; 19 chu kỳ còn lại vẫn đúng số bản ghi. Đã sửa bài.
+  - Lần chạy kế (hạt giống 1428297068) xanh cả ba job, bài đạt 11/11. Bước M0-2 mất 41 giây (bài 39,7 giây). Job e2e mất 3 phút 35 giây, so với 2 phút 41 giây trên `main` (commit `950823a`): tăng khoảng 1 phút.
+  - Job e2e còn xa mức 10 phút nên chưa cần tách job riêng.
 
 **Quyết định của chủ dự án (02/10/2026):**
 

@@ -13,6 +13,7 @@ import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 import { chromiumPath } from './browser.mjs';
+import { device, eventually, lastPrintHtml, login, prefetched, printFrames, rawLocalDump, resetDemoQueue, session, setOffline } from './offline-helpers.mjs';
 
 const BASE = process.env.E2E_URL ?? 'http://127.0.0.1:5173';
 const shots = fileURLToPath(new URL('./screenshots/', import.meta.url));
@@ -22,58 +23,12 @@ const browser = await chromium.launch({ executablePath: chromiumPath() });
 const problems = [];
 const devices = [];
 
-/** Một máy: context riêng (IndexedDB, sessionStorage riêng), bộ đếm yêu cầu IndexedDB lúc gọi print() và sổ ghi các yêu cầu hoàn tất. */
-async function device(name) {
-  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'vi-VN' });
-  // Bất biến của hàng rào in (F12): không gọi print() khi còn yêu cầu IndexedDB đang dở. Như bài e2e:offline.
-  await context.addInitScript(() => {
-    if (window === window.top) {
-      const state = { inFlight: 0, atPrint: [] };
-      window.__idb = state;
-      const wrap = (proto, names) => {
-        for (const n of names) {
-          const orig = proto[n];
-          if (typeof orig !== 'function') continue;
-          proto[n] = function (...args) {
-            const req = orig.apply(this, args);
-            state.inFlight++;
-            let done = false;
-            const finish = () => {
-              if (!done) (done = true), state.inFlight--;
-            };
-            req.addEventListener('success', finish);
-            req.addEventListener('error', finish);
-            return req;
-          };
-        }
-      };
-      const ops = ['get', 'getAll', 'getAllKeys', 'getKey', 'count', 'openCursor', 'openKeyCursor'];
-      wrap(IDBObjectStore.prototype, [...ops, 'put', 'add', 'delete', 'clear']);
-      wrap(IDBIndex.prototype, ops);
-    } else {
-      const print = window.print;
-      window.print = function () {
-        try {
-          window.top.__idb.atPrint.push(window.top.__idb.inFlight);
-        } catch {
-          // khung khác nguồn: không đo
-        }
-        return print.call(this);
-      };
-    }
-  });
-  const page = await context.newPage();
-  // `expected`: lỗi console được chờ đợi ở bước đang chạy (cố ý ngắt mạng; máy chủ từ chối 409, 422; phiên hết hạn 401).
-  const d = { name, context, page, expected: undefined, completes: [] };
-  page.on('console', (m) => m.type() === 'error' && !d.expected?.test(m.text()) && problems.push(`${name} console: ${m.text()}`));
-  page.on('pageerror', (e) => problems.push(`${name} pageerror: ${e.message}`));
-  page.on('request', (r) => {
-    if (r.method() === 'POST' && /\/api\/visits\/[^/]+\/complete$/.test(new URL(r.url()).pathname)) d.completes.push(r.postDataJSON());
-  });
+/** Một máy: context riêng (IndexedDB, sessionStorage riêng), có bộ đếm yêu cầu IndexedDB lúc gọi print() và sổ ghi các yêu cầu hoàn tất (offline-helpers.mjs). */
+async function newDevice(name) {
+  const d = await device(browser, name, problems);
   devices.push(d);
   return d;
 }
-const OFFLINE = /ERR_INTERNET_DISCONNECTED|ERR_FAILED|Failed to fetch|Failed to load resource/;
 
 let step = 0;
 const ok = (msg) => console.log(`✓ ${String(++step).padStart(2)}. ${msg}`);
@@ -86,61 +41,8 @@ const OWNER = 'BS. Trần Quốc Hưng';
 const pad3 = (n) => String(n).padStart(3, '0');
 const digits = (n) => String(Math.floor(Math.random() * 10 ** n)).padStart(n, '0');
 
-async function session(userId) {
-  const r = await fetch(`${BASE}/api/session`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ tenant: 'noi-tong-quat', userId }) });
-  const { token } = await r.json();
-  return (method, path, body) =>
-    fetch(`${BASE}${path}`, { method, headers: { authorization: `Bearer ${token}`, ...(body ? { 'content-type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) }).then((x) => x.json().catch(() => ({})));
-}
-
-/** Dọn hàng chờ của phòng khám demo (kể cả sau lần chạy hỏng): hủy người đang chờ, kết thúc lượt đang khám bằng phiên của chính người giữ nó. */
-async function resetQueue() {
-  const assistant = await session('noi-assistant');
-  const { items } = await assistant('GET', '/api/queue');
-  const holders = new Map();
-  for (const i of items ?? []) {
-    if (i.status === 'waiting') await assistant('POST', `/api/queue/${i.id}/cancel`);
-    if (i.status === 'in-exam' && ['noi-doctor', 'noi-owner'].includes(i.doctorUserId)) {
-      if (!holders.has(i.doctorUserId)) holders.set(i.doctorUserId, await session(i.doctorUserId));
-      await holders.get(i.doctorUserId)('POST', `/api/visits/${i.id}/complete`, { clientUuid: crypto.randomUUID(), exam: { vitals: {} }, diagnoses: ['J06.9'] });
-    }
-  }
-}
-
-async function login(d, userId) {
-  await d.page.goto(BASE);
-  await d.page.getByTestId(`login-${userId}`).click();
-  await d.page.getByTestId('search').waitFor();
-}
-async function setOffline(d, on) {
-  if (on) d.expected = OFFLINE;
-  await d.context.setOffline(on);
-  await d.page.locator(`[data-testid="sync-status"][data-online="${!on}"]`).waitFor({ state: 'attached' });
-}
 const status = (d, attrs) => d.page.locator(`[data-testid="sync-status"]${Object.entries(attrs).map(([k, v]) => `[data-${k}="${v}"]`).join('')}`).waitFor({ state: 'attached', timeout: 30_000 });
 const rowsOf = (d) => d.page.getByTestId('sync-row').evaluateAll((els) => els.map((e) => [e.getAttribute('data-kind'), e.getAttribute('data-status')]));
-const lastPrintHtml = (d) => d.page.locator('iframe[data-testid="print-frame"]').last().getAttribute('srcdoc');
-const frames = (d) => d.page.locator('iframe[data-testid="print-frame"]').count();
-
-/**
- * Máy đã nạp trước hồ sơ của ít nhất `n` người trong hàng chờ (bộ đệm mã hóa): mở khi mất mạng sẽ có dữ liệu dị ứng.
- * Thăm dò bằng `evaluate` (có chờ kết quả của hàm async). KHÔNG dùng `page.waitForFunction` với hàm async: nó coi lời hứa trả về
- * là "đúng" và xong ngay, tức là không chờ gì cả [Đã đo, playwright-core 1.63].
- */
-const prefetched = (d, n) =>
-  eventually(
-    () =>
-      d.page.evaluate(async (min) => {
-        const dbs = (await indexedDB.databases()).filter((x) => x.name?.startsWith('phongmach:'));
-        if (!dbs.length) return false;
-        const db = await new Promise((r) => (indexedDB.open(dbs[0].name).onsuccess = (e) => r(e.target.result)));
-        const count = (s) => new Promise((r) => (db.transaction(s).objectStore(s).count().onsuccess = (e) => r(e.target.result)));
-        const done = (await count('patients')) >= min && (await count('snapshots')) > 0;
-        db.close();
-        return done;
-      }, n),
-    `máy nạp trước hồ sơ của ${n} người trong hàng chờ`
-  );
 
 /** Gọi vào khám khi mất mạng một người đã nạp trước, kê đơn mẫu viêm họng (có amoxicillin), ký. Trả về mã đơn đã in. */
 async function signOffline(d, name) {
@@ -161,48 +63,21 @@ async function signOffline(d, name) {
   for (let i = 0; i < (await reasons.count()); i++) await reasons.nth(i).fill('Đã hỏi bệnh nhân trực tiếp');
   // IndexedDB ghi bất đồng bộ: chờ bản nháp lưu xong rồi mới ký.
   await page.locator('[data-testid="draft-saved"][data-dirty="false"]').waitFor();
-  const before = await frames(d);
+  const before = await printFrames(d.page);
   await page.getByTestId('sign').click();
   await page.getByTestId('offline-sign-result').waitFor();
   await page.locator('iframe[data-testid="print-frame"]').nth(before).waitFor({ state: 'attached' });
   const code = await page.getByTestId('rx-code').innerText();
   assert.match(code, /^PM-\d{6}-[0-9A-Z]{6}$/);
-  const html = await lastPrintHtml(d);
+  const html = await lastPrintHtml(d.page);
   for (const part of ['KÝ KHI MẤT MẠNG', code, name, 'Amoxicillin']) assert.ok(html.includes(part), `trang in phải có "${part}"`);
   return code;
 }
 
-/** Đọc thẳng mọi kho IndexedDB của ứng dụng trên một máy (không qua mã ứng dụng). */
-const rawLocalDump = (d) =>
-  d.page.evaluate(async () => {
-    const out = { rows: {}, text: '' };
-    const decoder = new TextDecoder();
-    const req = (r) => new Promise((resolve, reject) => ((r.onsuccess = () => resolve(r.result)), (r.onerror = () => reject(r.error))));
-    for (const { name } of (await indexedDB.databases()).filter((x) => x.name?.startsWith('phongmach:'))) {
-      const db = await req(indexedDB.open(name));
-      for (const store of db.objectStoreNames) {
-        const rows = await req(db.transaction(store).objectStore(store).getAll());
-        out.rows[store] = (out.rows[store] ?? 0) + rows.length;
-        for (const row of rows) for (const v of Object.values(row)) out.text += `${v instanceof ArrayBuffer || ArrayBuffer.isView(v) ? decoder.decode(v) : JSON.stringify(v)}\n`;
-      }
-      db.close();
-    }
-    return out;
-  });
-
-/** Thăm dò điều kiện tới khi đúng (tối đa `ms`), không ngủ cố định. */
-async function eventually(check, what, ms = 30_000) {
-  const until = Date.now() + ms;
-  while (!(await check())) {
-    if (Date.now() > until) throw new Error(`hết thời gian chờ: ${what}`);
-    await new Promise((r) => setTimeout(r, 250));
-  }
-}
-
 try {
-  await resetQueue();
-  const assistant = await session('noi-assistant');
-  const doctor = await session('noi-doctor');
+  await resetDemoQueue(BASE);
+  const assistant = await session(BASE, 'noi-tong-quat', 'noi-assistant');
+  const doctor = await session(BASE, 'noi-tong-quat', 'noi-doctor');
 
   // Hai bệnh nhân thử, có CCCD và ngày sinh (để đơn không bị chặn vì thiếu CCCD), chưa ghi nhận dị ứng; cả hai đã được cấp số.
   const made = {};
@@ -216,18 +91,18 @@ try {
   const allergy = made[ALLERGY_NAME];
 
   // ================================================================================================== 409: xung đột
-  const A = await device('máy bác sĩ');
-  const B = await device('máy kia');
-  await login(A, 'noi-doctor');
+  const A = await newDevice('máy bác sĩ');
+  const B = await newDevice('máy kia');
+  await login(A, BASE, 'noi-doctor');
   await A.page.getByTestId('tab-queue').click();
   await A.page.getByTestId('waiting').getByTestId('queue-row').filter({ hasText: CONFLICT_NAME }).waitFor();
-  await prefetched(A, 2);
+  await prefetched(A.page, 2);
   await setOffline(A, true);
   const conflictCode = await signOffline(A, CONFLICT_NAME);
   assert.equal(await A.page.getByTestId('offline-sync-state').getAttribute('data-status'), 'pending');
   ok(`máy bác sĩ mất mạng: mở lượt ${pad3(conflict.number)} đã nạp trước (có dữ liệu dị ứng), ký và in đơn ${conflictCode} từ máy`);
 
-  await login(B, 'noi-owner');
+  await login(B, BASE, 'noi-owner');
   await B.page.getByTestId('tab-queue').click();
   await B.page.getByTestId('queue-row').filter({ hasText: CONFLICT_NAME }).getByTestId('call').click();
   await B.page.getByTestId('visit').waitFor();
@@ -267,12 +142,12 @@ try {
 
   // "Đồng bộ ngay" rồi in lại: lần in lại thêm một mục ghi nhận in, tức bộ máy đã chạy tiếp SAU lần "Đồng bộ ngay" đó.
   await list.getByTestId('sync-list-now').click();
-  const before = await frames(A);
+  const before = await printFrames(A.page);
   await completeRow.getByTestId('sync-reprint').click();
   await completeRow.getByTestId('sync-reprinted').waitFor();
   await status(A, { pending: 4, attention: 4 });
-  assert.equal(await frames(A), before + 1, 'in lại mở đúng một trang in');
-  const reprintHtml = await lastPrintHtml(A);
+  assert.equal(await printFrames(A.page), before + 1, 'in lại mở đúng một trang in');
+  const reprintHtml = await lastPrintHtml(A.page);
   for (const part of ['KÝ KHI MẤT MẠNG', conflictCode, CONFLICT_NAME, 'Amoxicillin']) assert.ok(reprintHtml.includes(part), `trang in lại phải có "${part}"`);
   assert.deepEqual(await rowsOf(A), [['open', 'conflict'], ['complete', 'held'], ['printed', 'held'], ['printed', 'held']], 'xung đột không tự gửi lại, không tự biến mất');
   assert.equal(A.completes.length, 0, 'máy bác sĩ không gửi lần hoàn tất nào');
@@ -296,7 +171,7 @@ try {
   await notice.getByTestId('sync-notice-dismiss').click();
   assert.equal(await A.page.locator('[data-testid="sync-notice"]').count(), 0);
   assert.match(await A.page.getByTestId('attention-badge').innerText(), /4 cần xử lý/);
-  const raw409 = await rawLocalDump(A);
+  const raw409 = await rawLocalDump(A.page);
   assert.ok(raw409.rows.ops >= 4, `hàng đợi còn nguyên: ${JSON.stringify(raw409.rows)}`);
   for (const secret of [CONFLICT_NAME, 'Xung Đột', ALLERGY_NAME, SYMPTOMS, 'Amoxicillin', 'J02.9', 'Hồ sơ đang do', 'Trần Quốc Hưng']) assert.ok(!raw409.text.includes(secret), `kho trên máy không được có "${secret}" ở dạng rõ`);
   // Tải lại trang: các mục vẫn còn (đếm lại từ kho), thông báo đã tắt không hiện lại, huy hiệu vẫn còn.
@@ -325,18 +200,18 @@ try {
   await A.context.close();
 
   // ================================================================================================== 422: dị ứng mới
-  const C = await device('máy bác sĩ thứ hai');
-  await login(C, 'noi-doctor');
+  const C = await newDevice('máy bác sĩ thứ hai');
+  await login(C, BASE, 'noi-doctor');
   await C.page.getByTestId('tab-queue').click();
   await C.page.getByTestId('waiting').getByTestId('queue-row').filter({ hasText: ALLERGY_NAME }).waitFor();
-  await prefetched(C, 2);
+  await prefetched(C.page, 2);
   await setOffline(C, true);
   const allergyCode = await signOffline(C, ALLERGY_NAME);
   ok(`máy bác sĩ (kho mới) mất mạng: ký đơn ${allergyCode} có amoxicillin cho người chưa ghi nhận dị ứng`);
 
   await B.page.getByRole('button', { name: 'Đăng xuất' }).click();
   await B.page.getByRole('heading', { name: /Chọn phòng khám/ }).waitFor();
-  await login(B, 'noi-assistant');
+  await login(B, BASE, 'noi-assistant');
   await B.page.getByTestId('search').fill(ALLERGY_NAME);
   await B.page.getByTestId('search-status').filter({ hasText: /\d+ kết quả/ }).waitFor();
   await B.page.getByTestId('result').filter({ hasText: ALLERGY_NAME }).first().click();
@@ -360,7 +235,7 @@ try {
   const findings = await rulesRow.getByTestId('sync-finding').allInnerTexts();
   assert.ok(findings.length >= 1 && findings.every((f) => /dị ứng Penicillin/.test(f)) && findings.some((f) => /Amoxicillin/.test(f)), `cảnh báo dị ứng của máy chủ: ${findings}`);
   assert.match(await rulesRow.getByTestId('sync-row-rules').innerText(), /đơn đã in: liên hệ bệnh nhân nếu cần đổi thuốc/);
-  const raw422 = await rawLocalDump(C);
+  const raw422 = await rawLocalDump(C.page);
   for (const secret of [ALLERGY_NAME, 'Dị Ứng', SYMPTOMS, 'Amoxicillin', 'Penicillin', 'dị ứng', 'J02.9']) assert.ok(!raw422.text.includes(secret), `kho trên máy không được có "${secret}" ở dạng rõ`);
   await C.page.screenshot({ path: `${shots}42-sync-list-rules.png` });
   ok('bác sĩ có mạng lại: máy chủ từ chối (422); thông báo và danh sách hiện cảnh báo dị ứng Penicillin của máy chủ, ghi rõ "đơn đã in: liên hệ bệnh nhân"; kho vẫn không có dạng rõ');
@@ -391,7 +266,7 @@ try {
   assert.equal((await doctor('GET', '/api/queue')).items.find((i) => i.id === allergy.visitId).status, 'done');
   assert.equal(await C.page.locator('[data-testid="sync-notice"]').count(), 0, 'xử lý xong thì thông báo tự hết');
   assert.equal(await C.page.getByTestId('attention-badge').count(), 0);
-  assert.ok(!(await rawLocalDump(C)).text.includes(REASON), 'lý do xác nhận cũng không nằm ở dạng rõ trong kho');
+  assert.ok(!(await rawLocalDump(C.page)).text.includes(REASON), 'lý do xác nhận cũng không nằm ở dạng rõ trong kho');
   assert.deepEqual(await C.page.evaluate(() => window.__idb.atPrint), [0]);
   await C.page.screenshot({ path: `${shots}43-sync-list-acknowledged.png` });
   ok(`ghi lý do rồi "Xác nhận và gửi lại": đúng 2 yêu cầu cùng clientUuid; máy chủ có đúng 1 lượt khám, đơn ${allergyCode} lưu kèm lý do; danh sách và huy hiệu về 0`);
@@ -406,7 +281,7 @@ try {
   process.exitCode = 1;
 } finally {
   try {
-    await resetQueue();
+    await resetDemoQueue(BASE);
   } catch {
     // bỏ qua
   }

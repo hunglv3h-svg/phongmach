@@ -77,10 +77,18 @@ pnpm typecheck
 pnpm test                                       # đơn vị: danh mục, quy tắc, mô hình, clinical, BFF, web (không cần Medplum)
 pnpm --filter @phongmach/bff test:integration   # BFF với Medplum thật (cần stack đang chạy)
 pnpm e2e                                        # Chromium thật, 13 + 24 + 13 + 12 bước (hai bài cuối ngắt mạng thật, bài cuối dùng hai máy); cần stack + seed + BFF + web đang chạy
+pnpm e2e:cycles                                 # M0-2: 20 chu kỳ ngắt và khôi phục mạng, đếm 0 mất, 0 trùng; chỉ cần stack đang chạy (tự dựng phần còn lại)
 ```
 
 e2e mặc định mở `http://127.0.0.1:5173`; giao diện ở cổng khác thì đặt `E2E_URL` (`dev-up.sh` in ra giá trị đúng). Bài e2e tạo thêm bệnh nhân (tên bắt đầu bằng `Zq`) và các lượt khám trong hai phòng khám demo mỗi lần chạy, và tự dọn hàng chờ (kể cả sau lần chạy hỏng). Để chạy nhanh bước chèn lỗi cổng, khởi động BFF với `OUTBOX_BASE_MS=500 OUTBOX_CAP_MS=2000`. Muốn dữ liệu demo sạch: `pnpm stack:down`, xóa volume
 (`docker compose -f infra/medplum/docker-compose.yml down -v`), rồi chạy lại các bước trên.
+
+`pnpm e2e:cycles` (tiêu chí M0-2) không nằm trong `pnpm e2e` vì nó không dùng BFF và giao diện demo: `infra/e2e-cycles.mjs` tạo một phòng khám thử mới, build giao diện, chạy một BFF riêng ở cổng 8111 và bản build ở cổng 4174 (cần service worker để tải lại trang khi mất mạng), chạy bài `apps/clinic-web/e2e/offline-cycles.mjs` rồi dừng hai tiến trình đó. Nó không đụng hai phòng khám demo, và chạy được trong lúc BFF và giao diện demo đang chạy. Mỗi chu kỳ một bệnh nhân mới đi hết đường (tạo, cấp số, gọi vào khám, khám, ký và in) qua một lần ngắt và một lần khôi phục mạng, kèm mất phản hồi, tải lại trang khi mất mạng và máy sập đúng lúc in; cuối bài đếm bản ghi bằng tài khoản máy của phòng khám thử.
+
+- Bài in hạt giống ở dòng đầu. Chạy lại đúng một lần chạy cũ: `E2E_SEED=<số> pnpm e2e:cycles`. Số chu kỳ khác: `E2E_CYCLES=100` (T6).
+- Cổng 8111 hoặc 4174 đang bị giữ thì script dừng và báo; đổi bằng `CYCLES_BFF_PORT`, `CYCLES_WEB_PORT`. Đã build sẵn thì `CYCLES_SKIP_BUILD=1`.
+- Tệp phòng khám tạm, nhật ký và log của lần chạy nằm ở `services/bff/.data/e2e-cycles/` (đã gitignore). Mỗi lần chạy để lại một Project thử trong Medplum.
+- `apps/clinic-web/vite.config.ts` đọc `BFF_URL` (mặc định `http://127.0.0.1:8110`) và `PREVIEW_PORT` (mặc định 4173) từ môi trường.
 
 ## Giới hạn của bản hiện tại
 
