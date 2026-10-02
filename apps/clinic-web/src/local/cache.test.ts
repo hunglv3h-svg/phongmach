@@ -47,8 +47,9 @@ function op<K extends OpKind>(kind: K, payload: Payloads[K], status: OpStatus = 
   return { id: `op${seq}`, meta, body: { payload, ...(result ? { result } : {}) }, updatedAt: 0 } as AnyOp;
 }
 const item = (over: Partial<QueueItem>): QueueItem => ({ id: 'v1', number: 1, code: 'c', status: 'waiting', priority: 'normal', specialty: 'noi', patientId: 'p1', patientName: 'Nguyễn Văn An', arrivedAt: '2026-10-20T02:00:00Z', ...over });
-const checkin = (visitTmpId: string, proposedNumber: number, patientName = 'Trần Thị Bình') =>
-  ({ visitTmpId, body: { clientUuid: 'u', patientId: 'tmp-p', specialty: 'noi', priority: 'normal', arrivedAt: '2026-10-20T03:00:00.000Z', proposedNumber }, display: { patientName } }) satisfies Payloads['checkin'];
+const checkin = (visitTmpId: string, proposedNumber: number, patientName = 'Trần Thị Bình', over: Partial<Payloads['checkin']['body']> = {}) =>
+  ({ visitTmpId, body: { clientUuid: 'u', patientId: 'tmp-p', specialty: 'noi', priority: 'normal', arrivedAt: '2026-10-20T03:00:00.000Z', proposedNumber, ...over }, display: { patientName } }) satisfies Payloads['checkin'];
+const UUID_E = '3f2b8c1e-5a47-4d09-9e6b-0c1d2e3f4a5b';
 
 describe('gộp hàng chờ của máy chủ với thao tác trên máy', () => {
   it('người cấp số khi mất mạng hiện với số tạm; mở hồ sơ và ký trên máy hiện đúng trạng thái dù máy chủ chưa biết', () => {
@@ -80,6 +81,53 @@ describe('gộp hàng chờ của máy chủ với thao tác trên máy', () => 
       ['v1', 1, undefined],
       ['srv-v3', 3, undefined],
     ]);
+  });
+
+  // Mất phản hồi ở "cấp số": máy chủ đã có lượt E, mục cấp số trên máy chưa xong (đã chuyển sang dạng ngoại tuyến, id tạm) và
+  // CHƯA có ánh xạ id. Máy tải được hàng chờ của máy chủ trước khi mục đó được gửi lại.
+  describe('máy chủ đã có lượt khám mà mục cấp số trên máy chưa xong (mất phản hồi ở cấp số)', () => {
+    const E = item({ id: 'srv-E', number: 3, patientId: 'p9', patientName: 'Trần Thị Bình', clientUuid: UUID_E });
+    const lost = (over: Partial<Payloads['checkin']['body']> = {}) => op('checkin', checkin('tmp-v3', 3, 'Trần Thị Bình', { clientUuid: UUID_E, patientId: 'p9', ...over }), 'retry');
+
+    it('nhận ra lượt của máy chủ và lượt tạm là một theo clientUuid: MỘT dòng, mang id và số của máy chủ, trạng thái theo thao tác trên máy', () => {
+      const merged = mergeQueue([item({}), E], [lost(), op('open', { visitId: 'tmp-v3', openedAt: '2026-10-20T03:05:00.000Z' })], new Map(), ME);
+      expect(merged.filter((i) => i.patientId === 'p9')).toHaveLength(1);
+      expect(merged.map((i) => [i.id, i.number, i.status, i.local])).toEqual([
+        ['srv-E', 3, 'in-exam', { pending: true }],
+        ['v1', 1, 'waiting', undefined],
+      ]);
+      expect(merged[0]).toMatchObject({ doctorUserId: 'doc', doctorName: 'BS. Hà', calledAt: '2026-10-20T03:05:00.000Z' });
+    });
+
+    it('chưa mở hồ sơ: một dòng đang chờ, có nhãn chờ đồng bộ, không còn là số tạm; đã ký trên máy: một dòng đã xong', () => {
+      const waiting = mergeQueue([E], [lost()], new Map(), ME);
+      expect(waiting.map((i) => [i.id, i.status, i.local])).toEqual([['srv-E', 'waiting', { pending: true }]]);
+      const signed = mergeQueue([E], [lost(), op('open', { visitId: 'tmp-v3' }), op('complete', { visitId: 'tmp-v3', body: { clientUuid: 'c', exam: { vitals: {} }, diagnoses: [] } })], new Map(), ME);
+      expect(signed.map((i) => [i.id, i.status, i.local])).toEqual([['srv-E', 'done', { pending: true }]]);
+    });
+
+    it('máy chủ cấp số khác số tạm: vẫn một dòng, ghi lại số cũ và số mới', () => {
+      const merged = mergeQueue([E], [lost({ proposedNumber: 2 })], new Map(), ME);
+      expect(merged.map((i) => [i.id, i.number, i.local])).toEqual([['srv-E', 3, { renumbered: { from: 2, to: 3 }, pending: true }]]);
+    });
+
+    it('máy chủ ghi clientUuid bằng chữ thường: khớp không phân biệt hoa thường', () => {
+      expect(mergeQueue([E], [lost({ clientUuid: UUID_E.toUpperCase() })], new Map(), ME)).toHaveLength(1);
+    });
+
+    it('cùng bệnh nhân, cùng ngày nhưng là lần cấp số KHÁC (clientUuid khác): hai lượt khám, hai dòng, không gộp theo bệnh nhân', () => {
+      const morning = item({ id: 'srv-sang', number: 1, status: 'done', patientId: 'p9', patientName: 'Trần Thị Bình', clientUuid: '0a1b2c3d-0000-4000-8000-000000000001' });
+      const merged = mergeQueue([morning], [lost()], new Map(), ME);
+      expect(merged.map((i) => [i.id, i.number, i.status, i.local])).toEqual([
+        ['tmp-v3', 3, 'waiting', { tentative: true, pending: true }],
+        ['srv-sang', 1, 'done', undefined],
+      ]);
+    });
+
+    it('máy chủ bản cũ không trả clientUuid: như trước (hai dòng cho tới khi mục cấp số gửi lại xong), không lỗi', () => {
+      const { clientUuid: _, ...old } = E;
+      expect(mergeQueue([old], [lost()], new Map(), ME).map((i) => i.id)).toEqual(['srv-E', 'tmp-v3']);
+    });
   });
 
   it('thao tác bị máy chủ từ chối (xung đột) được đánh dấu cần xử lý', () => {

@@ -125,6 +125,8 @@ function check(label, wrong) {
 /** Việc sai gặp trong lúc chạy các chu kỳ (chu kỳ hỏng, máy chủ không nhận) và dữ liệu dạng rõ thấy trong IndexedDB. */
 const cycleFailures = [];
 const leaks = [];
+/** Mỗi lần bài mở hàng chờ để vào màn hình khám: số dòng của bệnh nhân chu kỳ đó (phải luôn là 1). */
+const queueLooks = [];
 const secretsOf = (c) => [c.patient.fullName, c.patient.phone, c.patient.cccd, c.symptoms];
 
 // ---------------------------------------------------------------------------------------------- lỗi mạng
@@ -232,10 +234,12 @@ async function openVisit(c) {
   await page().getByTestId('tab-queue').click();
   const rows = page().getByTestId('queue-row').filter({ hasText: c.patient.fullName });
   await rows.first().waitFor();
-  // Sau một lần mất phản hồi ở "cấp số", hàng chờ có lúc hiện HAI dòng cho cùng một lượt khám cho tới khi mục cấp số được gửi lại:
-  // dòng của máy chủ (đang chờ) và dòng tạm trên máy. Máy chủ vẫn chỉ có một lượt khám. Ghi lại để báo ở cuối bài, rồi bấm nút mà
-  // bác sĩ đang khám dở sẽ bấm: "Tiếp tục khám" nếu có, không thì "Gọi vào khám".
-  if ((await rows.count()) > 1) c.run.doubleRow = true;
+  // Mỗi lượt khám đúng MỘT dòng. Sau một lần mất phản hồi ở "cấp số", máy chủ đã có lượt khám còn mục cấp số trên máy chưa gửi lại:
+  // hàng chờ phải nhận ra hai thứ là một (khớp theo clientUuid, xem mergeQueue). Hai dòng cho cùng một bệnh nhân là LỖI: ghi lại để
+  // một bước kiểm cuối bài báo đỏ, rồi vẫn bấm nút mà bác sĩ đang khám dở sẽ bấm ("Tiếp tục khám" nếu có, không thì "Gọi vào khám")
+  // để chu kỳ chạy hết và phần đếm trên máy chủ vẫn có nghĩa.
+  const shown = await rows.count();
+  queueLooks.push({ cycle: c.index, at: ACTIONS[c.run.at], rows: shown });
   const resume = rows.getByTestId('continue');
   await ((await resume.count()) ? resume : rows.getByTestId('call')).first().click();
   await page().getByTestId('visit').waitFor();
@@ -364,7 +368,7 @@ try {
       `đơn ${print?.code}${print?.offline ? ' in từ máy' : ''}`,
       c.run.syncedMs !== undefined ? `máy chủ nhận sau ${(c.run.syncedMs / 1000).toFixed(1)} giây` : 'MÁY CHỦ CHƯA NHẬN',
       ...(c.run.signRefused.length ? [`"Ký & In" bị từ chối ${c.run.signRefused.length} lần trước khi in`] : []),
-      ...(c.run.doubleRow ? ['hàng chờ hiện hai dòng cho lượt khám này'] : []),
+      ...(queueLooks.some((q) => q.cycle === c.index && q.rows !== 1) ? ['HÀNG CHỜ HIỆN HƠN MỘT DÒNG CHO LƯỢT KHÁM NÀY'] : []),
     ];
     console.log(`· chu kỳ ${pad(c.index)}: ${describe(c)} → ${notes.join(', ')} [${((Date.now() - from) / 1000).toFixed(1)} giây]`);
   }
@@ -472,6 +476,12 @@ try {
     ]
   );
 
+  const lostCheckIns = queueLooks.filter((q) => plan[q.cycle - 1].lost === 1).length;
+  check(
+    `hàng chờ trên máy hiện đúng một dòng cho mỗi lượt khám ở cả ${queueLooks.length} lần mở hàng chờ để vào khám (${lostCheckIns} lần ở chu kỳ mất phản hồi khi cấp số)`,
+    queueLooks.filter((q) => q.rows !== 1).map((q) => `chu kỳ ${pad(q.cycle)}, trước "${q.at}": ${q.rows} dòng cho cùng một bệnh nhân (dòng của máy chủ và dòng tạm trên máy)`)
+  );
+
   check('không có lỗi nào trong console của trình duyệt, kể cả phản hồi lỗi của máy chủ (chỉ trừ lỗi không tới được máy chủ do cố ý ngắt mạng và cắt phản hồi)', problems);
 
   const waits = ran.map((c) => c.run.syncedMs).filter((ms) => ms !== undefined).sort((a, b) => a - b);
@@ -481,8 +491,6 @@ try {
   console.log(`\nThời gian chạy: ${((Date.now() - started) / 1000).toFixed(0)} giây.${waits.length ? ` Máy chủ nhận lượt khám sau khi có mạng: trung vị ${sec(waits[Math.floor((waits.length - 1) / 2)])} giây, lâu nhất ${sec(waits.at(-1))} giây.` : ''}`);
   if (slow.length) console.log(`Chờ máy chủ nhận trên 10 giây ở ${slow.length} chu kỳ: ${slow.map((c) => `${pad(c.index)} (${sec(c.run.syncedMs)} giây)`).join(', ')}.`);
   if (refused.length) console.log(`"Ký & In" báo chưa ký được, phải bấm lại, ở ${refused.length} chu kỳ: ${refused.map((c) => `${pad(c.index)} (${c.run.signRefused.length} lần)`).join(', ')}. Câu báo: "${refused[0].run.signRefused[0]}"`);
-  const doubled = ran.filter((c) => c.run.doubleRow);
-  if (doubled.length) console.log(`Hàng chờ hiện hai dòng cho cùng một lượt khám (dòng của máy chủ và dòng tạm trên máy) ở ${doubled.length} chu kỳ: ${doubled.map((c) => pad(c.index)).join(', ')}. Máy chủ vẫn chỉ có một lượt khám cho mỗi bệnh nhân.`);
   if (failed) {
     console.error(`\n✗ M0-2 KHÔNG đạt với hạt giống ${SEED}: ${failed}/${step} bước kiểm sai.`);
     await page().screenshot({ path: `${shots}FAILED-cycles-end.png` }).catch(() => {});

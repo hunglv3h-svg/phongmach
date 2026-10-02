@@ -265,3 +265,124 @@ describe('tiếp đón khi mất mạng (OFF-2, OFF-4)', () => {
     expect(await store.list('patients')).toEqual([]);
   });
 });
+
+// Máy chủ đã có lượt khám, trình duyệt không nhận được phản hồi: mục cấp số nằm lại trên máy với id tạm. Nếu máy tải được hàng chờ
+// của máy chủ trước khi mục đó được gửi lại thì lượt của máy chủ và lượt tạm phải được coi là MỘT (khớp theo clientUuid).
+describe('mất phản hồi ở cấp số rồi tải được hàng chờ của máy chủ trước khi mục cấp số gửi lại', () => {
+  const NAME = 'Zq Lê Thị Hoa';
+  const POST_QUEUE = /^POST \/api\/queue$/;
+  const rowsOf = async () => (await client.localQueue()).filter((i) => i.patientName === NAME);
+  const openOps = async () => (await engine.ops()).filter((o) => o.meta.kind === 'open');
+
+  /** Cấp số lúc có mạng, mất phản hồi: máy chủ có đúng một lượt, máy giữ mục cấp số với id tạm. */
+  async function lostCheckIn() {
+    const { patient } = await client.createPatient({ clientUuid: crypto.randomUUID(), fullName: NAME, phone: '0901234567' });
+    // Máy đã có dị ứng của người này (mở hồ sơ ở Tiếp đón): lần tải hàng chờ sau đó không gọi nạp trước, nên lần gọi máy chủ
+    // duy nhất thành công trong lúc mục cấp số còn chờ là lần tải hàng chờ.
+    await client.cachePatient(patient, []);
+    bff.fault(POST_QUEUE, 'lost');
+    const uuid = crypto.randomUUID();
+    const checkIn = await client.checkIn(patient, { clientUuid: uuid, specialty: 'noi', priority: 'normal' });
+    expect(checkIn).toMatchObject({ tentative: true, item: { local: { tentative: true, pending: true } } });
+    expect(bff.visits.size).toBe(1);
+    const server = [...bff.visits.values()][0]!.item;
+    return { uuid, tmp: checkIn.item, server };
+  }
+
+  /** Tải được hàng chờ của máy chủ, nhưng lần gửi lại mục cấp số ngay sau đó lại lỗi mạng (mạng rớt đúng lúc đó). */
+  async function snapshotArrives() {
+    // Không cho thời gian ảo trôi: bộ hẹn giờ gửi lại chưa chạy, lần gửi lại duy nhất là lần do "có mạng lại" kích hoạt.
+    bff.fault(POST_QUEUE, 'network');
+    expect((await client.refreshQueue(undefined, 0))?.items.map((i) => i.patientName)).toEqual([NAME]);
+    await engine.idle();
+    expect((await engine.ops()).find((o) => o.meta.kind === 'checkin')!.meta.status).toBe('retry');
+  }
+
+  it('hàng chờ trên máy hiện MỘT dòng, mang id của máy chủ, còn nhãn chờ đồng bộ; ánh xạ id tạm được lưu bền ngay', async () => {
+    const { tmp, server } = await lostCheckIn();
+    expect((await rowsOf()).map((i) => i.id)).toEqual([tmp.id]);
+    await snapshotArrives();
+    expect((await rowsOf()).map((i) => [i.id, i.number, i.status, i.local])).toEqual([[server.id, server.number, 'waiting', { pending: true }]]);
+    expect((await store.ids()).get(tmp.id)).toBe(server.id);
+    expect((await client.syncData()).queue.filter((i) => i.patientName === NAME)).toHaveLength(1);
+
+    await goOnline();
+    expect(engine.state.pending).toBe(0);
+    expect(bff.visits.size).toBe(1);
+    expect((await rowsOf()).map((i) => [i.id, i.local])).toEqual([[server.id, undefined]]);
+  });
+
+  it('đang khám dở dưới id tạm: mở lại qua dòng của máy chủ vẫn là bản nháp đó, không mở hồ sơ lần hai; ký xong máy chủ có một lượt, một đơn', async () => {
+    const { tmp, server } = await lostCheckIn();
+    // Mở hồ sơ qua dòng tạm (máy đang coi là mất mạng sau lần lỗi), nhập dở, bản nháp nằm dưới id tạm.
+    const first = await client.openVisit(tmp);
+    expect(first).toMatchObject({ offline: true, context: { visit: { id: tmp.id } } });
+    const draft = signedDraft({ ...newDraft('Đau họng'), openedAt: first.openedAt, openedOffline: true });
+    await store.putDraft(tmp.id, draft);
+
+    await snapshotArrives();
+    const rows = await rowsOf();
+    expect(rows.map((i) => [i.id, i.status, i.doctorUserId])).toEqual([[server.id, 'in-exam', 'doc']]);
+
+    // Bấm "Tiếp tục khám" ở dòng duy nhất đó (giờ mang id của máy chủ).
+    const again = await client.openVisit(rows[0]!);
+    expect(again).toMatchObject({ offline: true, openedAt: first.openedAt, context: { visit: { id: server.id } } });
+    expect(await openOps()).toHaveLength(1);
+    expect(await client.latestDraft(server.id)).toEqual(draft);
+
+    // Sửa tiếp trên màn hình khám (bản nháp giờ lưu dưới id máy chủ) rồi ký.
+    const edited = { ...draft, advice: 'Uống nhiều nước' };
+    await store.putDraft(server.id, edited);
+    expect(await client.latestDraft(server.id)).toEqual(edited);
+    await goOnline();
+    const out = await client.complete({ visit: again.context.visit, patient: again.context.patient, draft: edited, withRx: true, allergiesKnown: true, acks: [] });
+    expect(out.kind).toBe('online');
+    expect(bff.requests.filter((r) => r.method === 'POST' && r.path !== '/api/patients').map((r) => r.path.replace(/[0-9a-f-]{36}/g, ':id'))).toEqual([
+      '/api/queue', // mất phản hồi
+      '/api/queue', // lỗi mạng
+      '/api/queue', // gửi lại, cùng clientUuid
+      '/api/visits/:id/open',
+      '/api/visits/:id/complete',
+    ]);
+    expect([bff.visits.size, bff.completions.size, engine.state.pending]).toEqual([1, 1, 0]);
+    expect(await store.list('drafts')).toEqual([]);
+  });
+
+  it('chưa mở hồ sơ: "Gọi vào khám" ở dòng của máy chủ vẫn chờ mục cấp số như dòng tạm, và chỉ có một mục mở hồ sơ', async () => {
+    const { server } = await lostCheckIn();
+    await snapshotArrives();
+    goOffline();
+    const row = (await rowsOf())[0]!;
+    const opened = await client.openVisit(row);
+    expect(opened).toMatchObject({ offline: true, context: { visit: { id: server.id } } });
+    const [open] = await openOps();
+    expect(open!.meta.deps).toEqual([(await engine.ops()).find((o) => o.meta.kind === 'checkin')!.id]);
+    expect((await rowsOf()).map((i) => [i.id, i.status])).toEqual([[server.id, 'in-exam']]);
+    await goOnline();
+    expect([bff.visits.size, engine.state.pending, [...bff.visits.values()][0]!.item.status]).toEqual([1, 0, 'in-exam']);
+  });
+
+  it('hàng chờ của máy chủ về kịp trước khi "Cấp số" trả lời: vẫn báo đã cấp số (theo dòng của máy chủ), không báo lỗi', async () => {
+    const { patient } = await client.createPatient({ clientUuid: crypto.randomUUID(), fullName: NAME, phone: '0901234567' });
+    // Yêu cầu cấp số tới được máy chủ; trước khi trình duyệt thấy lỗi mạng, một lần tải hàng chờ khác đã lưu ảnh chụp có lượt đó.
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+      try {
+        return await bff.fetch(input, init);
+      } catch (e) {
+        if (init?.method === 'POST' && String(input) === '/api/queue') await client.saveSnapshot(client.today(), [...bff.visits.values()].map((v) => v.item));
+        throw e;
+      }
+    });
+    bff.fault(POST_QUEUE, 'lost');
+    const checkIn = await client.checkIn(patient, { clientUuid: crypto.randomUUID(), specialty: 'noi', priority: 'normal' });
+    const server = [...bff.visits.values()][0]!.item;
+    expect(checkIn).toMatchObject({ tentative: true, item: { id: server.id, number: server.number } });
+    // Số của máy chủ là số thật: không đề xuất số khác, nên không có thông báo "đổi số" sai.
+    expect(checkIn.item.local).toEqual({ pending: true });
+    expect(((await engine.ops()).find((o) => o.meta.kind === 'checkin') as Op<'checkin'>).body.payload.body.proposedNumber).toBe(server.number);
+    expect(await rowsOf()).toHaveLength(1);
+    await goOnline();
+    expect([bff.visits.size, engine.state.pending]).toEqual([1, 0]);
+    expect((await rowsOf()).map((i) => [i.id, i.number, i.local])).toEqual([[server.id, server.number, undefined]]);
+  });
+});

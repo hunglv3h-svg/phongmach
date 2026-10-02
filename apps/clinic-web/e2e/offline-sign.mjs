@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Kiểm thử đầu-cuối luồng ngoại tuyến (M0-S3, lát 3b) trên Chromium thật, ngắt mạng thật bằng `context.setOffline`:
 // tìm trong bộ đệm, tạo bệnh nhân và cấp số tạm, gọi vào khám, ký khi mất mạng, in A5 "KÝ KHI MẤT MẠNG", có mạng lại thì đồng bộ
-// đúng một đơn; ca mất phản hồi (máy chủ đã ghi, trình duyệt thấy lỗi mạng); đăng xuất khi còn mục chờ.
+// đúng một đơn; ca mất phản hồi (máy chủ đã ghi, trình duyệt thấy lỗi mạng) khi ký và khi cấp số (hàng chờ vẫn một dòng cho
+// một lượt khám); đăng xuất khi còn mục chờ.
 // Bài 20 chu kỳ ngắt và khôi phục mạng trên phòng khám thử riêng (M0-2) là offline-cycles.mjs.
 //
 //   cần stack + seed + BFF (DEMO_AUTH=1) + giao diện như e2e:visit
@@ -30,7 +31,9 @@ const shot = (name) => page.screenshot({ path: `${shots}${name}.png` });
 const tag = Math.random().toString(36).slice(2, 7);
 const NEW_NAME = `Zq Ngoại Tuyến ${tag}`;
 const KEEP_NAME = `Zq Giữ Lại ${tag}`;
+const ONE_NAME = `Zq Một Dòng ${tag}`;
 const SYMPTOMS = `Ho khan về đêm ${tag}`;
+const ONE_SYMPTOMS = `Đau bụng âm ỉ ${tag}`;
 const phone = `09${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`;
 const cccd = `0011${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`;
 
@@ -207,6 +210,83 @@ try {
   assert.equal(atPrint.length, 2, `đo được đúng hai lần in, thực tế ${JSON.stringify(atPrint)}`);
   assert.deepEqual(atPrint, [0, 0], `mọi lần in phải không còn yêu cầu IndexedDB đang dở, thực tế ${JSON.stringify(atPrint)}`);
   ok('hai lần in đều gọi print() khi không còn yêu cầu IndexedDB nào đang dở (hàng rào in)');
+
+  // ============================================================ Mất phản hồi ở "cấp số", rồi hàng chờ của máy chủ về TRƯỚC khi mục cấp số gửi lại
+  // Máy chủ đã có lượt khám, máy còn giữ mục cấp số với id tạm. Hàng chờ phải nhận ra hai thứ là một (theo clientUuid): một dòng,
+  // và bản nháp đang khám dở (lưu dưới id tạm) phải mở lại được qua dòng đó.
+  await page.getByTestId('back-to-queue').click();
+  await search(ONE_NAME);
+  await page.getByTestId('new-patient').click();
+  await page.getByTestId('f-submit').click();
+  await page.getByTestId('notice').filter({ hasText: /Đã tạo bệnh nhân mới/ }).waitFor();
+  // Yêu cầu cấp số đầu tiên tới được máy chủ nhưng phản hồi mất. Các lần gửi lại sau đó: 'down' = mạng vẫn rớt;
+  // 'busy' = có mạng nhưng máy chủ trả 503 (mục cấp số tiếp tục chờ gửi lại trong lúc hàng chờ đã tải được); 'up' = thông.
+  const posts = { n: 0, mode: 'down' };
+  d.expected = OFFLINE_ERRORS;
+  await page.route('**/api/queue', async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    posts.n += 1;
+    if (posts.n === 1) {
+      await route.fetch();
+      return route.abort('failed');
+    }
+    if (posts.mode === 'down') return route.abort('failed');
+    if (posts.mode === 'busy') return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'unavailable', message: 'Máy chủ đang bận (bài e2e chèn lỗi)' }) });
+    return route.fallback();
+  });
+  await page.getByTestId('check-in').click();
+  await page.getByTestId('notice').filter({ hasText: /\(tạm\)/ }).waitFor();
+  const oneRows = page.getByTestId('queue-row').filter({ hasText: ONE_NAME });
+  const onServer = async () => (await doctor('GET', '/api/queue')).items.filter((i) => i.patientName === ONE_NAME);
+  assert.equal((await onServer()).length, 1, 'máy chủ đã có lượt khám dù trình duyệt không nhận được phản hồi');
+
+  // Bác sĩ gọi vào khám qua dòng tạm và nhập dở: bản nháp nằm dưới id tạm.
+  await page.getByTestId('tab-queue').click();
+  await page.getByTestId('queue-offline').waitFor();
+  assert.equal(await oneRows.getAttribute('data-tentative'), 'true');
+  await oneRows.getByTestId('call').click();
+  await page.getByTestId('opened-offline').waitFor();
+  await page.getByTestId('exam-symptoms').fill(ONE_SYMPTOMS);
+  await page.locator('[data-testid="draft-saved"][data-dirty="false"]').waitFor();
+  await page.getByTestId('leave-visit').click();
+
+  // Có mạng lại: hàng chờ của máy chủ tải được (có lượt đó), còn mục cấp số vẫn chưa gửi lại được.
+  posts.mode = 'busy';
+  await setOffline(d, true);
+  await setOffline(d, false);
+  await page.locator('[data-testid="queue-row"][data-tentative="false"]').filter({ hasText: ONE_NAME }).waitFor();
+  assert.equal(await page.getByTestId('queue-offline').count(), 0, 'hàng chờ đang hiện là của máy chủ, không phải ảnh chụp cũ');
+  assert.equal(await oneRows.count(), 1, 'một lượt khám thì một dòng: dòng của máy chủ và lượt tạm trên máy phải là một');
+  assert.deepEqual(
+    { status: await oneRows.getAttribute('data-status'), pending: await oneRows.getAttribute('data-pending'), number: Number(await oneRows.getAttribute('data-number')) },
+    { status: 'in-exam', pending: 'true', number: (await onServer())[0].number },
+    'dòng duy nhất mang số của máy chủ, đang khám (theo thao tác trên máy), còn chờ đồng bộ'
+  );
+  assert.equal((await rawLocalDump(page)).ops.find((o) => o.kind === 'checkin' && o.status !== 'done')?.status, 'retry', 'mục cấp số vẫn đang chờ gửi lại');
+  await shot('35-one-row-after-lost-checkin');
+
+  // "Tiếp tục khám" ở dòng đó (giờ mang id của máy chủ) mở lại đúng bản nháp đang khám dở.
+  await oneRows.getByTestId('continue').click();
+  await page.getByTestId('visit').waitFor();
+  assert.equal(await page.getByTestId('exam-symptoms').inputValue(), ONE_SYMPTOMS, 'bản nháp khám dở (lưu dưới id tạm) phải còn nguyên khi mở qua dòng của máy chủ');
+
+  // Mạng thông hẳn: gửi lại cùng UUID, ký; máy chủ vẫn chỉ có một lượt khám và một đơn.
+  posts.mode = 'up';
+  await page.getByTestId('sync-now').click();
+  await syncedAll();
+  await signWithTemplate();
+  await page.getByTestId('sign-result').waitFor();
+  const oneCode = await page.getByTestId('rx-code').innerText();
+  await syncedAll();
+  await page.unroute('**/api/queue');
+  d.expected = undefined;
+  const oneVisits = await onServer();
+  assert.equal(oneVisits.length, 1, `đúng một lượt khám của "${ONE_NAME}" trên máy chủ, thực tế ${oneVisits.length}`);
+  assert.equal(oneVisits[0].status, 'done');
+  const oneHistory = (await doctor('GET', `/api/patients/${oneVisits[0].patientId}/visits?limit=10`)).visits;
+  assert.deepEqual(oneHistory.map((v) => v.prescription?.code), [oneCode], 'đúng một đơn, mã trùng mã trên màn hình');
+  assert.ok(posts.n >= 3, `mục cấp số được gửi lại cùng UUID (đã gửi ${posts.n} lần)`);
+  ok(`mất phản hồi khi cấp số, hàng chờ của máy chủ về trước khi mục cấp số gửi lại (${posts.n} lần gửi): hàng chờ hiện một dòng; "Tiếp tục khám" mở lại đúng bản nháp khám dở; máy chủ có 1 lượt khám, 1 đơn ${oneCode}`);
 
   // ============================================================ Đăng xuất khi còn mục chờ (OFF-6)
   await page.getByTestId('back-to-queue').click();

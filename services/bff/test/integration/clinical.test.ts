@@ -43,7 +43,7 @@ async function newPatient(name: string, extra: object = { birthDate: '1985-03-15
 async function enqueue(patientId: string, extra: object = {}) {
   const res = await call('POST', '/api/queue', 'a-assistant', { clientUuid: randomUUID(), patientId, specialty: 'noi', ...extra });
   expect(res.statusCode).toBe(201);
-  return res.json().item as { id: string; number: number; code: string };
+  return res.json().item as { id: string; number: number; code: string; clientUuid?: string };
 }
 const complete = (visitId: string, who: string, payload: object) => call('POST', `/api/visits/${visitId}/complete`, who, payload);
 const completionBody = (clientUuid: string, over: object = {}) => ({
@@ -93,6 +93,10 @@ describe('hàng chờ trên Medplum thật', () => {
     expect(again.json().item.id).toBe(first.json().item.id);
     expect(first.json().item.number).toBe(1);
     expect(first.json().item.code).toMatch(/^\d{8}-001$/);
+    // Lượt khám trong hàng chờ mang clientUuid của lần cấp số (đọc từ Encounter.identifier trên Medplum thật).
+    expect(first.json().item.clientUuid).toBe(uuid);
+    const listed = (await call('GET', '/api/queue', 'a-assistant')).json().items as Array<{ id: string; clientUuid?: string }>;
+    expect(listed.find((i) => i.id === first.json().item.id)!.clientUuid).toBe(uuid);
 
     const concurrent = await Promise.all(ids.slice(1).map((patientId) => call('POST', '/api/queue', 'a-assistant', { clientUuid: randomUUID(), patientId, specialty: 'noi' })));
     expect(concurrent.every((r) => r.statusCode === 201)).toBe(true);
@@ -131,7 +135,7 @@ describe('hàng chờ trên Medplum thật', () => {
 
 describe('luồng khám đầy đủ: mở hồ sơ, kê đơn, ký, in, gửi cổng', () => {
   let patientId = '';
-  let visit: { id: string };
+  let visit: { id: string; clientUuid?: string };
   let prescriptionId = '';
   let code = '';
   const uuid = randomUUID();
@@ -194,8 +198,12 @@ describe('luồng khám đầy đủ: mở hồ sơ, kê đơn, ký, in, gửi c
     expect([other.statusCode, other.json().error]).toEqual([409, 'already-closed']);
   });
   it('lượt khám đã đóng: hàng chờ hiện "done"; mở lại không được', async () => {
-    const items = (await call('GET', '/api/queue', 'a-doctor')).json().items as Array<{ id: string; status: string }>;
+    const items = (await call('GET', '/api/queue', 'a-doctor')).json().items as Array<{ id: string; status: string; clientUuid?: string }>;
     expect(items.find((i) => i.id === visit.id)!.status).toBe('done');
+    // Lượt đã ký có thêm định danh của lần hoàn tất ("<uuid lần ký>:complete"): hàng chờ vẫn trả clientUuid của lần cấp số.
+    expect(visit.clientUuid).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(items.find((i) => i.id === visit.id)!.clientUuid).toBe(visit.clientUuid);
+    expect(visit.clientUuid).not.toBe(uuid);
     expect((await call('POST', `/api/visits/${visit.id}/open`, 'a-doctor')).statusCode).toBe(409);
   });
   it('đọc lại đơn: chi tiết, lịch sử khám của bệnh nhân, ngữ cảnh lần khám sau', async () => {
