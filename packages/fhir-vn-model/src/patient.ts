@@ -19,7 +19,18 @@ export interface NewPatientInput {
 
 export class DomainError extends Error {
   constructor(
-    public readonly code: 'invalid-name' | 'invalid-phone' | 'invalid-cccd' | 'invalid-birth-date' | 'invalid-client-uuid',
+    public readonly code:
+      | 'invalid-name'
+      | 'invalid-phone'
+      | 'invalid-cccd'
+      | 'invalid-birth-date'
+      | 'invalid-client-uuid'
+      | 'invalid-vitals'
+      | 'invalid-diagnosis'
+      | 'invalid-prescription'
+      | 'invalid-allergy'
+      | 'invalid-state'
+      | 'rules-not-satisfied',
     message: string
   ) {
     super(message);
