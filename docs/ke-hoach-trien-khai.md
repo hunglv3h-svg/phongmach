@@ -418,9 +418,9 @@ Mục này viết cho người (hoặc phiên làm việc) tiếp nhận M0-S3 m
 - **Quy tắc đã thành nếp, giữ cho mọi tính năng mới**: log không chứa chuỗi truy vấn; nhật ký truy cập không chứa dữ liệu bệnh nhân; ghi nhật ký trước khi trả dữ liệu; tenant lấy từ phiên, không từ tham số; mọi phần mô phỏng có nhãn. Kiểm thử an toàn phải được xác nhận **thất bại khi gỡ biện pháp** tương ứng.
 - **Khi xong M0-S3, cập nhật chỗ nói "ngoại tuyến chưa có"**: `components/Scope.tsx`, `components/DemoBanner.tsx`, `README.md` (mục "Giới hạn"), mục 5.2 và 5.7 của kế hoạch, và bước kiểm tra trang Phạm vi trong `e2e/visit.mjs`.
 
-#### Thiết kế ngoại tuyến M0-S3 [Đề xuất, chờ duyệt] (02/10/2026)
+#### Thiết kế ngoại tuyến M0-S3 [Đã duyệt 02/10/2026] (02/10/2026)
 
-Điểm xuất phát đã chạy lại trên sandbox mới bằng `infra/dev-up.sh`: kiểu đạt, 217 kiểm thử đơn vị, 35 tích hợp, e2e 13 + 21 bước, tất cả xanh. Đã thử nhanh (không phải mã sản phẩm) trên Chromium: `context.setOffline` phát sự kiện `offline`/`online` và làm `fetch` lỗi; `route.fetch()` rồi `route.abort()` tạo được ca "máy chủ đã ghi (HTTP 200) nhưng trình duyệt thấy lỗi mạng"; WebCrypto và Web Locks có trên `127.0.0.1`. Phần còn lại của mục này là thiết kế, **chưa có mã**.
+Điểm xuất phát đã chạy lại trên sandbox mới bằng `infra/dev-up.sh`: kiểu đạt, 217 kiểm thử đơn vị, 35 tích hợp, e2e 13 + 21 bước, tất cả xanh. Đã thử nhanh (không phải mã sản phẩm) trên Chromium: `context.setOffline` phát sự kiện `offline`/`online` và làm `fetch` lỗi; `route.fetch()` rồi `route.abort()` tạo được ca "máy chủ đã ghi (HTTP 200) nhưng trình duyệt thấy lỗi mạng"; WebCrypto và Web Locks có trên `127.0.0.1`. Chủ dự án đã duyệt thiết kế ngày 02/10/2026: không dùng mã PIN ở M0, chấp nhận giới hạn N5 (đoạn ngắt mạng khi trình diễn làm trên một máy).
 
 **Nguyên tắc chung (N1–N5)**
 
@@ -434,7 +434,7 @@ Mục này viết cho người (hoặc phiên làm việc) tiếp nhận M0-S3 m
 
 *Lý do:* một mẫu duy nhất nên bản in trực tuyến và ngoại tuyến giống nhau, một bài kiểm tra PDF A5 dùng cho cả hai; mã đơn xác định nên không cần chờ máy chủ.
 
-*Rủi ro:* đồng hồ máy khách sai thì ngày trên mã và trên giấy sai theo (máy chủ lưu đúng cái đã in và gắn cờ, xem OFF-3); giá trị pháp lý của đơn in khi chưa liên thông vẫn là Q3 (trang in ghi rõ mô phỏng); bundle lớn thêm phần `qrcode` [Chưa đo]; dòng nhật ký in có thể bị ghi hai lần nếu mất phản hồi (nhật ký chỉ ghi thêm; chấp nhận và ghi chú).
+*Rủi ro:* đồng hồ máy khách sai thì ngày trên mã và trên giấy sai theo (máy chủ lưu đúng cái đã in và gắn cờ, xem OFF-3); giá trị pháp lý của đơn in khi chưa liên thông vẫn là Q3 (trang in ghi rõ mô phỏng); bundle lớn thêm phần `qrcode`: 312 → 343 KB, nén 96,7 → 109,3 KB [Đã đo, bản build lát 1]; dòng nhật ký in có thể bị ghi hai lần nếu mất phản hồi (nhật ký chỉ ghi thêm; chấp nhận và ghi chú).
 
 *Loại:* in thẳng trang ứng dụng (không kiểm soát được khổ A5, lộ giao diện); lưu sẵn HTML do BFF dựng (không có khi ký lúc mất mạng); sinh PDF ở trình duyệt (thư viện lớn, không cần).
 
@@ -511,12 +511,21 @@ Mục phụ thuộc vào một mục "cần xử lý" được giữ lại ("ch�
 
 **Lát cắt sau khi duyệt:** (1) gói in dùng chung, in từ dữ liệu cục bộ; (2) kho cục bộ có mã hóa thay `sessionStorage`; (3a) BFF: giờ máy khách, số tạm, nạp trước, ghi nhận in, kèm kiểm thử tích hợp; (3b) hàng đợi đồng bộ và luồng ngoại tuyến ở giao diện; (4) chỉ báo trực tuyến/ngoại tuyến, danh sách chờ đồng bộ, thông báo lỗi và xung đột; (5) bài e2e 20 chu kỳ và CI; (6) tài liệu, mục 5.9. Mỗi lát một commit, xanh trước khi sang lát sau.
 
-**Cần chủ dự án quyết định:**
+**Tiến độ.** Lát 1 xong:
+- Gói `@phongmach/print` dùng chung cho BFF và trình duyệt. Tuổi trên đơn nay tính tại lúc ký thay vì lúc in, để cùng dữ liệu luôn cho cùng một trang.
+- `localPrescriptionDetail` dựng đơn từ dữ liệu trên máy qua đúng các hàm của gói hoàn tất và của đường đọc ngược; có kiểm thử so với đường máy chủ.
+- `localPrescriptionCode` sinh mã đơn ở máy khách, dùng cùng vectơ kiểm tra với BFF.
+- "In lại đơn" khi mất mạng in từ dữ liệu trên máy. Bước e2e mới so trang in dựng ở trình duyệt với trang BFF dựng: giống từng ký tự, trừ dòng liên thông. Xuất PDF được đúng một trang A5; chạy được cả trên bản dev lẫn bản build.
+- Đột biến thử đã làm: bỏ thoát ký tự, tính tuổi theo giờ hiện tại, không cắt khoảng trắng lời dặn, không hạ chữ thường UUID, lấy ngày theo UTC. Mỗi đột biến làm đúng một bài đỏ. Bài về chữ hoa/thường ban đầu vẫn xanh khi bị đột biến vì UUID mẫu chỉ có chữ số; đã thêm vectơ có chữ cái.
 
-1. **Mã PIN cho kho cục bộ ở M0?** Khuyến nghị: không (lý do ở OFF-5).
-2. **Giới hạn N5 có chấp nhận cho M0 không?** Kịch bản 4 trên sân khấu sẽ làm đoạn ngắt mạng trên một máy (bác sĩ tự tiếp đón người mới đến). Để hai máy thấy nhau khi mất Internet cần một trạm đồng bộ trong mạng LAN của phòng khám: ngoài M0, thuộc T-OFF-3.
+Còn lại cho lát 3: lần in ngoại tuyến chưa có dòng nhật ký `prescription-print`. Trang in có nhãn "ký khi mất mạng" mới được kiểm qua kiểm thử đơn vị; kiểm PDF một trang A5 cho trang này làm khi ký ngoại tuyến chạy được qua giao diện.
 
-Các điểm còn lại đã chọn mặc định ở trên và có thể đổi khi duyệt: số tạm được ưu tiên giữ (OFF-2); giờ không hợp lý thì vẫn lưu, chỉ không tính số đo (OFF-3); đơn ngoại tuyến bị quy tắc chặn khi đồng bộ thì chờ bác sĩ xác nhận (OFF-7); đăng xuất khi còn mục chờ thì giữ dữ liệu đã mã hóa thay vì xóa (OFF-6).
+**Quyết định của chủ dự án (02/10/2026):**
+
+1. **Không dùng mã PIN cho kho cục bộ ở M0** (lý do ở OFF-5).
+2. **Chấp nhận giới hạn N5 cho M0.** Kịch bản 4 trên sân khấu làm đoạn ngắt mạng trên một máy (bác sĩ tự tiếp đón người mới đến). Để hai máy thấy nhau khi mất Internet cần một trạm đồng bộ trong mạng LAN của phòng khám: ngoài M0, thuộc T-OFF-3.
+
+Các điểm mặc định đã nêu và được duyệt cùng thiết kế: số tạm được ưu tiên giữ (OFF-2); giờ không hợp lý thì vẫn lưu, chỉ không tính số đo (OFF-3); đơn ngoại tuyến bị quy tắc chặn khi đồng bộ thì chờ bác sĩ xác nhận (OFF-7); đăng xuất khi còn mục chờ thì giữ dữ liệu đã mã hóa thay vì xóa (OFF-6).
 
 ---
 

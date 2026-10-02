@@ -8,11 +8,12 @@ Phần mềm quản lý phòng mạch tư nhân (Việt Nam). Kế hoạch tri�
 | Thư mục | Nội dung |
 |---|---|
 | `apps/clinic-web` | Ứng dụng phòng khám (PWA React + TypeScript + Vite): tiếp đón, hàng chờ, màn hình chờ, khám một trang, kê đơn, in, liên thông, thời gian khám, nhật ký truy cập |
-| `services/bff` | BFF / Domain API (Fastify): lớp duy nhất gọi Medplum; tenant lấy từ phiên; hộp thư đi (outbox) và cổng đơn thuốc mô phỏng; in A5 có QR |
+| `services/bff` | BFF / Domain API (Fastify): lớp duy nhất gọi Medplum; tenant lấy từ phiên; hộp thư đi (outbox) và cổng đơn thuốc mô phỏng; in A5 có QR (mẫu ở `packages/print`) |
 | `packages/fhir-vn-model` | Mô hình dữ liệu Việt Nam trên FHIR: chuẩn hóa tên không dấu, số điện thoại, CCCD, dựng `Patient` |
 | `packages/catalogs` | Danh mục **minh họa** (chưa duyệt y khoa): ICD-10, thuốc, đơn mẫu; tìm không dấu; sinh cách dùng và số lượng |
 | `packages/rules` | Quy tắc kê đơn (hàm thuần, dùng chung giao diện và BFF): trùng hoạt chất, dị ứng, số ngày tối đa, thiếu CCCD, trẻ em |
 | `packages/clinical` | Hàng chờ, sinh hiệu, dị ứng/tiền sử, đơn thuốc, outbox trên FHIR R4; gói hoàn tất lượt khám chạy lại được |
+| `packages/print` | Mẫu in đơn A5 có mã QR, dùng chung cho BFF (in khi có mạng) và trình duyệt (in từ dữ liệu trên máy khi mất mạng) |
 | `infra/medplum` | Backend Medplum (Docker Compose), smoke test, thử nghiệm hiệu năng và vòng đời phòng khám |
 | `docs` | Kế hoạch triển khai |
 

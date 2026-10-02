@@ -1,7 +1,7 @@
 import type { List, MedicationRequest, Task } from '@medplum/fhirtypes';
-import { EXTENSIONS, SYSTEMS } from '@phongmach/fhir-vn-model';
-import { buildInstruction, getDrug, type DrugEntry, type LineInput, type ResolvedLine } from '@phongmach/catalogs';
-import type { AckView, PrescriptionLineView, PrescriptionSummary } from './dto.js';
+import { DomainError, EXTENSIONS, SYSTEMS, type PatientSummary } from '@phongmach/fhir-vn-model';
+import { buildInstruction, getDrug, getIcd10, resolveLine, type DrugEntry, type LineInput, type ResolvedLine } from '@phongmach/catalogs';
+import type { AckView, DiagnosisView, PrescriptionDetail, PrescriptionLineView, PrescriptionSummary } from './dto.js';
 import { toGatewayView } from './outbox.js';
 
 const UCUM = 'http://unitsofmeasure.org';
@@ -166,5 +166,68 @@ export function toPrescriptionSummary(
     ...(followUp !== undefined ? { followUpDays: followUp } : {}),
     acknowledgements: toAcks(list),
     ...(gateway ? { gateway } : {}),
+  };
+}
+
+/** Một đơn vừa ký trên máy, máy chủ chưa nhận (ký khi mất mạng). */
+export interface LocalSignature {
+  /** id tạm của đơn và của lượt khám trên máy (chưa có id máy chủ). */
+  id: string;
+  encounterId: string;
+  /** Mã đơn sinh ở máy khách bằng `makePrescriptionCode`, cùng cách máy chủ sẽ tính lại khi đồng bộ. */
+  code: string;
+  signedAt: string;
+  signerName: string;
+  patient: PatientSummary;
+  /** Mã ICD-10. */
+  diagnoses: string[];
+  lines: LineInput[];
+  advice?: string | undefined;
+  followUpDays?: number | undefined;
+  acknowledgements: AckView[];
+}
+
+/**
+ * Đơn thuốc dựng từ dữ liệu trên máy để in ngay khi mất mạng, trước khi máy chủ nhận.
+ * Đi qua đúng các hàm mà gói hoàn tất (`buildMedicationRequest`) và đường đọc ngược (`toLineView`) dùng, để tờ in lúc mất mạng
+ * giống tờ in lại từ máy chủ sau khi đồng bộ (có kiểm thử so hai đường).
+ */
+export function localPrescriptionDetail(s: LocalSignature): PrescriptionDetail {
+  const diagnoses: DiagnosisView[] = s.diagnoses.map((code) => {
+    const entry = getIcd10(code);
+    if (!entry) throw new DomainError('invalid-diagnosis', `Mã ICD-10 không có trong danh mục: ${code}`);
+    return { code: entry.code, name: entry.name };
+  });
+  const now = new Date(s.signedAt);
+  const lines = s.lines.map((input, index) => {
+    const drug = getDrug(input.drug);
+    if (!drug) throw new DomainError('invalid-prescription', `Thuốc không có trong danh mục: ${input.drug}`);
+    const mr = buildMedicationRequest({ drug, input, resolved: resolveLine(drug, input) }, index, {
+      patientId: s.patient.id,
+      encounterId: s.encounterId,
+      code: s.code,
+      now,
+      doctor: { name: s.signerName },
+      diagnoses,
+    });
+    return toLineView(mr)!;
+  });
+  const advice = s.advice?.trim();
+  return {
+    prescription: {
+      id: s.id,
+      code: s.code,
+      signedAt: now.toISOString(),
+      signerName: s.signerName,
+      patientId: s.patient.id,
+      patientName: s.patient.fullName,
+      lines,
+      ...(advice ? { advice } : {}),
+      ...(s.followUpDays !== undefined ? { followUpDays: s.followUpDays } : {}),
+      acknowledgements: s.acknowledgements,
+    },
+    patient: s.patient,
+    diagnoses,
+    encounterId: s.encounterId,
   };
 }

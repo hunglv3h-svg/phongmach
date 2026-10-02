@@ -17,6 +17,7 @@
     "@phongmach/catalogs": "workspace:*",
     "@phongmach/clinical": "workspace:*",
     "@phongmach/fhir-vn-model": "workspace:*",
+    "@phongmach/print": "workspace:*",
     "@phongmach/rules": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

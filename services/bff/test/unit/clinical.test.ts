@@ -181,6 +181,12 @@ describe('hoàn tất lượt khám và kê đơn', () => {
     const other = await c.app.inject({ method: 'POST', url: `/api/visits/${visitId}/complete`, headers: auth(doctor), payload: body({ clientUuid: U(7) }) });
     expect(other.json().prescription.code).not.toBe(codes[0]);
   });
+  it('mã đơn = PM-<ngày>-<6 ký tự đầu SHA-256(clientUuid)>: cùng vectơ với hàm sinh mã ở máy khách (in khi mất mạng)', async () => {
+    const c = makeApp({ now: () => NOW });
+    const { visitId, doctor } = await opened(c);
+    const res = await c.app.inject({ method: 'POST', url: `/api/visits/${visitId}/complete`, headers: auth(doctor), payload: body({ clientUuid: '11111111-1111-4111-8111-111111111111' }) });
+    expect(res.json().prescription.code).toBe('PM-261020-XP25EM'); // apps/clinic-web/src/print.test.ts dùng cùng giá trị
+  });
   it('gửi lại sau khi đã hoàn tất: 200, replayed, không ghi thêm, không chạy lại quy tắc', async () => {
     const c = makeApp({ now: () => NOW });
     const { visitId, patientId, assistant, doctor } = await opened(c);

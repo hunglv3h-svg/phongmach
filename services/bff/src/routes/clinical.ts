@@ -17,7 +17,7 @@ import { ageInYears, checkPrescription, judge } from '@phongmach/rules';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { computeMetrics } from '../metrics.js';
-import { renderPrescriptionHtml } from '../print.js';
+import { renderPrescriptionHtml } from '@phongmach/print';
 import type { Doctor } from '../store.js';
 import { ALL_ROLES, CLINICAL_ROLES, type RouteContext } from './context.js';
 

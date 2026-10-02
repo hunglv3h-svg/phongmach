@@ -20,7 +20,10 @@ const browser = await chromium.launch({ executablePath: chromiumPath() });
 const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'vi-VN' });
 const page = await context.newPage();
 const problems = [];
-page.on('console', (m) => m.type() === 'error' && problems.push(`console: ${m.text()}`));
+// Khi cố ý ngắt mạng, trình duyệt ghi lỗi tải tài nguyên vào console: đó là điều được chờ đợi, không phải lỗi ứng dụng.
+let offline = false;
+const expectedOffline = (text) => offline && /ERR_INTERNET_DISCONNECTED|Failed to fetch/.test(text);
+page.on('console', (m) => m.type() === 'error' && !expectedOffline(m.text()) && problems.push(`console: ${m.text()}`));
 page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
 
 let step = 0;
@@ -86,6 +89,21 @@ async function pickDiagnosis(query) {
   await page.getByTestId('dx-search').press('Enter');
 }
 const pendingState = () => page.getByTestId('gateway-status').getAttribute('data-status');
+/** Xuất PDF như khi in: phải đúng một trang khổ A5 (148×210 mm ≈ 419,5×595,3 pt). */
+async function assertOneA5Page(html, name) {
+  const printPage = await context.newPage();
+  try {
+    await printPage.setContent(html);
+    const pdf = (await printPage.pdf({ preferCSSPageSize: true })).toString('latin1');
+    const pages = (pdf.match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+    assert.equal(pages, 1, `đơn phải vừa một trang A5, thực tế ${pages}`);
+    const box = /MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)\s*\]/.exec(pdf);
+    assert.ok(box && Math.abs(Number(box[1]) - 419.5) < 1.5 && Math.abs(Number(box[2]) - 595.3) < 1.5, `khổ A5, thực tế ${box?.slice(1, 3)}`);
+    await printPage.screenshot({ path: `${shots}${name}.png` });
+  } finally {
+    await printPage.close();
+  }
+}
 
 try {
   await resetQueue();
@@ -201,16 +219,27 @@ try {
   const printed = await frame.locator('body').innerText();
   assert.ok(printed.includes(signed.prescription.code) && printed.includes('BẢN MÔ PHỎNG') && printed.includes('Nguyễn Văn An'));
   const html = (await api('GET', `/api/prescriptions/${signed.prescription.id}/print`)).text;
-  const printPage = await context.newPage();
-  await printPage.setContent(html);
-  const pdf = await printPage.pdf({ preferCSSPageSize: true });
-  const pages = (pdf.toString('latin1').match(/\/Type\s*\/Page[^s]/g) ?? []).length;
-  assert.equal(pages, 1, `đơn phải vừa một trang A5, thực tế ${pages}`);
-  const box = /MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)\s*\]/.exec(pdf.toString('latin1'));
-  assert.ok(box && Math.abs(Number(box[1]) - 419.5) < 1.5 && Math.abs(Number(box[2]) - 595.3) < 1.5, `khổ A5 (148×210 mm ≈ 419,5×595,3 pt), thực tế ${box?.slice(1, 3)}`);
-  await printPage.screenshot({ path: `${shots}14-print-a5.png` });
-  await printPage.close();
+  await assertOneA5Page(html, '14-print-a5');
   ok('in A5: có mã QR (SVG), mã đơn, nhãn mô phỏng; xuất PDF đúng 1 trang khổ A5');
+
+  // Mất mạng ngay sau khi ký: "In lại đơn" dựng trang in ngay trong trình duyệt từ dữ liệu trên máy, cùng mẫu với BFF.
+  const framesBefore = await page.locator('iframe[data-testid="print-frame"]').count();
+  offline = true;
+  await context.setOffline(true);
+  await page.getByTestId('reprint').click();
+  await page.getByTestId('printed-locally').waitFor();
+  const localHtml = await page.locator('iframe[data-testid="print-frame"]').nth(framesBefore).getAttribute('srcdoc');
+  await context.setOffline(false);
+  offline = false;
+  // Dòng cuối (trạng thái liên thông) được phép khác: lúc này đơn có thể đã "Đã gửi"; bản in từ máy ghi rõ có thể chưa cập nhật.
+  const gatewayLine = /<div class="row" style="font:8pt sans-serif;margin-top:2mm">.*?<\/div>/s;
+  assert.match(localHtml, gatewayLine);
+  assert.match(localHtml.match(gatewayLine)[0], /In khi mất mạng từ dữ liệu trên máy/);
+  const compared = html.replace(gatewayLine, '');
+  for (const part of ['<svg', signed.prescription.code, 'Nguyễn Văn An', 'Amoxicillin', '<b>Tuổi:</b>']) assert.ok(compared.includes(part), `phần đem so phải có "${part}"`);
+  assert.equal(localHtml.replace(gatewayLine, ''), compared, 'trang in dựng ở trình duyệt phải giống từng ký tự trang do BFF dựng (trừ dòng liên thông)');
+  await assertOneA5Page(localHtml, '14b-print-a5-local');
+  ok('mất mạng, "In lại đơn": in từ dữ liệu trên máy, giống từng ký tự bản BFF (trừ dòng liên thông), PDF đúng 1 trang A5');
 
   // Liên thông: cổng đang chạy nên đơn sang "Đã gửi"
   await page.getByTestId('gateway-status').filter({ hasText: 'Đã gửi' }).waitFor({ timeout: 20_000 });
@@ -321,6 +350,7 @@ try {
 } finally {
   // Trả cổng mô phỏng về trạng thái chạy và dọn hàng chờ, kể cả khi kịch bản hỏng giữa chừng.
   try {
+    await context.setOffline(false);
     await resetQueue();
     await logout().catch(() => {});
     await login('noi-doctor');

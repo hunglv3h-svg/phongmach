@@ -1,9 +1,9 @@
-import { SPECIALTY_LABEL, type VisitContext, type VisitSummary } from '@phongmach/clinical';
+import { SPECIALTY_LABEL, type PrescriptionDetail, type VisitContext, type VisitSummary } from '@phongmach/clinical';
 import { useEffect, useMemo, useState } from 'react';
 import { ApiError, api, type AuthState, type CompleteResponse, type RulesRejected } from '../api';
 import { ageText, clock, pad3 } from '../format';
 import { useNow } from '../hooks';
-import { printPrescription } from '../print';
+import { printSaved } from '../print';
 import { addPrevious, dropDraft, evaluate, loadDraft, newDraft, saveDraft, toCompleteRequest, toVitals, type Draft } from './draft';
 import { ExamForm } from './ExamForm';
 import { PatientSide } from './PatientSide';
@@ -25,6 +25,7 @@ export function Visit({ auth, context: initial, onDone }: { auth: AuthState; con
   const [server, setServer] = useState<RulesRejected>();
   const [result, setResult] = useState<CompleteResponse>();
   const [printError, setPrintError] = useState<string>();
+  const [printedLocally, setPrintedLocally] = useState(false);
   const now = useNow(1000);
 
   useEffect(() => {
@@ -56,7 +57,13 @@ export function Visit({ auth, context: initial, onDone }: { auth: AuthState; con
       const res = await api.completeVisit(token, visit.id, toCompleteRequest(draft, withRx));
       dropDraft(visit.id);
       setResult(res);
-      if (res.prescription && !res.replayed) printPrescription(token, res.prescription.id).catch((e: Error) => setPrintError(e.message));
+      const detail = toDetail(res);
+      if (detail && !res.replayed) {
+        printSaved(token, detail, auth.tenant.name).then(
+          (via) => via === 'local' && setPrintedLocally(true),
+          (e: Error) => setPrintError(e.message)
+        );
+      }
     } catch (e) {
       if (e instanceof ApiError && e.code === 'rules-not-satisfied') {
         setServer(e.body as RulesRejected);
@@ -72,9 +79,23 @@ export function Visit({ auth, context: initial, onDone }: { auth: AuthState; con
   };
 
   const repeat = (v: VisitSummary) => setDraft((d) => addPrevious(d, v));
+  // Dữ liệu để in lại từ máy khi mất mạng: đơn do máy chủ trả về + bệnh nhân đang mở.
+  const toDetail = (res: CompleteResponse): PrescriptionDetail | undefined =>
+    res.prescription ? { prescription: res.prescription, patient: context.patient, diagnoses: res.visit.diagnoses, encounterId: visit.id } : undefined;
 
   if (result) {
-    return <SignResult token={token} result={result} {...(printError ? { printError } : {})} onBack={onDone} />;
+    const detail = toDetail(result);
+    return (
+      <SignResult
+        token={token}
+        clinicName={auth.tenant.name}
+        result={result}
+        {...(detail ? { detail } : {})}
+        {...(printError ? { printError } : {})}
+        printedLocally={printedLocally}
+        onBack={onDone}
+      />
+    );
   }
 
   const age = ageText(context.patient.birthDate);

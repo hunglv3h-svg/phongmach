@@ -1,7 +1,7 @@
 import type { Bundle, Encounter, List, MedicationRequest, Patient, Task } from '@medplum/fhirtypes';
 import { describe, expect, it } from 'vitest';
 import { drugCode, getDrug, getIcd10, resolveLine, type LineInput } from '@phongmach/catalogs';
-import { DomainError, buildPatient } from '@phongmach/fhir-vn-model';
+import { DomainError, buildPatient, toPatientSummary } from '@phongmach/fhir-vn-model';
 import {
   DEFAULT_RETRY,
   attemptsOf,
@@ -19,6 +19,7 @@ import {
   initialsOf,
   isDue,
   lineToInput,
+  localPrescriptionDetail,
   makePrescriptionCode,
   markCalled,
   markFailed,
@@ -274,6 +275,48 @@ describe('gói hoàn tất lượt khám', () => {
       const values = ((e.resource as { identifier?: Array<{ value?: string }> }).identifier ?? []).map((i) => i.value);
       expect(values.some((v) => e.request!.ifNoneExist!.endsWith(`|${v}`))).toBe(true);
     }
+  });
+  it('đơn dựng trên máy khi mất mạng giống hệt đơn máy chủ đọc lại sau khi đồng bộ (tờ in không lệch bản ghi)', () => {
+    const inputs: LineInput[] = [
+      { drug: drugCode('Amoxicillin 500 mg'), perDose: 1, timesPerDay: 3, days: 5 },
+      { drug: drugCode('Paracetamol 500 mg'), perDose: 1, quantity: 10, instruction: 'Uống khi sốt trên 38,5 độ' },
+      { drug: drugCode('Cetirizin 10 mg'), perDose: 1, timesPerDay: 1, days: 14 },
+    ];
+    const signedAt = '2026-10-20T16:59:30.000Z'; // 23:59 giờ Việt Nam: ngày trên đơn theo giờ ký, không theo lúc đồng bộ
+    const acks = [{ key: 'allergy:x', message: 'Dị ứng X', reason: 'đã dùng trước đây' }];
+    const signedLines = inputs.map((input) => {
+      const drug = getDrug(input.drug)!;
+      return { drug, input, resolved: resolveLine(drug, input) };
+    });
+    // Đường máy chủ: gói hoàn tất, giả lập gán id, đọc ngược.
+    const b = buildCompletionBundle({ ...base, now: new Date(signedAt), prescription: { code: 'PM-261020-ABC123', lines: signedLines, advice: '  Uống nhiều nước ', followUpDays: 3, acks, digestBase64 } });
+    const res = (t: string) => b.entry!.filter((e) => e.resource?.resourceType === t).map((e, i) => ({ ...e.resource!, id: `${t}-${i}` }));
+    const requests = res('MedicationRequest') as MedicationRequest[];
+    const list = { ...(res('List')[0] as List), entry: requests.map((r) => ({ item: { reference: `MedicationRequest/${r.id}` } })) };
+    const server = toPrescriptionSummary(list, requests, undefined, 'Nguyễn Văn An')!;
+    // Đường trên máy.
+    const local = localPrescriptionDetail({
+      id: 'local-1',
+      encounterId: 'e1',
+      code: 'PM-261020-ABC123',
+      signedAt,
+      signerName: 'BS. Hà',
+      patient: toPatientSummary(patient),
+      diagnoses: ['J02.9'],
+      lines: inputs,
+      advice: '  Uống nhiều nước ',
+      followUpDays: 3,
+      acknowledgements: acks,
+    });
+    const { id: _a, ...serverRest } = server;
+    const { id: _b, ...localRest } = local.prescription;
+    void _a;
+    void _b;
+    expect(localRest).toEqual(serverRest);
+    expect(local.prescription.lines.map((l) => l.instruction)).toEqual(['Uống 1 viên x 3 lần/ngày', 'Uống khi sốt trên 38,5 độ', expect.any(String)]);
+    expect(local.diagnoses).toEqual(res('Condition').map((c) => ({ code: 'J02.9', name: (c as { code: { coding: Array<{ display: string }> } }).code.coding[0]!.display })));
+    expect(() => localPrescriptionDetail({ ...local.prescription, encounterId: 'e1', signedAt, signerName: 'x', patient: toPatientSummary(patient), diagnoses: ['Z99.999'], lines: inputs, acknowledgements: [] })).toThrow(DomainError);
+    expect(() => localPrescriptionDetail({ ...local.prescription, encounterId: 'e1', signedAt, signerName: 'x', patient: toPatientSummary(patient), diagnoses: ['J02.9'], lines: [{ drug: 'THUOC-LA' }], acknowledgements: [] })).toThrow(DomainError);
   });
   it('phát hiện mục lỗi trong phản hồi dù HTTP 200', () => {
     const response: Bundle = { resourceType: 'Bundle', type: 'transaction-response', entry: [{ response: { status: '201' } }, { response: { status: '412', outcome: { resourceType: 'OperationOutcome', issue: [{ severity: 'error', code: 'processing', details: { text: 'Precondition Failed' } }] } } }, { response: { status: '200' } }, { response: { status: '404' } }] };

@@ -177,6 +177,9 @@ importers:
       '@phongmach/fhir-vn-model':
         specifier: workspace:*
         version: link:../../packages/fhir-vn-model
+      '@phongmach/print':
+        specifier: workspace:*
+        version: link:../../packages/print
       '@phongmach/rules':
         specifier: workspace:*
         version: link:../../packages/rules
@@ -260,6 +263,28 @@ importers:
         specifier: ^5.0.0
         version: 5.0.3(@types/node@22.20.4)(vite@8.3.1(@types/node@22.20.4)(esbuild@0.28.2)(terser@5.51.2)(tsx@4.23.15))
 
+  packages/print:
+    dependencies:
+      '@phongmach/clinical':
+        specifier: workspace:*
+        version: link:../clinical
+      '@phongmach/rules':
+        specifier: workspace:*
+        version: link:../rules
+      qrcode:
+        specifier: ^1.5.4
+        version: 1.5.4
+    devDependencies:
+      '@types/qrcode':
+        specifier: ^1.5.5
+        version: 1.5.6
+      typescript:
+        specifier: ^6.0.0
+        version: 6.0.3
+      vitest:
+        specifier: ^5.0.0
+        version: 5.0.3(@types/node@22.20.4)(vite@8.3.1(@types/node@22.20.4)(esbuild@0.28.2)(terser@5.51.2)(tsx@4.23.15))
+
   packages/rules:
     dependencies:
       '@phongmach/catalogs':
@@ -290,6 +315,9 @@ importers:
       '@phongmach/fhir-vn-model':
         specifier: workspace:*
         version: link:../../packages/fhir-vn-model
+      '@phongmach/print':
+        specifier: workspace:*
+        version: link:../../packages/print
       '@phongmach/rules':
         specifier: workspace:*
         version: link:../../packages/rules
@@ -299,9 +327,6 @@ importers:
       jose:
         specifier: ^6.0.0
         version: 6.2.12
-      qrcode:
-        specifier: ^1.5.4
-        version: 1.5.4
       zod:
         specifier: ^4.0.0
         version: 4.6.5
@@ -309,9 +334,6 @@ importers:
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.4
-      '@types/qrcode':
-        specifier: ^1.5.5
-        version: 1.5.6
       tsx:
         specifier: ^4.0.0
         version: 4.23.15
