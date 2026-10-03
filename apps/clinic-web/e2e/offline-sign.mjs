@@ -176,7 +176,10 @@ try {
   // ============================================================ Mất phản hồi: máy chủ đã ghi, trình duyệt thấy lỗi mạng
   await page.getByTestId('back-to-queue').click();
   const anId = (await doctor('GET', '/api/queue')).items.find((i) => i.patientName === 'Nguyễn Văn An' && i.status === 'waiting').patientId;
-  const before = (await doctor('GET', `/api/patients/${anId}/visits?limit=50`)).visits.length;
+  // Đếm lượt khám mới theo id, không theo độ dài danh sách: BFF trả tối đa 50 lượt (mới nhất trước), mà An có thêm lượt khám
+  // sau mỗi lần chạy e2e, nên tới lần chạy thứ ~50 độ dài dừng ở 50 và phép đếm cũ luôn ra 0.
+  const anVisits = async () => (await doctor('GET', `/api/patients/${anId}/visits?limit=50`)).visits;
+  const before = new Set((await anVisits()).map((v) => v.encounterId));
   await page.getByTestId('queue-row').filter({ hasText: 'Nguyễn Văn An' }).filter({ has: page.getByTestId('call') }).getByTestId('call').click();
   await page.getByTestId('visit').waitFor();
   assert.equal(await page.getByTestId('opened-offline').count(), 0, 'mở có mạng');
@@ -197,9 +200,9 @@ try {
   await syncedAll();
   d.expected = undefined;
   await page.locator('[data-testid="offline-sync-state"][data-status="done"]').waitFor();
-  const after = (await doctor('GET', `/api/patients/${anId}/visits?limit=50`)).visits;
-  assert.equal(after.length, before + 1, `mất phản hồi rồi gửi lại: đúng 1 lượt khám mới, thực tế ${after.length - before}`);
-  assert.equal(after[0].prescription.code, lostCode, 'gửi lại cùng UUID: máy chủ trả đơn cũ, mã trùng mã đã in');
+  const added = (await anVisits()).filter((v) => !before.has(v.encounterId));
+  assert.equal(added.length, 1, `mất phản hồi rồi gửi lại: đúng 1 lượt khám mới, thực tế ${added.length}`);
+  assert.equal(added[0].prescription.code, lostCode, 'gửi lại cùng UUID: máy chủ trả đơn cũ, mã trùng mã đã in');
   ok(`mất phản hồi khi ký (máy chủ đã ghi): in từ máy, gửi lại cùng UUID, máy chủ vẫn chỉ có 1 lượt khám mới, mã ${lostCode} trùng`);
 
   // Đo trước khi tải lại trang (bộ đếm nằm trong trang): hai lần in ở trên (ký khi mất mạng, mất phản hồi).

@@ -225,7 +225,10 @@ try {
   ok('nhập lý do vẫn kê (lý do 2 ký tự không đủ) thì mở khóa "Ký & In"');
 
   // Ký bằng bấm đúp: chỉ một đơn
-  const before = (await api('GET', `/api/patients/${await patientIdOf()}/visits?limit=50`)).json.visits.length;
+  // Đếm lượt khám mới theo id, không theo độ dài danh sách: BFF trả tối đa 50 lượt (mới nhất trước), mà bệnh nhân demo
+  // có thêm lượt khám sau mỗi lần chạy e2e, nên tới lần chạy thứ ~50 độ dài dừng ở 50 và phép đếm cũ luôn ra 0.
+  const visitIds = async () => (await api('GET', `/api/patients/${await patientIdOf()}/visits?limit=50`)).json.visits.map((v) => v.encounterId);
+  const before = new Set(await visitIds());
   const completed = page.waitForResponse((r) => /\/api\/visits\/.+\/complete/.test(r.url()) && r.request().method() === 'POST');
   await page.getByTestId('sign').dblclick();
   const res = await completed;
@@ -234,8 +237,8 @@ try {
   await page.getByTestId('sign-result').waitFor();
   assert.match(await page.getByTestId('rx-code').innerText(), /^PM-\d{6}-[0-9A-Z]{6}$/);
   assert.equal(signed.prescription.acknowledgements.length >= 2, true, 'lý do xác nhận được lưu cùng đơn');
-  const after = (await api('GET', `/api/patients/${await patientIdOf()}/visits?limit=50`)).json.visits.length;
-  assert.equal(after, before + 1, 'bấm đúp không tạo hai lượt khám');
+  const added = (await visitIds()).filter((id) => !before.has(id));
+  assert.equal(added.length, 1, `bấm đúp không tạo hai lượt khám, thực tế ${added.length} lượt mới`);
   const seconds = Number(/\((\d+) giây/.exec(await page.getByTestId('visit-seconds').innerText())[1]);
   assert.ok(seconds >= 1, 'đồng hồ phiên khám do server đo');
   await shot('13-sign-result');
