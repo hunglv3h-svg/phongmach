@@ -28,18 +28,19 @@ export function Shell({ auth, store, onLogout }: { auth: AuthState; store: Local
   const [screen, setScreen] = useState<Screen>('reception');
   const [visit, setVisit] = useState<Opened>();
   const [confirm, setConfirm] = useState<number>();
+  const [moreOpen, setMoreOpen] = useState(false);
   const { role } = auth.user;
   const clinical = role !== 'assistant';
 
-  const tabs: Array<{ id: Screen; label: string; show: boolean }> = [
+  const tabs: Array<{ id: Screen; label: string; show: boolean; more?: boolean }> = [
     { id: 'reception', label: 'Tiếp đón', show: true },
     { id: 'queue', label: 'Hàng chờ', show: true },
     { id: 'visit', label: visit ? `Đang khám: ${visit.context.patient.fullName}` : 'Khám bệnh', show: clinical && !!visit },
     { id: 'display', label: 'Màn hình chờ', show: true },
-    { id: 'gateway', label: 'Liên thông', show: true },
-    { id: 'metrics', label: 'Thời gian khám', show: clinical },
-    { id: 'audit', label: 'Nhật ký truy cập', show: role === 'owner' },
-    { id: 'scope', label: 'Phạm vi', show: true },
+    { id: 'gateway', more: true, label: 'Liên thông', show: true },
+    { id: 'metrics', more: true, label: 'Thời gian khám', show: clinical },
+    { id: 'audit', more: true, label: 'Nhật ký truy cập', show: role === 'owner' },
+    { id: 'scope', more: true, label: 'Phạm vi', show: true },
   ];
 
   // Còn mục chưa đồng bộ: không xóa dữ liệu khi đăng xuất, hỏi người dùng (OFF-6). Không có nút hủy dữ liệu chưa đồng bộ.
@@ -56,10 +57,23 @@ export function Shell({ auth, store, onLogout }: { auth: AuthState; store: Local
           <strong>{auth.tenant.name}</strong>
           <small data-testid="whoami">{auth.user.name} · {ROLE_LABEL[role]}</small>
         </div>
-        <nav aria-label="Chức năng">
+        <nav aria-label="Chức năng" className={moreOpen ? 'main-nav more-open' : 'main-nav'}>
           {tabs.filter((t) => t.show).map((t) => (
-            <button key={t.id} className={screen === t.id ? 'tab active' : 'tab'} onClick={() => setScreen(t.id)} data-testid={`tab-${t.id}`}>{t.label}</button>
+            <button
+              key={t.id}
+              className={`${screen === t.id ? 'tab active' : 'tab'}${t.more ? ' tab-more-item' : ''}`}
+              aria-current={screen === t.id ? 'page' : undefined}
+              onClick={() => { setScreen(t.id); setMoreOpen(false); }}
+              data-testid={`tab-${t.id}`}
+            >
+              <span className={`tab-icon icon-${t.id}`} aria-hidden="true" />
+              <span className="tab-label">{t.label}</span>
+            </button>
           ))}
+          <button className={moreOpen || tabs.some((t) => t.more && t.show && t.id === screen) ? 'tab tab-more-toggle active' : 'tab tab-more-toggle'} aria-expanded={moreOpen} onClick={() => setMoreOpen((o) => !o)} data-testid="tab-more">
+            <span className="tab-icon icon-more" aria-hidden="true" />
+            <span className="tab-label">Thêm</span>
+          </button>
         </nav>
         <SyncBar view={overview.view} open={listOpen} onToggle={() => setListOpen((o) => !o)} onSyncNow={() => void actions.syncNow()} />
         <button className="ghost" onClick={() => void logout()}>Đăng xuất</button>
@@ -78,6 +92,7 @@ export function Shell({ auth, store, onLogout }: { auth: AuthState; store: Local
         </div>
       )}
       {/* Màn hình chờ đặt ở nơi công cộng và chỉ có số thứ tự với chữ cái đầu: không hiện thông báo (có họ tên bệnh nhân) ở đó. Huy hiệu ở thanh trên vẫn còn. */}
+      <div className="content">
       {screen !== 'display' && <SyncNotices notices={overview.notices} onDismiss={overview.dismiss} onOpenList={() => setListOpen(true)} />}
       {listOpen && <SyncPanel view={overview.view} rows={overview.rows} actions={actions} onClose={() => setListOpen(false)} />}
       {screen === 'reception' && <Reception token={auth.token} />}
@@ -88,6 +103,7 @@ export function Shell({ auth, store, onLogout }: { auth: AuthState; store: Local
       {screen === 'metrics' && clinical && <Metrics auth={auth} />}
       {screen === 'audit' && role === 'owner' && <AuditLog token={auth.token} />}
       {screen === 'scope' && <Scope />}
+      </div>
     </div>
   );
 }

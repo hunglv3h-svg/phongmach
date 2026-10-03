@@ -110,6 +110,7 @@ export function Reception({ token }: { token: string }) {
 
   return (
     <main className="reception">
+      <h1 className="sr-only">Tiếp đón</h1>
       <section className="search-pane" aria-label="Tìm bệnh nhân">
         <label htmlFor="q" className="sr-only">Tìm bệnh nhân</label>
         <input
@@ -140,10 +141,10 @@ export function Reception({ token }: { token: string }) {
           {hintText && <span className="chip">{hintText}</span>}
         </p>
 
-        <ul id="results" role="listbox" className={fresh ? 'results' : 'results stale'} aria-label="Kết quả tìm kiếm" aria-busy={!fresh} data-testid="results">
+        <ul id="results" className={fresh ? 'results' : 'results stale'} aria-label="Kết quả tìm kiếm" aria-busy={!fresh} data-testid="results">
           {search.results.map((p, i) => (
-            <li key={p.id} role="option" aria-selected={i === active}>
-              <button className={i === active ? 'result active' : 'result'} disabled={!fresh} onClick={() => open(p)} onMouseMove={() => active !== i && setActive(i)} data-testid="result">
+            <li key={p.id}>
+              <button className={i === active ? 'result active' : 'result'} aria-current={i === active ? 'true' : undefined} disabled={!fresh} onClick={() => open(p)} onMouseMove={() => active !== i && setActive(i)} data-testid="result">
                 <span className="result-name">{p.fullName}</span>
                 <span className="result-meta">
                   {[p.phone, ageText(p.birthDate), p.cccdMasked].filter(Boolean).join(' · ')}

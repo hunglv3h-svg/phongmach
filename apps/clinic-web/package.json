@@ -17,6 +17,7 @@
     "e2e:cycles": "node e2e/offline-cycles.mjs"
   },
   "dependencies": {
+    "@fontsource/be-vietnam-pro": "^5.3.0",
     "@phongmach/catalogs": "workspace:*",
     "@phongmach/clinical": "workspace:*",
     "@phongmach/fhir-vn-model": "workspace:*",

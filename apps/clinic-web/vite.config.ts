@@ -33,7 +33,7 @@ export default defineConfig(({ mode }) => {
           // (`src/local/store.ts`), không đi qua service worker.
           navigateFallback: '/index.html',
           navigateFallbackDenylist: [/^\/api\//],
-          globPatterns: ['**/*.{js,css,html,png}'],
+          globPatterns: ['**/*.{js,css,html,png,woff2}'],
         },
       }),
     ],

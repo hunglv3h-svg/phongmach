@@ -315,3 +315,98 @@ tr.total td { background: var(--primary-soft); }
 .sync-notice.bad { background: var(--bad-bg); color: var(--danger); }
 .sync-notice.warn { background: var(--warn-bg); color: var(--warn-ink); }
 .sync-notice button { white-space: nowrap; }
+
+/* ============ UI v0.1 (thiết kế lại, theo Figma "PHONGMACH – Thiết kế lại giao diện") ============
+   Biểu tượng: Lucide (ISC), nhúng dạng mặt nạ CSS. Phông: Be Vietnam Pro (OFL) qua @fontsource, có trong bộ nhớ đệm ngoại tuyến. */
+:root {
+  --space-xs: .25rem; --space-sm: .5rem; --space-md: .75rem; --space-lg: 1rem; --space-xl: 1.5rem; --space-2xl: 2rem;
+  --radius-sm: 6px; --radius-lg: 16px;
+  --font: 'Be Vietnam Pro', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+body { font-family: var(--font); }
+.demo-banner { padding: .25rem 1rem; font-size: .75rem; }
+.content { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.content > main, .content > .page, .content > .visit, .content > .audit { flex: 1; }
+
+.tab { display: inline-flex; align-items: center; gap: .6rem; }
+.tab-icon { width: 22px; height: 22px; flex: none; background: currentColor; -webkit-mask: var(--ic) center / contain no-repeat; mask: var(--ic) center / contain no-repeat; }
+.tab-more-toggle { display: none; }
+.icon-reception { --ic: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2%22/%3E%3Ccircle cx=%229%22 cy=%227%22 r=%224%22/%3E%3Cpath d=%22M22 21v-2a4 4 0 0 0-3-3.87%22/%3E%3Cpath d=%22M16 3.13a4 4 0 0 1 0 7.75%22/%3E%3C/svg%3E"); }
+.icon-queue { --ic: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01%22/%3E%3C/svg%3E"); }
+.icon-visit { --ic: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M11 2v2M5 2v2M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1%22/%3E%3Cpath d=%22M8 15a6 6 0 0 0 12 0v-3%22/%3E%3Ccircle cx=%2220%22 cy=%2210%22 r=%222%22/%3E%3C/svg%3E"); }
+.icon-display { --ic: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Crect width=%2220%22 height=%2214%22 x=%222%22 y=%223%22 rx=%222%22/%3E%3Cpath d=%22M8 21h8M12 17v4%22/%3E%3C/svg%3E"); }
+.icon-gateway { --ic: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71%22/%3E%3Cpath d=%22M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71%22/%3E%3C/svg%3E"); }
+.icon-metrics { --ic: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%2210%22/%3E%3Cpath d=%22M12 6v6l4 2%22/%3E%3C/svg%3E"); }
+.icon-audit { --ic: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z%22/%3E%3C/svg%3E"); }
+.icon-scope { --ic: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%2210%22/%3E%3Cpath d=%22M12 16v-4M12 8h.01%22/%3E%3C/svg%3E"); }
+.icon-more { --ic: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M4 6h16M4 12h16M4 18h16%22/%3E%3C/svg%3E"); }
+
+/* Máy tính: cột điều hướng bên trái */
+@media (min-width: 1024px) {
+  .shell { flex-direction: row; align-items: stretch; }
+  .topbar { flex-direction: column; align-items: stretch; flex: 0 0 248px; width: 248px; border-bottom: 0; border-right: 1px solid var(--line); padding: var(--space-lg); gap: var(--space-lg); position: sticky; top: 0; align-self: flex-start; max-height: 100vh; overflow-y: auto; }
+  .brand { margin-right: 0; flex: 0 0 auto; }
+  .brand strong, .brand small { white-space: normal; }
+  .main-nav { flex-direction: column; flex-wrap: nowrap; gap: var(--space-xs); }
+  .main-nav .tab { justify-content: flex-start; width: 100%; padding: 0 var(--space-md); border-radius: var(--radius); }
+  .main-nav .tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar .sync-status { justify-content: flex-start; }
+  .topbar > button.ghost { margin-top: auto; text-align: left; }
+}
+
+/* Điện thoại: thanh tab ở đáy, mục phụ vào "Thêm" */
+@media (max-width: 759px) {
+  .topbar { flex-wrap: wrap; padding: var(--space-sm) var(--space-lg); }
+  .brand { flex: 1 1 60%; }
+  .content { padding-bottom: 76px; }
+  .main-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 12; background: var(--surface); border-top: 1px solid var(--line); display: flex; flex-wrap: nowrap; gap: 0; padding: var(--space-xs) var(--space-xs) calc(var(--space-xs) + env(safe-area-inset-bottom)); }
+  .main-nav .tab { flex: 1 1 0; min-width: 0; flex-direction: column; justify-content: center; gap: 2px; min-height: 58px; padding: var(--space-xs); font-size: .7rem; border-radius: var(--radius); }
+  .main-nav .tab-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .main-nav .tab.active { background: transparent; color: var(--primary); }
+  .tab-more-toggle { display: inline-flex; }
+  .tab-more-item { display: none; }
+  .main-nav.more-open { flex-wrap: wrap; }
+  .main-nav.more-open .tab-more-item { display: inline-flex; order: -1; flex: 1 0 50%; flex-direction: row; justify-content: flex-start; gap: .6rem; font-size: .95rem; min-height: 48px; padding: 0 var(--space-lg); }
+  .sync-panel { bottom: 0; }
+  .checkin .primary { position: sticky; bottom: calc(68px + env(safe-area-inset-bottom)); box-shadow: 0 -6px 14px var(--bg); z-index: 5; min-height: 52px; }
+}
+
+/* Tiếp đón */
+.allergy-alert { background: var(--bad-bg); color: var(--danger); padding: var(--space-md) var(--space-lg); border-radius: var(--radius); margin: 0 0 var(--space-md); }
+.result { border-radius: var(--radius); }
+.result.active { border-width: 2px; }
+
+/* Hàng chờ */
+.queue-row { border-radius: var(--radius-lg); padding: var(--space-md) var(--space-lg); gap: var(--space-lg); }
+.queue-number { font-family: var(--font); font-size: 1.75rem; min-width: 4.5rem; }
+.queue-row.in-exam { border-width: 2px; }
+
+/* Màn hình chờ cho TV: số đang gọi rất lớn */
+.display { background: #0e1819; color: #e6f0f0; }
+.display h2 { color: #93a9ac; letter-spacing: .08em; text-transform: uppercase; font-size: 1.1rem; }
+.display-grid.big { grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); }
+.display-grid.big .display-cell { background: #12383a; border: 3px solid #2dd4bf; border-radius: var(--radius-lg); padding: var(--space-xl); color: #2dd4bf; }
+.display-grid.big .display-cell b { font-family: var(--font); font-size: clamp(5rem, 15vw, 11rem); font-weight: 700; }
+.display-grid.big .display-cell span { color: #e6f0f0; font-size: 1.75rem; letter-spacing: .12em; }
+.display-cell b { font-family: var(--font); }
+
+/* Chỉnh sau lần chụp thử: cột bên cao đủ khung, thanh trên điện thoại gọn hơn */
+@media (min-width: 1024px) {
+  .topbar { position: static; align-self: stretch; max-height: none; overflow: visible; }
+}
+@media (max-width: 759px) {
+  .demo-banner { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: .7rem; padding: .2rem .75rem; }
+  .topbar { gap: 0 var(--space-md); padding: var(--space-sm) var(--space-lg); }
+  .brand small { display: none; }
+  .brand { flex: 1 1 auto; }
+  .topbar .sync-status { flex: 0 1 auto; }
+}
+
+/* Menu "Thêm" trên điện thoại: mỗi mục phụ một hàng, hàng tab chính giữ nguyên chiều rộng */
+@media (max-width: 759px) {
+  .main-nav.more-open .tab-more-item { flex: 1 0 100%; }
+}
+/* Khám bệnh: cột bên trái chiếm 248px nên chỉ dùng 3 cột khi đủ rộng */
+@media (min-width: 1024px) and (max-width: 1439px) {
+  .visit { grid-template-columns: 1fr 1fr; grid-template-areas: 'head head' 'exam rx' 'side side'; }
+}

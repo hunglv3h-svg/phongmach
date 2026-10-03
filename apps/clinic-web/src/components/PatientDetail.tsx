@@ -1,3 +1,4 @@
+import { allergyClassLabel } from '@phongmach/catalogs';
 import { PRIORITIES, PRIORITY_LABEL, SPECIALTIES, SPECIALTY_LABEL, type AllergyView, type QueuePriority, type Specialty } from '@phongmach/clinical';
 import type { PatientSummary } from '@phongmach/fhir-vn-model';
 import { ageInYears } from '@phongmach/rules';
@@ -103,6 +104,11 @@ export function PatientDetail({ token, summary, onQueued }: { token: string; sum
     <article className="card" aria-labelledby="pt-name" data-testid="patient-detail">
       <h2 id="pt-name">{patient.fullName}</h2>
       {error && <p className="error" role="alert">{error}</p>}
+      {allergies && allergies.length > 0 && (
+        <p className="allergy-alert" role="note" data-testid="allergy-alert">
+          <strong>Dị ứng thuốc:</strong> {allergies.map((a) => (a.kind === 'class' ? allergyClassLabel(a.value) : a.label)).join(', ')}
+        </p>
+      )}
       <dl className="facts">
         <div><dt>Điện thoại</dt><dd>{patient.phone ?? '—'}</dd></div>
         <div><dt>CCCD</dt><dd>{patient.cccdMasked ?? '—'}</dd></div>
