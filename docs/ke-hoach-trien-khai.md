@@ -1,6 +1,6 @@
 # Kế hoạch triển khai chi tiết — PHONGMACH
 
-Cập nhật 03/10/2026 (lần 4). Dựa trên ba nguồn:
+Cập nhật 03/10/2026 (lần 5). Dựa trên ba nguồn:
 
 1. Báo cáo "Quản lý Phòng mạch Việt Nam" v2.0 (29/09/2026), viết cho nhà đầu tư.
 2. Tài liệu nội bộ "Phân tích – Kế hoạch triển khai SaaS Quản lý Phòng mạch" v1.0 (29/09/2026, 34 trang), viết tắt **TL34**.
@@ -8,7 +8,7 @@ Cập nhật 03/10/2026 (lần 4). Dựa trên ba nguồn:
 
 **Quyết định của chủ dự án (02/10/2026):** làm sớm và cắt phạm vi; nhiệm vụ là ra MVP nhanh để nhà đầu tư được thuyết phục hơn.
 Hệ quả: mục 5 và 6 được viết lại quanh hai cột mốc MVP, **M0 (13/11/2026, trình nhà đầu tư)** và **M1 (31/03/2027, pilot)**.
-Đội có sẵn từ 05/10 (xác nhận 02/10). **M0-S1, M0-S2 và phần ngoại tuyến của M0-S3 đã làm xong trước lịch**; trạng thái ở mục 5.6, 5.7 và 5.9.
+Đội có sẵn từ 05/10 (xác nhận 02/10). **M0-S1, M0-S2, phần ngoại tuyến của M0-S3 và nút Zalo mô phỏng đã làm xong trước lịch**; trạng thái ở mục 5.6, 5.7 và 5.9.
 
 Quy ước độ tin cậy:
 
@@ -244,7 +244,7 @@ Cắt mạnh để làm kịp 6 tuần, giữ những gì chứng minh lời h�
 | Kê đơn | Đơn mẫu, kê lại một nút, kiểm tra trùng hoạt chất / dị ứng / số ngày tối đa (30 ngày, bệnh mạn tính 90 ngày), in A5 có mã QR | **Ký số** ("ký mô phỏng", chưa gọi nhà cung cấp) | Tương tác thuốc đầy đủ, đơn thuốc cổ truyền |
 | Liên thông cổng đơn thuốc | Bộ nối với giao diện chuẩn, hàng đợi gửi, trạng thái từng đơn (đã ký / chờ gửi / đã gửi / lỗi), thử lại, màn hình "đơn chưa gửi được" | **Cổng quốc gia mô phỏng**, có nút chèn lỗi để trình diễn thử lại, cho đến khi có tài liệu API và sandbox (TL34 Q1) | Gửi lên cổng thật |
 | Ngoại tuyến | Tiếp đón, khám, kê đơn, in khi mất mạng; đồng bộ khi có mạng; 0 mất, 0 trùng; kịch bản ngắt mạng ngay trên sân khấu. **Đã làm (mục 5.9)**, trên từng máy: tìm trong hồ sơ trên máy, tạo bệnh nhân, cấp số tạm, gọi vào khám, khám, ký, in và in lại; kho trên máy có mã hóa; M0-2 đạt; đoạn ngắt mạng trên sân khấu làm trên một máy (N5) | | Chờ ký và gửi khi mất mạng ở mức đầy đủ; giải quyết xung đột sửa đồng thời (M0 chỉ phát hiện và báo); cache toàn bộ 20.000 bệnh nhân; hai máy thấy nhau khi phòng khám mất Internet (N5, T-OFF-3); mã PIN cho kho trên máy (quyết định 02/10) |
-| Zalo | | Nút "gửi đơn qua Zalo" hiện bản xem trước tin nhắn, không gửi | ZNS thật, nhắc lịch |
+| Zalo | | Nút "gửi đơn qua Zalo" hiện bản xem trước tin nhắn, không gửi. **Đã làm (mục 5.9)**: tin chỉ có tên phòng khám, tên bệnh nhân, mã đơn, ngày kê và số nhận đã che; không thuốc, không chẩn đoán; không gọi mạng, mở được cả khi mất mạng | ZNS thật, nhắc lịch; tin có nội dung đơn (cần bệnh nhân đồng ý, mẫu ZNS được duyệt và ý kiến pháp chế: T-ZALO, T-CONSENT) |
 | Thu tiền | | | Cả nhóm: phiếu thu, QR, sổ thu, hóa đơn điện tử (sang M1 và Giai đoạn 2) |
 | Tuân thủ | Cách ly hai phòng khám demo; nhật ký truy cập xem được trên màn hình quản trị; thời gian từng phiên khám hiển thị | | Đồng ý điện tử đầy đủ, xuất/xóa theo yêu cầu, bộ hồ sơ DPIA, phân quyền chi tiết |
 | Hạ tầng | Medplum 5.2.0 + PostgreSQL 16 + Redis, trên hạ tầng nhà cung cấp trong nước nếu có tài khoản thử từ tuần 2 (Q16) | | HA, vùng thứ hai, PITR (đo riêng ở T3) |
@@ -966,18 +966,30 @@ M0-S3 (02–13/11) được làm trước lịch, ngay sau M0-S2. Phần ngoại
 | Quyền và mục bị từ chối khi đồng bộ (OFF-7) | Xong phần **phát hiện và báo**; giải quyết xung đột ngoài M0 | 409: giữ bản khám trên máy, in lại được, không gửi lại, không ghi đè. 422 quy tắc: bác sĩ ghi lý do rồi gửi lại cùng `clientUuid`. Lỗi khác: hiện nguyên thông điệp. Bài e2e hai máy `offline-conflict.mjs` (12 bước) |
 | Chỉ báo mạng, danh sách "Chờ đồng bộ", thông báo | Xong | `SyncBar`, `SyncPanel`: "Có mạng" hoặc "Mất mạng", số mục chờ ("đang đếm" trước lần đếm đầu), huy hiệu "N cần xử lý" không tắt được, thông báo có họ tên không hiện ở màn hình chờ |
 | Bài 20 chu kỳ ngắt và khôi phục mạng (M0-2) | **Đạt** | Xem "Kết quả M0-2" bên dưới |
-| Nhãn và tài liệu sau ngoại tuyến (M0-5) | Xong | Trang "Phạm vi" và dải nhãn nói đúng hiện trạng theo cả hai chiều; `e2e:visit` bước 22 kiểm từng khối, 6 đột biến đều đỏ ở đúng bước đó (mục 5.8, "Lát 6 xong") |
+| Nhãn và tài liệu sau ngoại tuyến (M0-5) | Xong | Trang "Phạm vi" và dải nhãn nói đúng hiện trạng theo cả hai chiều; `e2e:visit` bước 22 (bước 23 từ M0-ZALO) kiểm từng khối, 6 đột biến đều đỏ ở đúng bước đó (mục 5.8, "Lát 6 xong") |
 | Màn hình nhật ký truy cập cho quản trị | Xong từ M0-S1 | Mục 5.6 |
-| Zalo mô phỏng (nút, bản xem trước tin nhắn) | **Chưa** | Chưa có dòng mã nào. Nhãn trên màn hình đã chuyển Zalo từ "mô phỏng" sang "chưa có" cho tới khi làm |
+| Zalo mô phỏng (nút, bản xem trước tin nhắn) | Xong (M0-ZALO, PR #11) | Nút có huy hiệu MÔ PHỎNG ở màn hình kết quả ký, cả khi có mạng lẫn khi ký lúc mất mạng; hộp thoại ghi "MÔ PHỎNG: không có tin nhắn nào được gửi". Tin không có thuốc hay chẩn đoán, số nhận đã che; bài e2e ghi mọi yêu cầu mạng từ lúc bấm tới lúc đóng. Trang "Phạm vi" và dải nhãn đưa Zalo trở lại "Mô phỏng". Xem đoạn "M0-ZALO" bên dưới |
 | Phiên thử với 3 bác sĩ (M0-1) | **Chưa**: cần người thật | Đồng hồ phiên khám và trang số đo đã có (mục 5.7) |
 | Kịch bản 10 phút, bản dự phòng, diễn tập hai lần (M0-6) | **Chưa** | `README.md` có các bước đi qua bằng tay, gồm đoạn ngắt mạng trên một máy; chưa có bài diễn tập tự động, video hay máy dự phòng |
 | T6 đầy đủ (100 chu kỳ, đồng bộ 40 ca trong 60 giây) | **Chưa** | Một lần chạy 100 chu kỳ đạt; vế "40 ca trong 60 giây" chưa đo và cần T-QUOTA trước (bài học 6) |
 
+**M0-ZALO (03/10/2026, PR #11).** Thiết kế được chủ dự án duyệt cùng ngày, gồm ba điểm chốt: e2e lọc đúng các yêu cầu nền của màn hình thay vì đổi ứng dụng cho dễ kiểm; che số còn 3 số đầu và 3 số cuối; thêm một bước vào `offline-sign.mjs`.
+
+- Hàm thuần `zaloPrescriptionMessage` (`packages/clinical/src/zalo.ts`, dùng chung cho giao diện và BFF) nhận cả đơn nhưng chỉ lấy năm trường: tên phòng khám, tên bệnh nhân, mã đơn, ngày kê (giờ Việt Nam) và đường dẫn xem đơn (M0 ghi "(đường dẫn sẽ có ở M1)"). Số nhận che bằng `maskPhone` (`091****678`); số không hợp lệ thì không hiện gì. M1 dùng `params` làm tham số mẫu ZNS. Mỗi trường bỏ ký tự điều khiển, xuống dòng, ký tự đảo chiều và độ rộng 0: tên do người dùng nhập không thêm được dòng nào vào tin (ví dụ một dòng "Xem đơn tại:" giả).
+- Thành phần `ZaloPreview` chỉ nhận đơn và tên phòng khám, không nhận token hay hàng đợi. Vì vậy nó không gọi mạng, không ghi hàng đợi đồng bộ, không sinh dòng nhật ký truy cập, và mở được khi mất mạng [Đã đọc mã]. Hộp thoại chỉ có nút "Đóng" (Esc cũng đóng) và ghi lý do không có thuốc hay chẩn đoán.
+- Kiểm thử: 47 kiểm thử đơn vị cho hàm dựng tin (nội dung; ngày theo giờ Việt Nam; 27 chuỗi không được có mặt: thuốc, cách dùng, chẩn đoán, lời dặn, lý do xác nhận, mã quốc gia, bác sĩ ký, CCCD, ngày sinh; che số với 5 dạng số và 4 chuỗi không hợp lệ; thoát ký tự); 7 kiểm thử thành phần (nhãn, che số, thẻ HTML hiện dạng chữ, chỉ có nút "Đóng"). `e2e:visit` bước 12 (bấm nút, nhãn, số đã che, không thuốc hay chẩn đoán, không yêu cầu mạng) và bước 23 (Zalo đúng khối trên trang "Phạm vi", dải nhãn khớp). `e2e:offline` bước 8 (mất mạng: mở được, đúng 0 yêu cầu).
+- Cách kiểm "không yêu cầu mạng" khi có mạng [Đã đọc mã]: màn hình kết quả ký tự hỏi trạng thái liên thông mỗi 2 giây, và máy tải lại hàng chờ, nạp trước hồ sơ mỗi 30 giây. Bài ghi mọi yêu cầu của trang (mọi địa chỉ, mọi phương thức) từ lúc bấm tới lúc đóng và chỉ bỏ qua đúng các GET đó: `/api/prescriptions/<id của đơn này>`, `/api/queue`, `/api/queue/prefetch`. Khi mất mạng không còn việc nền nào (hàng đợi không gửi khi trình duyệt báo mất mạng), nên bài đòi đúng 0.
+- Đột biến (12) [Đã đo, bản dev, mỗi lần đếm số bài thật sự chạy]. Bốn đột biến prompt yêu cầu đều đỏ: bỏ nhãn trong hộp thoại (1 kiểm thử thành phần, `e2e:visit` bước 12, `e2e:offline` bước 8); đưa tên thuốc vào tin (6 kiểm thử đơn vị, 1 thành phần, bước 12); hiện số đầy đủ (9 đơn vị, 1 thành phần, bước 12, bước 8); bấm nút thì gọi `POST /api/zalo/send` (bước 12 và bước 8; kiểm thử thành phần vẫn xanh vì không bấm được nút trong HTML tĩnh). Thêm bảy đột biến: bỏ huy hiệu MÔ PHỎNG trên nút (thành phần, bước 12); bỏ lọc ký tự định dạng và ký tự điều khiển (1 đơn vị: phép gộp khoảng trắng vẫn chặn được xuống dòng, nên bài xuống dòng xanh là đúng); bỏ hẳn bộ lọc (4 đơn vị); hiển thị dòng tin dạng HTML (thành phần); dải nhãn ghi "Chưa có: Zalo"; trang "Phạm vi" bỏ Zalo khỏi "Mô phỏng"; khối "Chưa làm" ghi "Gửi đơn qua Zalo" là chưa làm (ba cái cuối đỏ ở bước 23).
+- **Điểm mù đã đo:** đột biến gọi `GET /api/queue` khi bấm nút (trùng một yêu cầu nền) làm bước 12 xanh. Bài chỉ đỏ ở bước cuối (lỗi 401 trong console) vì lời gọi đó không có token. Một lời gọi trùng hệt yêu cầu nền và có token thì không bài nào bắt được [Phân tích]. Chấp nhận, vì thành phần không có token để gọi.
+- Đi khác thiết kế: (1) sửa phép đếm của `e2e:visit` (bấm đúp) và `e2e:offline` (mất phản hồi khi ký) thành so tập id lượt khám, commit riêng. Hai bước này đếm bằng độ dài danh sách mà BFF giới hạn 50 lượt; bệnh nhân demo "Nguyễn Văn An" đã có 50 lượt sau nhiều lần chạy e2e trên máy dev, nên `e2e:offline` hỏng ở bước đó dù ứng dụng đúng. CI dựng cơ sở dữ liệu mới nên không gặp. Việc này ngoài phạm vi prompt nhưng chặn việc kiểm trên máy dev. (2) Thêm bước vào `offline-sign.mjs` (chủ dự án đồng ý).
+- Câu chữ của tin ("Kính gửi Quý khách …, Phòng khám đã kê đơn thuốc cho Quý khách ngày …") mới do đội viết, chưa ai ngoài đội duyệt. Giới hạn độ dài tham số của mẫu ZNS chưa biết [Chưa kiểm chứng]; hàm hiện không cắt chuỗi.
+
 Kiểm thử đã chạy [Đã đo, 03/10/2026, mã của lát 6; máy dev Windows 11, i7-11800H, 32 GB RAM, Medplum 5.2.0 trong Docker Desktop]: kiểu đạt cả 7 gói; 370 kiểm thử đơn vị = 34 (mô hình) + 16 (danh mục) + 27 (quy tắc) + 36 (clinical) + 4 (in) + 163 (web) + 90 (BFF); 41 kiểm thử tích hợp với Medplum thật; e2e 13 + 24 + 13 + 12 bước trên Chromium thật (`e2e`, `e2e:visit`, `e2e:offline`, `e2e:conflict`), đạt trên cả bản dev và bản build; bài 20 chu kỳ 11 bước trên bản build. So với lúc bắt đầu M0-S3 (217 đơn vị, 35 tích hợp, e2e 13 + 21 bước): thêm 153 kiểm thử đơn vị, 6 tích hợp, 3 bước ở `e2e:visit` và ba bài e2e mới.
 
-- Đột biến: 111 đột biến ở lát 1–5 (5 + 7 + 9 + 17 + 15 ở lát 1 đến 3b; 45 qua kiểm thử đơn vị và 10 qua bài e2e hai máy ở lát 4; 3 qua bài 20 chu kỳ ở lát 5) và 6 ở lát 6. Sau khi sửa các ca nêu ở bài học 3, mỗi đột biến làm ít nhất một bài đỏ.
+- Đột biến: 111 đột biến ở lát 1–5 (5 + 7 + 9 + 17 + 15 ở lát 1 đến 3b; 45 qua kiểm thử đơn vị và 10 qua bài e2e hai máy ở lát 4; 3 qua bài 20 chu kỳ ở lát 5) và 6 ở lát 6. Sau khi sửa các ca nêu ở bài học 3, mỗi đột biến làm ít nhất một bài đỏ. M0-ZALO thêm 12 đột biến (đoạn "M0-ZALO" ở trên).
 - CI trên `main` (commit `43e4b6d`) xanh cả ba job: kiểu, đơn vị và build 40 giây; tích hợp 1 phút 15 giây; e2e 3 phút 23 giây, trong đó có bài 20 chu kỳ [Đã đo].
-- Gói JS của bản build: 312 KB (nén 96,7 KB) trước M0-S3, 510,5 KB (nén 163,8 KB) sau lát 5, 511,7 KB (nén 164,2 KB) sau lát 6 [Đã đo]. Phần tăng của lát 6 là chữ trên trang "Phạm vi".
+- Gói JS của bản build: 312 KB (nén 96,7 KB) trước M0-S3, 510,5 KB (nén 163,8 KB) sau lát 5, 511,7 KB (nén 164,2 KB) sau lát 6, 514,9 KB (nén 165,2 KB) sau M0-ZALO [Đã đo, bản build của CI]. Phần tăng của lát 6 là chữ trên trang "Phạm vi".
+- Sau M0-ZALO [Đã đo, 03/10/2026, cùng máy dev]: kiểu đạt cả 7 gói; 424 kiểm thử đơn vị (thêm 47 ở `clinical`, 7 ở `clinic-web`); 41 kiểm thử tích hợp (không đổi, chạy lại ở CI); e2e 13 + 25 + 14 + 12 bước, đạt trên bản dev (máy dev) và bản build (CI). CI của PR #11 xanh cả ba job: kiểu, đơn vị và build 47 giây; tích hợp 1 phút 44 giây; e2e 3 phút 7 giây, trong đó có bài 20 chu kỳ.
 
 **Kết quả M0-2: đạt [Đã đo].** Tiêu chí (mục 5.3): 20 lần ngắt và khôi phục mạng liên tiếp, 0 bản ghi mất, 0 bản ghi trùng.
 
@@ -1013,6 +1025,7 @@ Giới hạn đã biết, cần quyết định. Mục (a) nên quyết trước
 - (i) **Gói JS tăng 312 → 512 KB (nén 96,7 → 164 KB) trong M0-S3**, trong đó Dexie khoảng 104 KB (nén 35 KB). Thay bằng `idb` (khoảng 1 KB) là khả năng đã nêu ở lát 2, khi kho chỉ đọc và ghi theo khóa. Từ lát 3b kho còn dùng chỉ mục phụ (`seq`, `status`, `day`), truy vấn theo khoảng, giao dịch nhiều bảng và nâng version [Đã đọc mã: `local/store.ts`]; `idb` làm được các việc này nhưng phải viết lại lớp kho và chạy lại toàn bộ đột biến của kho. Chỉ nên làm nếu số đo trên máy tính bảng thật cho thấy cần.
 - (j) **Chưa thử ngoài Chromium không giao diện [Chưa kiểm chứng]:** F12 trên trình duyệt có giao diện, máy tính bảng thật, Safari (IndexedDB, Web Locks, service worker, hộp thoại in). Phiên thử với bác sĩ là lần đầu ngoại tuyến chạy trên thiết bị thật.
 - (k) **Rủi ro còn lại của "lưu bền rồi mới in":** trình duyệt sập giữa lúc lưu mục và lúc in thì lượt khám tự gửi mà không có tờ đơn và không có dấu "chưa in" (OFF-8, rủi ro còn lại 4). Dòng nhật ký in có thể ghi hai lần khi mất phản hồi (đã chấp nhận ở OFF-1).
+- (l) **Tin Zalo, kể cả khi không có thuốc hay chẩn đoán, có thể vẫn là dữ liệu sức khỏe [Phân tích, cần pháp chế].** Tên bệnh nhân, tên phòng khám (thường có chuyên khoa, ví dụ "Nhi") và mã đơn đủ cho biết người đó đã đi khám và được kê đơn, và gửi qua Zalo là chuyển dữ liệu cho bên thứ ba. Trước T-ZALO và T-CONSENT (M1), pháp chế cần trả lời: tin tối thiểu được gồm những trường nào; có cần đồng ý riêng cho kênh Zalo không; tin này có thuộc diện dữ liệu nhạy cảm của Q8 không. Không chặn M0, vì bản xem trước không gửi gì.
 
 ---
 
