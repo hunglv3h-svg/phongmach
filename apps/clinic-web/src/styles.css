@@ -282,7 +282,7 @@ tr.total td { background: var(--primary-soft); }
   button { transition: background-color .12s, border-color .12s; }
 }
 
-/* M0-S3: ngoại tuyến (lát 3b). Chỉ báo tối thiểu; danh sách chờ đồng bộ đầy đủ ở lát 4. */
+/* M0-S3: ngoại tuyến (lát 3b). Khung chỉ báo, hộp thoại đăng xuất, nhãn số tạm, ghi chú "cần mạng". */
 .sync-status { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; }
 .dialog-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, .35); display: grid; place-items: center; z-index: 20; padding: 1rem; }
 .dialog { max-width: 32rem; width: 100%; }

@@ -1,19 +1,20 @@
 # PHONGMACH
 
 Phần mềm quản lý phòng mạch tư nhân (Việt Nam). Kế hoạch triển khai: [`docs/ke-hoach-trien-khai.md`](docs/ke-hoach-trien-khai.md).
-Đang ở **M0-S2** (hàng chờ, khám một trang, kê đơn, in, liên thông mô phỏng): MVP trình nhà đầu tư dự kiến 13/11/2026.
+Đang ở **M0-S3**: phần ngoại tuyến đã xong (mất mạng vẫn tiếp đón, khám, ký, in trên từng máy; có mạng lại thì tự đồng bộ, không mất, không trùng), làm trên nền M0-S1 và M0-S2 (tiếp đón, hàng chờ, khám một trang, kê đơn, in, liên thông mô phỏng). Còn lại tới M0: Zalo mô phỏng, phiên thử với bác sĩ thật, kịch bản trình diễn và bản dự phòng (kế hoạch, mục 5.9). MVP trình nhà đầu tư dự kiến 13/11/2026.
 
 ## Cấu trúc
 
 | Thư mục | Nội dung |
 |---|---|
-| `apps/clinic-web` | Ứng dụng phòng khám (PWA React + TypeScript + Vite): tiếp đón, hàng chờ, màn hình chờ, khám một trang, kê đơn, in, liên thông, thời gian khám, nhật ký truy cập |
-| `services/bff` | BFF / Domain API (Fastify): lớp duy nhất gọi Medplum; tenant lấy từ phiên; hộp thư đi (outbox) và cổng đơn thuốc mô phỏng; in A5 có QR (mẫu ở `packages/print`) |
+| `apps/clinic-web` | Ứng dụng phòng khám (PWA React + TypeScript + Vite): tiếp đón, hàng chờ, màn hình chờ, khám một trang, kê đơn, in, liên thông, thời gian khám, nhật ký truy cập. Ngoại tuyến nằm ở `src/local`: kho mã hóa trên máy (IndexedDB), hàng đợi đồng bộ, bộ đệm hồ sơ, chỉ báo mạng và danh sách "Chờ đồng bộ". Bài e2e ở `e2e/` |
+| `services/bff` | BFF / Domain API (Fastify): lớp duy nhất gọi Medplum; tenant lấy từ phiên; hộp thư đi (outbox) và cổng đơn thuốc mô phỏng; in A5 có QR (mẫu ở `packages/print`); nhận thao tác làm lúc mất mạng (giờ máy khách, số tạm, nạp trước hàng chờ, ghi nhận lần in) |
 | `packages/fhir-vn-model` | Mô hình dữ liệu Việt Nam trên FHIR: chuẩn hóa tên không dấu, số điện thoại, CCCD, dựng `Patient` |
 | `packages/catalogs` | Danh mục **minh họa** (chưa duyệt y khoa): ICD-10, thuốc, đơn mẫu; tìm không dấu; sinh cách dùng và số lượng |
-| `packages/rules` | Quy tắc kê đơn (hàm thuần, dùng chung giao diện và BFF): trùng hoạt chất, dị ứng, số ngày tối đa, thiếu CCCD, trẻ em |
-| `packages/clinical` | Hàng chờ, sinh hiệu, dị ứng/tiền sử, đơn thuốc, outbox trên FHIR R4; gói hoàn tất lượt khám chạy lại được |
+| `packages/rules` | Quy tắc kê đơn (hàm thuần, dùng chung giao diện và BFF): trùng hoạt chất, dị ứng, số ngày tối đa, thiếu CCCD, trẻ em, "chưa rõ dị ứng" khi mở hồ sơ lúc mất mạng |
+| `packages/clinical` | Hàng chờ, sinh hiệu, dị ứng/tiền sử, đơn thuốc, outbox trên FHIR R4; gói hoàn tất lượt khám chạy lại được; đo thời gian phiên khám theo giờ máy chủ hoặc giờ máy khách (lượt làm lúc mất mạng) |
 | `packages/print` | Mẫu in đơn A5 có mã QR, dùng chung cho BFF (in khi có mạng) và trình duyệt (in từ dữ liệu trên máy khi mất mạng) |
+| `infra` | `dev-up.sh` (dựng và chạy môi trường dev), `e2e-cycles.mjs` (bài 20 chu kỳ ngắt và khôi phục mạng trên phòng khám thử riêng) |
 | `infra/medplum` | Backend Medplum (Docker Compose), smoke test, thử nghiệm hiệu năng và vòng đời phòng khám |
 | `docs` | Kế hoạch triển khai |
 
@@ -68,7 +69,14 @@ infra/dev-up.sh --stop
 1. Đăng nhập **Phụ tá Nguyễn Thị Lan** (phòng khám Nội) → Tiếp đón → gõ `nguyen van an` → thấy dị ứng Penicillin → "Cấp số". Thêm "Trần Thị Bình" với ưu tiên "Đã hẹn": Bình được gọi trước. Mở "Màn hình chờ".
 2. Đăng xuất, đăng nhập **BS. Lê Thị Thu Hà** → Hàng chờ → "Gọi vào khám" → nhập sinh hiệu, gõ tắt `viem hong` → chọn đơn mẫu "Viêm họng cấp có chỉ định kháng sinh". Hệ thống cảnh báo **dị ứng** (amoxicillin) và, nếu thêm paracetamol hai dạng, **trùng hoạt chất**; phải ghi lý do mới ký được. "Ký & In" mở hộp thoại in đơn A5 có mã QR.
 3. "Liên thông": bấm "Mất kết nối cổng", kê tiếp cho Bình bằng nút "Kê lại đơn này". Đơn đã ký hiện "Chờ gửi lại" kèm lý do. Bật lại cổng: đơn tự gửi được, không mất.
-4. Đăng nhập chủ phòng khám → "Thời gian khám" (đo ở máy chủ, so với mục tiêu 60/120 giây) và "Nhật ký truy cập". Trang "Phạm vi" nêu rõ cái gì thật, cái gì mô phỏng, cái gì chưa làm.
+4. **Ngắt mạng trên một máy.** Ngoại tuyến tính theo từng máy (hai máy không thấy nhau khi mất Internet), nên cả đoạn này làm trên máy bác sĩ, bác sĩ tự tiếp đón người mới đến. Vẫn là BS. Hà:
+   - Lúc còn mạng, cấp số cho một bệnh nhân rồi mở "Hàng chờ" một lần: máy nạp trước hồ sơ và dị ứng của người đang chờ.
+   - Ngắt mạng của trình duyệt: DevTools (F12) → Network → "Offline" (mọi thứ chạy trên localhost nên rút dây mạng không có tác dụng). Thanh trên đổi từ "Có mạng" sang "Mất mạng".
+   - "Tiếp đón" → gõ tên người đang chờ: ô tìm ghi "Mất mạng: chỉ tìm trong N hồ sơ trên máy này", vẫn thấy dị ứng đã nạp. Tạo một bệnh nhân mới → "Cấp số": số có nhãn "(tạm)", hiện cả ở "Màn hình chờ".
+   - "Hàng chờ" → "Gọi vào khám" người vừa tạo: máy chưa có dữ liệu dị ứng của người này nên đòi bác sĩ hỏi bệnh nhân và ghi lý do. "Ký & In": đơn A5 in từ dữ liệu trên máy, có nhãn "KÝ KHI MẤT MẠNG", mã đơn sinh ngay trên máy. Thanh trên ghi số mục chờ đồng bộ.
+   - Bỏ "Offline": các mục tự gửi, thanh trên về "Đã đồng bộ hết". Máy chủ có đúng một bệnh nhân, một lượt khám, một đơn trùng mã đã in, và giữ số tạm nếu chưa ai lấy số đó.
+   - Làm đoạn này trên bản build (`preview`, xem trên): chỉ bản build có service worker giữ vỏ ứng dụng, nên tải lại trang trong lúc mất mạng vẫn mở được ứng dụng.
+5. Đăng nhập chủ phòng khám → "Thời gian khám" (đo ở máy chủ; lượt làm lúc mất mạng đo bằng đồng hồ máy khám và đếm riêng; so với mục tiêu 60/120 giây) và "Nhật ký truy cập". Trang "Phạm vi" nêu rõ cái gì thật, cái gì mô phỏng, cái gì chưa làm.
 
 ## Kiểm thử
 
@@ -95,9 +103,18 @@ e2e mặc định mở `http://127.0.0.1:5173`; giao diện ở cổng khác th�
 - **Chưa có xác thực thật** (T-IDP). BFF chỉ chạy khi đặt `DEMO_AUTH=1`, chỉ lắng nghe trên localhost, và chỉ nên dùng với dữ liệu giả.
 - **Mô phỏng**: chữ ký số (băm nội dung, chưa gọi nhà cung cấp) và cổng đơn thuốc quốc gia (bộ nối giả có nút chèn lỗi). Mọi nơi hiển thị đều có nhãn.
 - Danh mục ICD-10, thuốc và đơn mẫu là **tập con minh họa**, chưa được cố vấn y khoa duyệt, không dùng lâm sàng.
-- Chưa có: ngoại tuyến (M0-S3, đang làm), Zalo, thu tiền (xem kế hoạch, mục 5 và 6).
-- Bản nháp lượt khám lưu trên máy trong IndexedDB, mã hóa AES-GCM, mỗi người dùng một kho, xóa cả kho lẫn khóa khi đăng xuất. Khóa nằm cùng máy với dữ liệu nên **chưa** bảo vệ được trước người dùng chung trình duyệt hay người lấy được ổ đĩa (kế hoạch, OFF-5); cần xác thực thật (T-IDP).
+- Chưa có: Zalo (kể cả phần mô phỏng), thu tiền (xem kế hoạch, mục 5 và 6).
+- **Ngoại tuyến** chạy thật, trong phạm vi sau (kế hoạch, mục 5.8 và 5.9):
+  - Tính theo **từng máy**: khi phòng khám mất Internet, hai máy không thấy nhau; người được cấp số ở máy lễ tân chỉ hiện ở máy bác sĩ khi có mạng lại.
+  - Khi mất mạng chỉ tìm được người trong hàng chờ hôm nay, hồ sơ đã mở trong ngày và bệnh nhân tạo trên máy đó; không lưu toàn bộ danh sách bệnh nhân. Tìm bằng CCCD chỉ ra bệnh nhân tạo trên máy đó.
+  - Làm được khi mất mạng: tìm, tạo bệnh nhân, cấp số (số tạm), gọi vào khám, khám, ký hoặc kết thúc khám, in, in lại. Cần mạng: hủy lượt, sửa dị ứng và tiền sử, bổ sung CCCD, liên thông, thời gian khám, nhật ký truy cập.
+  - Đơn ký khi mất mạng dùng chữ ký mô phỏng như khi có mạng, chưa lên cổng cho tới khi đồng bộ; **chưa có** chờ ký số và gửi cổng ở mức đầy đủ. Giá trị pháp lý của đơn in khi chưa liên thông là câu hỏi mở (kế hoạch, Q3).
+  - Xung đột (người khác đã mở hoặc kết thúc lượt khám đó trong lúc máy mất mạng) chỉ được **phát hiện và báo**: bản khám giữ trên máy và in lại được, nhưng chưa có cách đưa nó lên máy chủ. Đơn bị quy tắc của máy chủ chặn hẳn khi đồng bộ cũng vậy: chỉ còn cách liên hệ bệnh nhân và kê lại. Không có nút xóa hay hủy mục chưa đồng bộ.
+  - Đóng tab trong lúc mất mạng thì mất phiên đăng nhập; dữ liệu trên máy còn nguyên nhưng phải có mạng mới đăng nhập lại được.
+  - Lỗi đã biết, chưa sửa trên `main`: "Ký & In" lúc có mạng mà máy chủ chưa nhận ngay có lúc lưu lượt khám nhưng không in đơn, phải bấm lại (thiết kế sửa OFF-8 đang chờ duyệt); hàng chờ có lúc hiện hai dòng cho một lượt khám sau khi mất phản hồi ở "cấp số"; chế độ "Mất mạng" không tự thoát khi không còn mục chờ; mục "thử lại" có thể nằm chờ thêm tới 30 giây. Không lỗi nào làm mất hay trùng bản ghi trên máy chủ.
+  - Mới thử bằng kiểm thử tự động trên Chromium không giao diện (máy dev và CI); chưa thử trên máy tính bảng, trên trình duyệt khác, và chưa có bác sĩ thật dùng.
+- Dữ liệu trên máy (bản nháp lượt khám, hàng đợi đồng bộ, bộ đệm hồ sơ, đơn ký khi mất mạng) lưu trong IndexedDB, mã hóa AES-GCM, mỗi người dùng một kho. Đăng xuất xóa cả kho lẫn khóa, trừ khi còn mục chưa đồng bộ: khi đó kho đã mã hóa được giữ lại để lần đăng nhập sau của đúng người đó gửi tiếp. Khóa nằm cùng máy với dữ liệu và không có mã PIN, nên **chưa** bảo vệ được trước người dùng chung trình duyệt hay người lấy được ổ đĩa (kế hoạch, OFF-5); cần xác thực thật (T-IDP).
 - **Medplum không hoàn tác `transaction` khi một mục lỗi** (xem kế hoạch, F11): gói hoàn tất lượt khám được thiết kế để chạy lại được, không dựa vào hoàn tác.
 - Nhật ký truy cập ghi vào file cục bộ (`services/bff/.data/`); chuyển ra kho bất biến ở M1 (T-AUD).
-- Ứng dụng web chỉ lưu vỏ ứng dụng cho PWA, **không** lưu phản hồi API (có dữ liệu bệnh nhân).
+- Service worker của PWA chỉ lưu vỏ ứng dụng, **không** lưu phản hồi API (có dữ liệu bệnh nhân). Dữ liệu dùng khi mất mạng nằm trong kho mã hóa nói trên.
 - `services/bff/.demo-tenants.json` chứa bí mật của các tài khoản máy Medplum; đã nằm trong `.gitignore`, không commit.

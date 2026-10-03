@@ -1,6 +1,6 @@
 # Kế hoạch triển khai chi tiết — PHONGMACH
 
-Cập nhật 02/10/2026 (lần 3). Dựa trên ba nguồn:
+Cập nhật 03/10/2026 (lần 4). Dựa trên ba nguồn:
 
 1. Báo cáo "Quản lý Phòng mạch Việt Nam" v2.0 (29/09/2026), viết cho nhà đầu tư.
 2. Tài liệu nội bộ "Phân tích – Kế hoạch triển khai SaaS Quản lý Phòng mạch" v1.0 (29/09/2026, 34 trang), viết tắt **TL34**.
@@ -8,7 +8,7 @@ Cập nhật 02/10/2026 (lần 3). Dựa trên ba nguồn:
 
 **Quyết định của chủ dự án (02/10/2026):** làm sớm và cắt phạm vi; nhiệm vụ là ra MVP nhanh để nhà đầu tư được thuyết phục hơn.
 Hệ quả: mục 5 và 6 được viết lại quanh hai cột mốc MVP, **M0 (13/11/2026, trình nhà đầu tư)** và **M1 (31/03/2027, pilot)**.
-Đội có sẵn từ 05/10 (xác nhận 02/10); **M0-S1 đã bắt đầu**, trạng thái ở mục 5.6.
+Đội có sẵn từ 05/10 (xác nhận 02/10). **M0-S1, M0-S2 và phần ngoại tuyến của M0-S3 đã làm xong trước lịch**; trạng thái ở mục 5.6, 5.7 và 5.9.
 
 Quy ước độ tin cậy:
 
@@ -89,7 +89,8 @@ Thông lượng bão hòa quanh 700 req/s; ở lần đo đầu là 758 req/s v�
 ### Chưa thử
 
 Giao diện web Medplum, Bot, Subscription (webhook), xác thực hai lớp, chạy nhiều bản server, nâng cấp phiên bản, PITR, ảnh Docker 3.x, mã hóa cấp trường,
-lưu trữ S3/MinIO, mọi bộ nối (Cổng Đơn thuốc, ký số, Zalo, thanh toán, hóa đơn điện tử), ngoại tuyến, phương án B.
+lưu trữ S3/MinIO, mọi bộ nối (Cổng Đơn thuốc, ký số, Zalo, thanh toán, hóa đơn điện tử), phương án B.
+Ngoại tuyến đã làm và đo ở M0-S3 trong phạm vi M0 (mục 5.9); T6 đầy đủ thì chưa.
 
 ### Phát hiện từ việc cài đặt và xây dựng (F1–F12)
 
@@ -242,7 +243,7 @@ Cắt mạnh để làm kịp 6 tuần, giữ những gì chứng minh lời h�
 | Khám | Màn hình khám một trang: sinh hiệu, lý do khám, triệu chứng, chẩn đoán ICD-10 gõ tắt, dị ứng, tiền sử, lịch sử khám; **2 chuyên khoa** (đề xuất nội tổng quát và nhi, Q15) | | Mẫu khám tự thiết kế, ảnh đính kèm, ký phiếu khám, các chuyên khoa khác |
 | Kê đơn | Đơn mẫu, kê lại một nút, kiểm tra trùng hoạt chất / dị ứng / số ngày tối đa (30 ngày, bệnh mạn tính 90 ngày), in A5 có mã QR | **Ký số** ("ký mô phỏng", chưa gọi nhà cung cấp) | Tương tác thuốc đầy đủ, đơn thuốc cổ truyền |
 | Liên thông cổng đơn thuốc | Bộ nối với giao diện chuẩn, hàng đợi gửi, trạng thái từng đơn (đã ký / chờ gửi / đã gửi / lỗi), thử lại, màn hình "đơn chưa gửi được" | **Cổng quốc gia mô phỏng**, có nút chèn lỗi để trình diễn thử lại, cho đến khi có tài liệu API và sandbox (TL34 Q1) | Gửi lên cổng thật |
-| Ngoại tuyến | Tiếp đón, khám, kê đơn, in khi mất mạng; đồng bộ khi có mạng; 0 mất, 0 trùng; kịch bản ngắt mạng ngay trên sân khấu | | Chờ ký và gửi khi mất mạng ở mức đầy đủ, xung đột sửa đồng thời, cache toàn bộ 20.000 bệnh nhân |
+| Ngoại tuyến | Tiếp đón, khám, kê đơn, in khi mất mạng; đồng bộ khi có mạng; 0 mất, 0 trùng; kịch bản ngắt mạng ngay trên sân khấu. **Đã làm (mục 5.9)**, trên từng máy: tìm trong hồ sơ trên máy, tạo bệnh nhân, cấp số tạm, gọi vào khám, khám, ký, in và in lại; kho trên máy có mã hóa; M0-2 đạt; đoạn ngắt mạng trên sân khấu làm trên một máy (N5) | | Chờ ký và gửi khi mất mạng ở mức đầy đủ; giải quyết xung đột sửa đồng thời (M0 chỉ phát hiện và báo); cache toàn bộ 20.000 bệnh nhân; hai máy thấy nhau khi phòng khám mất Internet (N5, T-OFF-3); mã PIN cho kho trên máy (quyết định 02/10) |
 | Zalo | | Nút "gửi đơn qua Zalo" hiện bản xem trước tin nhắn, không gửi | ZNS thật, nhắc lịch |
 | Thu tiền | | | Cả nhóm: phiếu thu, QR, sổ thu, hóa đơn điện tử (sang M1 và Giai đoạn 2) |
 | Tuân thủ | Cách ly hai phòng khám demo; nhật ký truy cập xem được trên màn hình quản trị; thời gian từng phiên khám hiển thị | | Đồng ý điện tử đầy đủ, xuất/xóa theo yêu cầu, bộ hồ sơ DPIA, phân quyền chi tiết |
@@ -261,7 +262,7 @@ Kịch bản 10 phút:
 1. Phụ tá gõ "nguyen van an" hoặc 4 số cuối điện thoại, tìm ra bệnh nhân, cấp số; màn hình chờ cập nhật (1 phút).
 2. Bác sĩ mở hồ sơ, khám một trang, gõ tắt chẩn đoán, chọn đơn mẫu; hệ thống cảnh báo trùng thuốc/dị ứng (cố ý); sửa; bấm "Ký & In"; in A5 có QR; đồng hồ phiên khám hiển thị (2 phút).
 3. Trạng thái liên thông: đơn "đã gửi"; chèn lỗi cổng, đơn "chờ gửi", tự thử lại và thành công, không mất đơn (cổng mô phỏng, có nhãn) (1 phút).
-4. Ngắt mạng giữa buổi khám: tiếp đón, khám, kê đơn, in vẫn chạy; bật lại, đồng bộ, không trùng (2 phút).
+4. Ngắt mạng giữa buổi khám: tiếp đón, khám, kê đơn, in vẫn chạy; bật lại, đồng bộ, không trùng (2 phút). Làm trên một máy: bác sĩ tự tiếp đón người mới đến (N5, quyết định 02/10; các bước ở `README.md`).
 5. Cách ly: phòng khám B không thấy bệnh nhân của A; màn hình nhật ký truy cập của A cho biết ai đã mở hồ sơ nào (1 phút).
 6. Số đo thật: thời gian phiên khám của các bác sĩ đã dùng thử; chi phí hạ tầng trên mỗi phòng khám theo số đo (1 phút).
 7. Gói bằng chứng: T1–T10 hiện trạng, thư cam kết, rủi ro và phương án B (2 phút).
@@ -370,7 +371,7 @@ M0-S2 (19–30/10) được làm trước lịch vì M0-S1 xong sớm. Bảng d�
 | Đồng hồ phiên khám (T-TELE) | Xong phần đo | Máy chủ đo từ lúc mở hồ sơ đến lúc ký; p50/p90 theo bác sĩ so với 60/120 giây; phiên dài hơn 30 phút được đếm riêng, không giấu. **M0-1 chưa đo được** vì cần 3 bác sĩ thật |
 | Trang "Phạm vi" (M0-5) | Xong | Liệt kê đã thật / mô phỏng / chưa làm, có kiểm tra trong e2e |
 | Dữ liệu demo cho kịch bản | Xong | Seed thêm dị ứng, tiền sử và 4 lượt khám cũ có đơn; chạy lại không tạo trùng |
-| Ngoại tuyến | Chưa (M0-S3) | |
+| Ngoại tuyến | Không thuộc M0-S2; xong ở M0-S3 | Mục 5.9 |
 
 Kiểm thử đã chạy: 16 (danh mục) + 25 (quy tắc) + 34 (mô hình) + 30 (clinical) + 76 (BFF đơn vị) + 36 (web) kiểm thử đơn vị; 35 kiểm thử tích hợp với Medplum thật (gồm 21 mới về luồng khám); 13 + 21 bước đầu-cuối trên Chromium thật, cũng chạy được trên bản build production. Các kiểm thử an toàn quan trọng (phân quyền, quy tắc kê đơn ở server, thoát ký tự HTML) đã được xác nhận thất bại khi gỡ biện pháp tương ứng. CI có thêm job e2e (Chromium trên Medplum thật); cả ba job (kiểu + đơn vị + build, tích hợp, e2e) đã đạt trên GitHub ở commit `7a8c626`. Lần đầu job tích hợp đỏ vì một bài thử lại dựa vào thời gian thật (hạn 40 ms) trên runner chậm và để cổng mô phỏng ở trạng thái lỗi cho các bài sau; đã đổi sang thời gian ảo và đặt lại cổng trước mỗi bài.
 
@@ -380,7 +381,7 @@ Bài học từ M0-S2:
 2. **Thiếu ngày sinh làm quy tắc theo tuổi im lặng bỏ qua** (trẻ em, CCCD). Đã thêm quy tắc "chưa có ngày sinh" buộc bác sĩ xác nhận, và cho phụ tá bổ sung CCCD và ngày sinh ngay ở màn hình tiếp đón.
 3. **Chạy lại sau khi đã ký không được bị quy tắc từ chối.** Nếu phụ tá thêm dị ứng sau khi đơn đã ký, bấm lại "Ký" (mất mạng, bấm đúp) phải trả lại đơn cũ chứ không báo lỗi quy tắc. Có kiểm thử.
 4. **Dữ liệu thăm dò làm bẩn dữ liệu demo**: các lần thử ban đầu tạo lượt khám số 7xx–9xx trong phòng khám demo làm sai số thứ tự và lịch sử. Đã dọn; bài e2e nay tự dọn hàng chờ ở đầu và cuối để chạy lại được kể cả sau lần hỏng.
-5. **Giới hạn đã biết, cần quyết định cho M1**: (a) hộp thư đi hỏi Medplum theo chu kỳ, mỗi phòng khám mỗi lần 20 điểm hạn mức; đủ cho M0, nhưng 300 phòng khám mỗi 2 giây là 3.000 lần tìm mỗi phút nên M1 phải chuyển sang Subscription hoặc hàng đợi; (b) bản nháp lượt khám tạm lưu ở `sessionStorage` (có dữ liệu lâm sàng, xóa khi đăng xuất, chưa mã hóa), M0-S3 chuyển sang kho cục bộ có mã hóa cùng với ngoại tuyến; (c) màn hình chờ dùng chung phiên của máy lễ tân, M1 cần thiết bị màn hình có mã ghép riêng; (d) mã đơn nội bộ (`PM-YYMMDD-XXXXXX`, sinh xác định từ `clientUuid`) là giả định tạm cho đến khi có tài liệu cổng (TL34 Q1); (e) giới hạn 30/90 ngày và danh sách bệnh mạn tính là dữ liệu minh họa, cần cố vấn y khoa và pháp chế xác nhận trước M1.
+5. **Giới hạn đã biết, cần quyết định cho M1**: (a) hộp thư đi hỏi Medplum theo chu kỳ, mỗi phòng khám mỗi lần 20 điểm hạn mức; đủ cho M0, nhưng 300 phòng khám mỗi 2 giây là 3.000 lần tìm mỗi phút nên M1 phải chuyển sang Subscription hoặc hàng đợi; (b) bản nháp lượt khám tạm lưu ở `sessionStorage` (có dữ liệu lâm sàng, xóa khi đăng xuất, chưa mã hóa), M0-S3 chuyển sang kho cục bộ có mã hóa cùng với ngoại tuyến (đã làm ở lát 2, mục 5.9); (c) màn hình chờ dùng chung phiên của máy lễ tân, M1 cần thiết bị màn hình có mã ghép riêng; (d) mã đơn nội bộ (`PM-YYMMDD-XXXXXX`, sinh xác định từ `clientUuid`) là giả định tạm cho đến khi có tài liệu cổng (TL34 Q1); (e) giới hạn 30/90 ngày và danh sách bệnh mạn tính là dữ liệu minh họa, cần cố vấn y khoa và pháp chế xác nhận trước M1.
 
 ### 5.8 Bàn giao sang M0-S3: ngoại tuyến (02/10/2026)
 
@@ -419,7 +420,7 @@ Mục này viết cho người (hoặc phiên làm việc) tiếp nhận M0-S3 m
 - **Không thăm dò trên phòng khám demo**: các lần thử ban đầu đã làm sai số thứ tự và lịch sử. Tạo phòng khám tạm như các kiểm thử tích hợp (`createTenantProject`). Bài e2e `visit.mjs` tự dọn hàng chờ ở đầu và cuối để chạy lại được kể cả sau lần hỏng.
 - **Không dùng `pkill -f` theo mẫu chữ** (đã từng giết chính shell đang chạy lệnh); `infra/dev-up.sh` dùng file PID và nhóm tiến trình. Tiến trình nền phải bỏ stdout của lệnh gọi, nếu không nó giữ đầu ống và lệnh không bao giờ kết thúc.
 - **Quy tắc đã thành nếp, giữ cho mọi tính năng mới**: log không chứa chuỗi truy vấn; nhật ký truy cập không chứa dữ liệu bệnh nhân; ghi nhật ký trước khi trả dữ liệu; tenant lấy từ phiên, không từ tham số; mọi phần mô phỏng có nhãn. Kiểm thử an toàn phải được xác nhận **thất bại khi gỡ biện pháp** tương ứng.
-- **Khi xong M0-S3, cập nhật chỗ nói "ngoại tuyến chưa có"**: `components/Scope.tsx`, `components/DemoBanner.tsx`, `README.md` (mục "Giới hạn"), mục 5.2 và 5.7 của kế hoạch, và bước kiểm tra trang Phạm vi trong `e2e/visit.mjs`.
+- **Khi xong M0-S3, cập nhật chỗ nói "ngoại tuyến chưa có"**: `components/Scope.tsx`, `components/DemoBanner.tsx`, `README.md` (mục "Giới hạn"), mục 5.2 và 5.7 của kế hoạch, và bước kiểm tra trang Phạm vi trong `e2e/visit.mjs`. (Đã làm ở lát 6, 03/10/2026: mục 5.9.)
 
 #### Thiết kế ngoại tuyến M0-S3 [Đã duyệt 02/10/2026] (02/10/2026)
 
@@ -795,6 +796,13 @@ Lát 4 tách làm hai commit. **Lát 4-1 xong** (hàm thuần, chỉ báo, danh 
   - Lần chạy kế (hạt giống 1428297068) xanh cả ba job, bài đạt 11/11. Bước M0-2 mất 41 giây (bài 39,7 giây). Job e2e mất 3 phút 35 giây, so với 2 phút 41 giây trên `main` (commit `950823a`): tăng khoảng 1 phút.
   - Job e2e còn xa mức 10 phút nên chưa cần tách job riêng.
 
+**Lát 6 xong (03/10/2026)** (nhãn và tài liệu; không đổi hành vi của ứng dụng ngoài chữ trên trang "Phạm vi" và dải nhãn). Tóm tắt cả sáu lát, kết quả M0-2, bài học và giới hạn nằm ở mục 5.9.
+- Trang "Phạm vi": ngoại tuyến chuyển sang khối "Đã làm thật"; khối "Chưa làm ở M0" nêu phần ngoại tuyến chưa có (hai máy thấy nhau, giải quyết xung đột, chờ ký số và gửi cổng, lưu toàn bộ danh sách bệnh nhân, mã PIN). Dải nhãn: bỏ "ngoại tuyến" khỏi "Chưa có"; Zalo chuyển từ "Mô phỏng" sang "Chưa có" vì chưa có dòng mã nào về Zalo.
+- `e2e/visit.mjs` bước 22 kiểm theo từng khối thay vì tìm chữ "Ngoại tuyến" ở đâu đó trên trang, và kiểm dải nhãn khớp với trang. Số bước không đổi (24).
+- Đột biến (6, mỗi cái làm bài đỏ đúng ở bước 22, 21 bước trước vẫn đạt) [Đã đo, bản dev]: đưa dòng ngoại tuyến về khối "Chưa làm"; để cả hai khối cùng có; chuyển dòng sang khối "Mô phỏng"; bỏ các dòng giới hạn của ngoại tuyến; dải nhãn ghi "Chưa có: ngoại tuyến"; dải nhãn ghi Zalo là mô phỏng trong khi trang để Zalo ở "Chưa làm". Bước kiểm cũ (chỉ tìm chữ) xanh với cả sáu.
+- `README.md` (dòng hiện trạng, bảng cấu trúc, đoạn ngắt mạng trên một máy trong kịch bản, mục "Giới hạn"), chú thích ở `vite.config.ts`, `styles.css`, `OfflineSignResult.tsx`, mô tả gói `clinic-web`, và các mục 2, 5.2, 5.3, 5.7 của kế hoạch.
+- **Phát hiện khi rà, chưa sửa (ngoài phạm vi lát này):** bản sửa phát hiện 2 của lát 5 (commit `376bd97`, PR #7) được merge vào nhánh của lát 5 **sau** khi nhánh đó đã vào `main`, nên `main` chưa có bản sửa này [Đã đo: `git log origin/main..origin/claude/m0-s3-5-network-cycles-098118` còn 3 commit]. PR #9 (sửa phát hiện 5) còn là bản nháp và đang lấy nhánh của lát 5 làm gốc.
+
 #### Thiết kế OFF-8: "Ký & In" lúc có mạng mà máy chủ chưa nhận ngay [Chờ duyệt] (03/10/2026)
 
 Thiết kế cho phát hiện 3 của lát 5. **Chưa sửa mã sản phẩm, chưa sửa BFF**: mới có kiểm thử tái hiện và bản thiết kế này. Chờ chủ dự án duyệt hướng làm và trả lời bốn câu hỏi ở cuối mục.
@@ -942,6 +950,69 @@ Cách sửa tận gốc nằm ở BFF: gói hoàn tất đọc lại giờ ký v
 2. **Chấp nhận giới hạn N5 cho M0.** Kịch bản 4 trên sân khấu làm đoạn ngắt mạng trên một máy (bác sĩ tự tiếp đón người mới đến). Để hai máy thấy nhau khi mất Internet cần một trạm đồng bộ trong mạng LAN của phòng khám: ngoài M0, thuộc T-OFF-3.
 
 Các điểm mặc định đã nêu và được duyệt cùng thiết kế: số tạm được ưu tiên giữ (OFF-2); giờ không hợp lý thì vẫn lưu, chỉ không tính số đo (OFF-3); đơn ngoại tuyến bị quy tắc chặn khi đồng bộ thì chờ bác sĩ xác nhận (OFF-7); đăng xuất khi còn mục chờ thì giữ dữ liệu đã mã hóa thay vì xóa (OFF-6).
+
+### 5.9 Trạng thái M0-S3 (cập nhật 03/10/2026)
+
+M0-S3 (02–13/11) được làm trước lịch, ngay sau M0-S2. Phần ngoại tuyến xong qua sáu lát: lát 1–3b (PR #2), lát 4 (PR #4), lát 5 (PR #6), lát 6 (nhãn và tài liệu). Các việc còn lại của M0-S3 theo mục 5.5 cần người thật hoặc chưa làm; bảng dưới gồm cả hai. Thiết kế (N1–N5, OFF-1 đến OFF-7) và chi tiết từng lát nằm ở mục 5.8, không chép lại ở đây. Mọi con số chỉ nói về một máy dev và runner CI, dữ liệu giả, Chromium không giao diện: **chưa có bác sĩ thật dùng thử, chưa thử trên máy tính bảng hay trình duyệt khác**.
+
+| Hạng mục | Trạng thái | Bằng chứng |
+|---|---|---|
+| In khi mất mạng (OFF-1) | Xong | Gói `@phongmach/print` dùng chung cho BFF và trình duyệt. Trang in dựng ở trình duyệt giống từng ký tự trang BFF dựng, trừ dòng liên thông; mã đơn sinh ở máy khách trùng mã máy chủ tính lại; PDF đúng 1 trang A5; trang in có nhãn "KÝ KHI MẤT MẠNG" |
+| Số thứ tự tạm (OFF-2) | Xong | Số tạm = số lớn nhất máy biết + 1, có nhãn "(tạm)" ở hàng chờ và màn hình chờ. Máy chủ giữ số tạm nếu còn trống; đã có người lấy thì cấp số kế tiếp và giao diện báo đổi số (kiểm thử tích hợp, e2e) |
+| Đồng hồ phiên khám khi mất mạng (OFF-3) | Xong | `measureVisit`: thời lượng theo đồng hồ máy khách, máy chủ kiểm tra hợp lý. Giờ không hợp lý thì vẫn lưu lượt khám, không tính vào p50/p90, đếm riêng ở trang "Thời gian khám" |
+| Tìm bệnh nhân trên máy (OFF-4) | Xong | Bộ đệm mã hóa gồm người trong hàng chờ hôm nay, hồ sơ đã mở trong ngày, bệnh nhân tạo trên máy; nạp trước qua `GET /api/queue/prefetch`. Máy chưa có dữ liệu dị ứng thì quy tắc `allergy-unknown` đòi bác sĩ xác nhận, và máy chủ chạy lại quy tắc với dị ứng thật khi đồng bộ |
+| Kho trên máy có mã hóa (OFF-5) | Xong, **không có mã PIN** (quyết định 02/10) | IndexedDB (Dexie), AES-GCM 256 bit, khóa không xuất được, mỗi (phòng khám, người dùng) một kho. Các bài e2e đọc thẳng IndexedDB: không có tên, số điện thoại, CCCD, triệu chứng, thuốc, mã ICD ở dạng rõ. Khóa nằm cùng máy với dữ liệu: xem giới hạn (g) |
+| Hàng đợi đồng bộ, phiên hết hạn (N1–N3, OFF-6) | Xong | Lưu bền rồi mới gửi, rồi mới in; một thao tác một `clientUuid`; gửi theo phụ thuộc, chờ lũy thừa 2 có trần 60 giây; một tab gửi (Web Locks). 401 thì tạm dừng, không xóa mục nào; đăng xuất khi còn mục chờ thì giữ kho đã mã hóa; không có nút xóa hay hủy mục chưa đồng bộ |
+| Quyền và mục bị từ chối khi đồng bộ (OFF-7) | Xong phần **phát hiện và báo**; giải quyết xung đột ngoài M0 | 409: giữ bản khám trên máy, in lại được, không gửi lại, không ghi đè. 422 quy tắc: bác sĩ ghi lý do rồi gửi lại cùng `clientUuid`. Lỗi khác: hiện nguyên thông điệp. Bài e2e hai máy `offline-conflict.mjs` (12 bước) |
+| Chỉ báo mạng, danh sách "Chờ đồng bộ", thông báo | Xong | `SyncBar`, `SyncPanel`: "Có mạng" hoặc "Mất mạng", số mục chờ ("đang đếm" trước lần đếm đầu), huy hiệu "N cần xử lý" không tắt được, thông báo có họ tên không hiện ở màn hình chờ |
+| Bài 20 chu kỳ ngắt và khôi phục mạng (M0-2) | **Đạt** | Xem "Kết quả M0-2" bên dưới |
+| Nhãn và tài liệu sau ngoại tuyến (M0-5) | Xong | Trang "Phạm vi" và dải nhãn nói đúng hiện trạng theo cả hai chiều; `e2e:visit` bước 22 kiểm từng khối, 6 đột biến đều đỏ ở đúng bước đó (mục 5.8, "Lát 6 xong") |
+| Màn hình nhật ký truy cập cho quản trị | Xong từ M0-S1 | Mục 5.6 |
+| Zalo mô phỏng (nút, bản xem trước tin nhắn) | **Chưa** | Chưa có dòng mã nào. Nhãn trên màn hình đã chuyển Zalo từ "mô phỏng" sang "chưa có" cho tới khi làm |
+| Phiên thử với 3 bác sĩ (M0-1) | **Chưa**: cần người thật | Đồng hồ phiên khám và trang số đo đã có (mục 5.7) |
+| Kịch bản 10 phút, bản dự phòng, diễn tập hai lần (M0-6) | **Chưa** | `README.md` có các bước đi qua bằng tay, gồm đoạn ngắt mạng trên một máy; chưa có bài diễn tập tự động, video hay máy dự phòng |
+| T6 đầy đủ (100 chu kỳ, đồng bộ 40 ca trong 60 giây) | **Chưa** | Một lần chạy 100 chu kỳ đạt; vế "40 ca trong 60 giây" chưa đo và cần T-QUOTA trước (bài học 6) |
+
+Kiểm thử đã chạy [Đã đo, 03/10/2026, mã của lát 6; máy dev Windows 11, i7-11800H, 32 GB RAM, Medplum 5.2.0 trong Docker Desktop]: kiểu đạt cả 7 gói; 370 kiểm thử đơn vị = 34 (mô hình) + 16 (danh mục) + 27 (quy tắc) + 36 (clinical) + 4 (in) + 163 (web) + 90 (BFF); 41 kiểm thử tích hợp với Medplum thật; e2e 13 + 24 + 13 + 12 bước trên Chromium thật (`e2e`, `e2e:visit`, `e2e:offline`, `e2e:conflict`), đạt trên cả bản dev và bản build; bài 20 chu kỳ 11 bước trên bản build. So với lúc bắt đầu M0-S3 (217 đơn vị, 35 tích hợp, e2e 13 + 21 bước): thêm 153 kiểm thử đơn vị, 6 tích hợp, 3 bước ở `e2e:visit` và ba bài e2e mới.
+
+- Đột biến: 111 đột biến ở lát 1–5 (5 + 7 + 9 + 17 + 15 ở lát 1 đến 3b; 45 qua kiểm thử đơn vị và 10 qua bài e2e hai máy ở lát 4; 3 qua bài 20 chu kỳ ở lát 5) và 6 ở lát 6. Sau khi sửa các ca nêu ở bài học 3, mỗi đột biến làm ít nhất một bài đỏ.
+- CI trên `main` (commit `43e4b6d`) xanh cả ba job: kiểu, đơn vị và build 40 giây; tích hợp 1 phút 15 giây; e2e 3 phút 23 giây, trong đó có bài 20 chu kỳ [Đã đo].
+- Gói JS của bản build: 312 KB (nén 96,7 KB) trước M0-S3, 510,5 KB (nén 163,8 KB) sau lát 5, 511,7 KB (nén 164,2 KB) sau lát 6 [Đã đo]. Phần tăng của lát 6 là chữ trên trang "Phạm vi".
+
+**Kết quả M0-2: đạt [Đã đo].** Tiêu chí (mục 5.3): 20 lần ngắt và khôi phục mạng liên tiếp, 0 bản ghi mất, 0 bản ghi trùng.
+
+- Bài `pnpm e2e:cycles`: 20 bệnh nhân mới đi hết đường (tạo, cấp số, gọi vào khám, khám, ký và in) trên một phòng khám thử riêng, mỗi chu kỳ một lần ngắt và một lần bật lại mạng ở thời điểm sinh từ hạt giống. Lỗi chèn thêm: mất phản hồi 16 lần (4 lần cho mỗi thao tác ghi), tải lại trang khi đang mất mạng ở khoảng 40% số chu kỳ, máy sập đúng lúc in ở một nửa số chu kỳ ký khi mất mạng.
+- Cuối bài đếm thẳng trong Medplum bằng tài khoản máy của phòng khám thử: Patient = Encounter = List = Task = Provenance = ClinicalImpression = 20; mọi Encounter `finished`; MedicationRequest, Condition, Observation đúng bằng số đã nhập; 20 số thứ tự khác nhau; mỗi mã đơn đã in có đúng một đơn trên máy chủ và ngược lại; trên máy không còn mục chờ; IndexedDB không có dữ liệu bệnh nhân ở dạng rõ.
+- Máy dev, bản build: 13 lần chạy 20 chu kỳ đều đạt 11/11 bước kiểm (12 lần ở lát 5 với 11 hạt giống khác nhau, 1 lần ở lát 6 với hạt giống 1577264254) và 1 lần chạy 100 chu kỳ đạt 11/11 (251 giây).
+- CI: lần chạy đầu đỏ ở chu kỳ 02 do chính bài kiểm thử (bộ định vị gặp hai nút, phát hiện 5 của lát 5), 19 chu kỳ còn lại vẫn đúng số bản ghi; đã sửa bài. Ba lần chạy đã đọc log sau đó đều 11/11: hạt giống 1428297068 (nhánh lát 5), 1300616032 và 578461091 (`main`).
+- Bài chỉ có nghĩa vì đã thấy nó đỏ: sinh `clientUuid` mới khi gửi lại cho Patient 24/20; bỏ mục khi gặp lỗi mạng cho Encounter 13/20 và List 5/20; in trước khi lưu bền cho List 17/20.
+- Thời gian: bài 20 chu kỳ 44–60 giây trên máy dev, thêm khoảng 1 phút cho job e2e của CI. Máy chủ nhận lượt khám sau khi có mạng lại: trung vị 0,3–1,5 giây, lâu nhất 4,3 giây.
+- **M0-2 không đo điều gì:** tiêu chí tính trên bản ghi của máy chủ, nên hai lỗi phía người dùng đi qua mà bài vẫn xanh: "Ký & In" có lúc không in (phát hiện 3) và hàng chờ có lúc hiện hai dòng cho một lượt khám (phát hiện 5). Bài tự bấm lại và ghi số lần ở cuối. Bài cũng chỉ chạy một máy, một người dùng.
+
+Bài học từ M0-S3:
+
+1. **Một đường cho cả lúc có mạng lẫn lúc mất mạng (N1) trả công, nhưng sinh ra trạng thái trung gian.** Mọi thao tác ghi đi qua cùng một hàng đợi, nên đường ngoại tuyến được chạy hằng ngày và "0 trùng" dựa hẳn vào `clientUuid` đã có kiểm thử từ M0-S1. Cái giá: thao tác làm lúc có mạng mà máy chủ chưa nhận ngay rơi vào trạng thái "đã vào hàng đợi, sẽ tự gửi, nhưng chưa có tờ đơn" (phát hiện 3 của lát 5, thiết kế OFF-8). Mỗi đường mới phải trả lời được: khi hàm trả về, mục đang ở đâu và người dùng đang cầm gì trong tay.
+2. **Trình duyệt bỏ mất sự kiện IndexedDB khi trang gọi `print()` (F12).** Không có trong thiết kế, chỉ lộ ra khi bài e2e ký rồi in thật. Hàng rào in và hạn 20 giây cho mỗi thao tác kho đưa số yêu cầu bị mất từ 83/200 về 0/200. Mọi lần in phải đi qua `printHtml`.
+3. **Bài kiểm thử chỉ đáng tin sau khi đã thấy nó đỏ.** Trong 111 đột biến của lát 1–5: 3 lần bài kiểm thử vẫn xanh vì yếu (vectơ UUID chỉ có chữ số; bài hai tab không tất định; bài dựa vào kết quả của bài trước) và đã được viết lại; 3 lần chính đột biến viết sai hoặc không đổi hành vi; 1 lần tệp không dịch được trông như "đỏ" dù không chu kỳ nào chạy. Một bước chờ `page.waitForFunction` với hàm `async` đã không chờ gì từ lát 3b-2 tới lát 4. Bước kiểm trang "Phạm vi" chỉ tìm chữ "Ngoại tuyến" nên xanh cả khi nhãn đặt sai khối (lát 6). Script đột biến phải đếm số bài thật sự chạy.
+4. **Đếm bản ghi chưa đủ nếu không chèn đúng loại lỗi.** Đột biến "in trước khi lưu bền" không làm lệch số đếm nào cho tới khi bài 20 chu kỳ có thêm kiểu lỗi "máy sập đúng lúc in". Ngược lại, số đếm đúng không nói gì về cái người dùng thấy (đoạn "M0-2 không đo điều gì" ở trên).
+5. **"Mất mạng" có hai dạng.** Trình duyệt biết mình mất mạng (sự kiện `offline`), và trình duyệt tưởng có mạng nhưng gọi gì cũng lỗi (mất phản hồi, tải lại trang khi mất mạng). Ứng dụng coi lỗi mạng của chính lời gọi là tín hiệu, không chỉ dựa vào `navigator.onLine`. Chiều ngược lại còn thiếu: không có lời gọi nào thăm dò để tự thoát chế độ "Mất mạng" (phát hiện 4).
+6. **Hạn mức FHIR mặc định là trần thật của việc đồng bộ.** Một lượt khám đi hết đường tốn khoảng 2.500 điểm [Phân tích], tức khoảng 20 lượt khám mỗi phút qua một tài khoản máy với hạn mức 50.000 điểm/phút. Gặp 429 thì nhóm "gửi lại" vẫn hội tụ đủ 20/20 [Đã đo], nhưng T6 ("40 ca trong 60 giây") cần T-QUOTA trước.
+7. **Ngoại tuyến làm nhật ký truy cập dày hơn và thêm một loại giờ "máy khách khai".** Thêm dòng `queue-prefetch` và một `queue-read` mỗi 30 giây khi màn hình hàng chờ không mở; dòng của thao tác làm lúc mất mạng mang `clientTs` không kiểm chứng được. Tính vào Q13 (khối lượng nhật ký) và T-SIGN (giờ ký).
+8. **PR xếp chồng phải merge theo thứ tự từ gốc.** PR #7 (sửa phát hiện 2) lấy nhánh của lát 5 làm gốc và được merge 33 giây sau khi nhánh đó đã vào `main`, nên bản sửa nằm lại ngoài `main` (mục 5.8, "Lát 6 xong").
+
+Giới hạn đã biết, cần quyết định. Mục (a) nên quyết trước buổi trình diễn 13/11; còn lại cho M1:
+
+- (a) **Bốn lỗi đã biết của lát 5 còn trên `main`**, không lỗi nào làm mất hay trùng bản ghi trên máy chủ: mục "thử lại" có thể nằm chờ thêm tới 30 giây (đã có bản sửa ở PR #7, chưa vào `main`); "Ký & In" lúc có mạng mà máy chủ chưa nhận ngay có lúc không in đơn (thiết kế OFF-8 chờ duyệt, bốn câu hỏi ở cuối mục đó); chế độ "Mất mạng" không tự thoát khi không còn mục chờ; hàng chờ có lúc hiện hai dòng cho một lượt khám (PR #9, bản nháp). Lỗi thứ hai và thứ tư có thể gặp ngay trên sân khấu [Phân tích].
+- (b) **Hai máy không thấy nhau khi phòng khám mất Internet (N5).** Cần một trạm đồng bộ trong mạng LAN: T-OFF-3, Giai đoạn 2. Tới lúc đó phải nói rõ trong tài liệu bán hàng.
+- (c) **Mục bị từ chối không có đường ra.** Xung đột 409 chỉ được phát hiện và báo. Đơn 422 có lỗi chặn (`blocking`) không có ô lý do và không có nút gửi lại: chỉ còn liên hệ bệnh nhân và kê lại. Không có nút xóa hay hủy, nên các mục này nằm lại trong danh sách, huy hiệu "cần xử lý" không về 0, và mỗi lần in lại thêm một mục. M1 cần quy trình giải quyết (gộp, tách thành lượt khám riêng, hủy có ghi nhận) và người có quyền làm việc đó.
+- (d) **"Đã in đơn rồi mới thấy cảnh báo".** Đơn ký khi mất mạng bị quy tắc của máy chủ bắt lại lúc đồng bộ (ví dụ dị ứng vừa được ghi ở máy khác) khi bệnh nhân đã cầm đơn. Hiện bác sĩ ghi lý do rồi gửi lại, màn hình nhắc liên hệ bệnh nhân. Cần cố vấn y khoa duyệt cách xử lý trước M1.
+- (e) **Hết hạn phiên thật sau 480 phút [Chưa đo].** Bài e2e giả lập phản hồi 401; chưa có lần nào để token hết hạn thật giữa lúc mất mạng. Đóng tab khi mất mạng làm mất token, phải có mạng mới đăng nhập lại được (dữ liệu trên máy còn nguyên).
+- (f) **Mục chờ của người nghỉ việc nằm lại trên máy**: chỉ phiên của chính người đó gửi được. M1 cần quy trình quản trị, cùng T-IDP.
+- (g) **Khóa mã hóa nằm cùng máy với dữ liệu, không có mã PIN.** Chỉ chống xem lướt, không chống người dùng chung trình duyệt hay người lấy được ổ đĩa (OFF-5). Định dạng lưu cho phép M1 bọc khóa bằng PIN hoặc bằng khóa do IdP cấp. `navigator.storage.persist()` được gọi nhưng kết quả không được kiểm; chưa đo trình duyệt có tự dọn kho khi đầy bộ nhớ hay không [Đã đọc mã].
+- (h) **Giờ ký và thời lượng khám của lượt làm lúc mất mạng do máy khách khai**; đơn in khi mất mạng dùng chữ ký mô phỏng và chưa lên cổng. Giá trị pháp lý của tờ đơn đó là Q3; chờ ký số và gửi cổng khi mất mạng là T-OFF-2 (M1, S5), phụ thuộc T-SIGN.
+- (i) **Gói JS tăng 312 → 512 KB (nén 96,7 → 164 KB) trong M0-S3**, trong đó Dexie khoảng 104 KB (nén 35 KB). Thay bằng `idb` (khoảng 1 KB) là khả năng đã nêu ở lát 2, khi kho chỉ đọc và ghi theo khóa. Từ lát 3b kho còn dùng chỉ mục phụ (`seq`, `status`, `day`), truy vấn theo khoảng, giao dịch nhiều bảng và nâng version [Đã đọc mã: `local/store.ts`]; `idb` làm được các việc này nhưng phải viết lại lớp kho và chạy lại toàn bộ đột biến của kho. Chỉ nên làm nếu số đo trên máy tính bảng thật cho thấy cần.
+- (j) **Chưa thử ngoài Chromium không giao diện [Chưa kiểm chứng]:** F12 trên trình duyệt có giao diện, máy tính bảng thật, Safari (IndexedDB, Web Locks, service worker, hộp thoại in). Phiên thử với bác sĩ là lần đầu ngoại tuyến chạy trên thiết bị thật.
+- (k) **Rủi ro còn lại của "lưu bền rồi mới in":** trình duyệt sập giữa lúc lưu mục và lúc in thì lượt khám tự gửi mà không có tờ đơn và không có dấu "chưa in" (OFF-8, rủi ro còn lại 4). Dòng nhật ký in có thể ghi hai lần khi mất phản hồi (đã chấp nhận ở OFF-1).
 
 ---
 

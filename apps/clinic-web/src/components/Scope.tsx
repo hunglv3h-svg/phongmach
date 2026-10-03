@@ -4,7 +4,9 @@ const REAL = [
   'Khám một trang: sinh hiệu, triệu chứng, chẩn đoán ICD-10 gõ tắt, dị ứng, tiền sử, lịch sử khám',
   'Kê đơn: đơn mẫu, "kê lại" một nút, kiểm tra trùng hoạt chất, dị ứng, số ngày tối đa (30 ngày, mạn tính 90 ngày), thiếu CCCD; xác nhận kèm lý do được lưu',
   'In đơn A5 có mã QR; hộp thư đi không mất đơn khi cổng lỗi; trạng thái từng đơn; thử lại tự động và thủ công',
-  'Đồng hồ phiên khám đo ở máy chủ (mục tiêu 60 giây); nhật ký truy cập; cách ly giữa hai phòng khám',
+  'Đồng hồ phiên khám đo ở máy chủ, lượt làm lúc mất mạng đo bằng đồng hồ máy khám và đếm riêng (mục tiêu 60 giây); nhật ký truy cập; cách ly giữa hai phòng khám',
+  'Ngoại tuyến trên từng máy: mất mạng vẫn tìm trong hồ sơ đã có trên máy, tạo bệnh nhân, cấp số tạm, gọi vào khám, khám, ký (chữ ký vẫn là mô phỏng) và in đơn có nhãn "ký khi mất mạng"; có mạng lại thì tự đồng bộ, không mất, không trùng (kiểm thử tự động 20 chu kỳ ngắt và khôi phục mạng)',
+  'Dữ liệu trên máy (bản nháp, hàng đợi đồng bộ, bộ đệm hồ sơ) được mã hóa; thao tác bị máy chủ từ chối khi đồng bộ (xung đột, quy tắc kê đơn) luôn được báo, không tự bỏ, không ghi đè',
 ];
 const SIMULATED = [
   'Chữ ký số: băm nội dung đơn và gắn nhãn, chưa gọi nhà cung cấp ký số (T1)',
@@ -13,8 +15,9 @@ const SIMULATED = [
   'Đăng nhập: chọn người dùng demo, chưa có mật khẩu (T-IDP)',
 ];
 const MISSING = [
-  'Ngoại tuyến (mất mạng vẫn khám và in): M0-S3',
-  'Gửi đơn qua Zalo (sẽ chỉ hiện bản xem trước), đặt lịch, nhắc lịch',
+  'Ngoại tuyến, phần chưa có: hai máy thấy nhau khi phòng khám mất Internet (mỗi máy tự làm, có mạng lại mới thấy nhau); giải quyết xung đột (bản này chỉ phát hiện và báo)',
+  'Ngoại tuyến, phần chưa có: chờ ký số và gửi cổng khi mất mạng ở mức đầy đủ; lưu toàn bộ danh sách bệnh nhân trên máy (chỉ có người trong hàng chờ hôm nay, hồ sơ đã mở trong ngày và người tạo trên máy này); mã PIN cho kho trên máy (khóa mã hóa nằm cùng máy với dữ liệu)',
+  'Gửi đơn qua Zalo (ở M0 sẽ chỉ là bản xem trước mô phỏng, chưa làm), đặt lịch, nhắc lịch',
   'Thu tiền, hóa đơn điện tử, bệnh án điện tử đầy đủ, tương tác thuốc, đơn thuốc cổ truyền',
   'Đồng ý điện tử, xuất/xóa dữ liệu theo yêu cầu, phân quyền chi tiết, nhiều cơ sở',
 ];

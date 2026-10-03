@@ -352,8 +352,30 @@ try {
   await page.getByTestId('tab-scope').click();
   const scope = await page.getByTestId('scope').innerText();
   for (const label of ['Đã làm thật', 'Mô phỏng', 'Chưa làm ở M0', 'Chữ ký số', 'Cổng đơn thuốc quốc gia', 'Ngoại tuyến']) assert.ok(scope.includes(label), `trang phạm vi thiếu "${label}"`);
+  // M0-5 theo cả hai chiều: mục nào nằm ở khối nào mới là điều phải đúng, không chỉ là có chữ đó ở đâu trên trang.
+  const scopeBlock = async (name) => (await page.getByTestId('scope').locator(`section[aria-label="${name}"] li`).allInnerTexts()).map((t) => t.trim());
+  const real = await scopeBlock('Đã làm thật');
+  const simulated = await scopeBlock('Mô phỏng (có nhãn trên màn hình)');
+  const missing = await scopeBlock('Chưa làm ở M0');
+  const offlineReal = real.filter((t) => /ngoại tuyến/i.test(t));
+  assert.equal(offlineReal.length, 1, `khối "Đã làm thật" phải có đúng một dòng ngoại tuyến, thực tế ${offlineReal.length}`);
+  for (const part of [/mất mạng vẫn/, /cấp số tạm/, /khám/, /in đơn/, /đồng bộ/, /không mất, không trùng/]) assert.match(offlineReal[0], part, 'dòng ngoại tuyến ở "Đã làm thật" phải nói đúng cái đã làm');
+  assert.ok(real.some((t) => /trên máy/.test(t) && /mã hóa/.test(t)), 'khối "Đã làm thật" phải nói dữ liệu trên máy được mã hóa');
+  assert.ok(!simulated.some((t) => /ngoại tuyến/i.test(t)), 'ngoại tuyến không phải phần mô phỏng');
+  // Khối "Chưa làm" chỉ được nhắc tới ngoại tuyến để nêu phần còn thiếu, và phải nêu đủ các phần đó.
+  const offlineMissing = missing.filter((t) => /ngoại tuyến/i.test(t));
+  for (const t of offlineMissing) assert.match(t, /phần chưa có/, `khối "Chưa làm ở M0" không được ghi ngoại tuyến là chưa làm: "${t}"`);
+  for (const gap of [/hai máy/, /xung đột/, /ký số và gửi cổng/, /toàn bộ danh sách bệnh nhân/, /mã PIN/]) assert.ok(offlineMissing.some((t) => gap.test(t)), `khối "Chưa làm ở M0" thiếu giới hạn của ngoại tuyến: ${gap}`);
+  // Dải nhãn ở đầu mọi màn hình phải nói cùng một điều với trang này.
+  const banner = (await page.locator('.demo-banner').innerText()).split('·').map((t) => t.trim());
+  const bannerSimulated = banner.find((t) => t.startsWith('Mô phỏng')) ?? '';
+  const bannerMissing = banner.find((t) => t.startsWith('Chưa có:')) ?? '';
+  assert.ok(bannerSimulated && bannerMissing, `dải nhãn thiếu phần "Mô phỏng" hoặc "Chưa có:": ${banner.join(' | ')}`);
+  assert.ok(!/ngoại tuyến/i.test(bannerMissing), 'dải nhãn không được ghi ngoại tuyến là chưa có');
+  assert.equal(/zalo/i.test(bannerSimulated), simulated.some((t) => /zalo/i.test(t)), 'dải nhãn và trang "Phạm vi" phải xếp Zalo vào cùng một nhóm (mô phỏng hay không)');
+  assert.equal(/zalo/i.test(bannerMissing), !simulated.some((t) => /zalo/i.test(t)), 'Zalo chưa có phần mô phỏng thì dải nhãn phải ghi là chưa có');
   await shot('20-scope');
-  ok('trang "Phạm vi": liệt kê đã thật / mô phỏng / chưa làm (tiêu chí M0-5)');
+  ok('trang "Phạm vi": ngoại tuyến nằm ở "Đã làm thật", phần còn thiếu của nó nằm ở "Chưa làm ở M0"; dải nhãn khớp với trang (tiêu chí M0-5)');
 
   // ================================================================== Máy tính bảng ngang
   await logout();
