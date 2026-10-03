@@ -84,7 +84,7 @@ export function Gateway({ auth }: { auth: AuthState }) {
       <h2>Đơn chưa gửi được</h2>
       {pending.data && rows.length === 0 && <p className="ok-text" data-testid="pending-empty">Không có đơn nào đang chờ: tất cả đã gửi.</p>}
       {rows.length > 0 && (
-        <div className="table-wrap">
+        <div className="table-wrap" tabIndex={0} role="region" aria-label="Bảng dữ liệu, cuộn ngang bằng phím mũi tên">
           <table data-testid="pending-table">
             <thead><tr><th>Mã đơn</th><th>Bệnh nhân</th><th>Ký lúc</th><th>Trạng thái</th><th /></tr></thead>
             <tbody>{rows.map((p) => <Pending key={p.prescriptionId} p={p} token={token} now={now} online={online} onChanged={pending.reload} />)}</tbody>

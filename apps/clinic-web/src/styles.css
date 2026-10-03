@@ -445,3 +445,4 @@ h2 { font-weight: 650; letter-spacing: -.01em; }
 @media (min-width: 1024px) { .topbar .sync-status .sync-open { color: var(--ink-text); } }
 .queue-number { width: 5.75rem; min-width: 0; padding-inline: 0; }
 @media (min-width: 1024px) { .topbar small, .topbar .muted { color: var(--ink-muted); } }
+@media (min-width: 1024px) and (prefers-color-scheme: dark) { .topbar { border-right: 1px solid var(--line); } }
