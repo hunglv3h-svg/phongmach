@@ -74,6 +74,16 @@ export interface FinishedVisit {
   doctorUserId?: string | undefined;
   seconds?: number | undefined;
   source?: VisitSecondsSource | undefined;
+  // Định danh của lượt khám: để xuất số đo từng lượt (phiên thử M0-1). `computeMetrics` không đọc các trường này,
+  // và đường `GET /api/metrics/visits` không trả chúng ra ngoài.
+  encounterId?: string | undefined;
+  patientId?: string | undefined;
+  /** Mã lượt khám YYYYMMDD-NNN. */
+  code?: string | undefined;
+  /** Mốc mở hồ sơ đã ghi trên lượt khám. */
+  openedAt?: string | undefined;
+  /** Giờ kết thúc lượt khám (giờ ký). */
+  finishedAt?: string | undefined;
 }
 
 /** Hộp thư đi của MỘT phòng khám. */
