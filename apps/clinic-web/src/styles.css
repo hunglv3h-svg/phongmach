@@ -410,3 +410,38 @@ body { font-family: var(--font); }
 @media (min-width: 1024px) and (max-width: 1439px) {
   .visit { grid-template-columns: 1fr 1fr; grid-template-areas: 'head head' 'exam rx' 'side side'; }
 }
+
+/* ===== UI v0.2 — hướng thiết kế "phiếu số": số thứ tự là điểm nhấn duy nhất ===== */
+:root { --ink: #0b2f2e; --ink-text: #d7ecea; --ink-muted: #9fc2bf; --signal: #f2b84b; --notch: 7px; }
+body { font-feature-settings: 'tnum' 1; letter-spacing: -.003em; }
+h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -.015em; }
+h2 { font-weight: 650; letter-spacing: -.01em; }
+
+/* Phiếu số: hai khuyết bán nguyệt hai bên + đường xé nét đứt, như phiếu giấy ở quầy tiếp đón */
+.queue-number, .display-grid.big .display-cell {
+  --notch-r: var(--notch);
+  -webkit-mask: radial-gradient(circle var(--notch-r) at 0 50%, #0000 98%, #000) left / 51% 100% no-repeat,
+                radial-gradient(circle var(--notch-r) at 100% 50%, #0000 98%, #000) right / 51% 100% no-repeat;
+  mask: radial-gradient(circle var(--notch-r) at 0 50%, #0000 98%, #000) left / 51% 100% no-repeat,
+        radial-gradient(circle var(--notch-r) at 100% 50%, #0000 98%, #000) right / 51% 100% no-repeat;
+  border-radius: 6px;
+}
+.queue-number { background: var(--primary); color: var(--primary-ink); font-weight: 700; font-size: 1.9rem; letter-spacing: .02em; min-width: 5rem; padding: .55rem .9rem; }
+.queue-row.in-exam .queue-number { background: var(--signal); color: #2b1d00; }
+.queue-row.in-exam { border-color: var(--signal); border-width: 2px; }
+.display-grid.big .display-cell { --notch-r: 22px; border: 0; border-radius: 12px; background: var(--primary); color: var(--primary-ink); }
+.display-grid.big .display-cell span { color: var(--primary-ink); }
+
+/* Cột bên màu mực: tách rõ khung điều hướng khỏi vùng làm việc (chỉ máy bàn/tablet ngang) */
+@media (min-width: 1024px) {
+  .topbar { background: var(--ink); color: var(--ink-text); border-right: 0; }
+  .topbar .brand small, .topbar .sync-status { color: var(--ink-muted); }
+  .topbar .tab { color: var(--ink-text); background: transparent; border-color: transparent; }
+  .topbar .tab:hover { background: rgba(255,255,255,.08); }
+  .topbar .tab.active { background: rgba(255,255,255,.14); color: #fff; box-shadow: inset 3px 0 0 var(--signal); }
+  .topbar > button.ghost { color: var(--ink-muted); }
+  .topbar button:focus-visible { outline-color: var(--signal); }
+}
+@media (min-width: 1024px) { .topbar .sync-status .sync-open { color: var(--ink-text); } }
+.queue-number { width: 5.75rem; min-width: 0; padding-inline: 0; }
+@media (min-width: 1024px) { .topbar small, .topbar .muted { color: var(--ink-muted); } }
