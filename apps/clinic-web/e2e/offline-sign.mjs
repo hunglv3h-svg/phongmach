@@ -155,6 +155,24 @@ try {
   for (const secret of [NEW_NAME, 'Ngoại Tuyến', phone, cccd, SYMPTOMS, 'Nguyễn Văn An', 'Amoxicillin', 'J02.9', 'Penicillin']) assert.ok(!raw.text.includes(secret), `kho trên máy không được có "${secret}" ở dạng rõ`);
   ok(`đọc thẳng IndexedDB: ${raw.rows.ops} mục chờ và bộ đệm, không có tên, số điện thoại, CCCD, triệu chứng, thuốc ở dạng rõ`);
 
+  // Bản xem trước Zalo (mô phỏng) mở được khi mất mạng: chỉ dựng từ dữ liệu trên màn hình. Lúc mất mạng màn hình này không có
+  // việc nền nào gọi mạng (hàng đợi không gửi khi trình duyệt báo mất mạng), nên đòi đúng 0 yêu cầu, kể cả yêu cầu hỏng.
+  const duringZalo = [];
+  const recordZalo = (r) => duringZalo.push(`${r.method()} ${r.url()}`);
+  page.on('request', recordZalo);
+  await page.getByTestId('zalo-open').click();
+  await page.getByTestId('zalo-preview').waitFor();
+  assert.equal(await page.getByTestId('zalo-simulated').innerText(), 'MÔ PHỎNG: không có tin nhắn nào được gửi');
+  const zaloText = await page.getByTestId('zalo-preview').innerText();
+  for (const part of [NEW_NAME, code, `${phone.slice(0, 3)}****${phone.slice(-3)}`]) assert.ok(zaloText.includes(part), `bản xem trước thiếu "${part}"`);
+  for (const secret of [phone, 'Amoxicillin', 'J02', 'Viêm họng', SYMPTOMS]) assert.ok(!zaloText.includes(secret), `bản xem trước không được có "${secret}"`);
+  assert.ok(!(await page.getByTestId('zalo-recipient').innerText()).includes(phone.slice(3, -3)), 'người nhận không được lộ đoạn giữa của số điện thoại');
+  await page.keyboard.press('Escape');
+  await page.getByTestId('zalo-preview').waitFor({ state: 'detached' });
+  page.off('request', recordZalo);
+  assert.deepEqual(duringZalo, [], `xem trước Zalo khi mất mạng không được phát sinh yêu cầu nào: ${duringZalo.join(', ')}`);
+  ok('mất mạng: "Gửi đơn qua Zalo" (mô phỏng) vẫn mở bản xem trước từ dữ liệu trên máy, số đã che, không thuốc hay chẩn đoán, 0 yêu cầu mạng; Esc đóng');
+
   // ============================================================ Có mạng lại: đồng bộ, đúng một đơn
   await offline(false);
   await syncedAll();

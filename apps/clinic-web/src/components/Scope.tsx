@@ -13,11 +13,12 @@ const SIMULATED = [
   'Cổng đơn thuốc quốc gia: bộ nối giả có nút chèn lỗi, cùng giao diện với bộ nối thật (chưa có tài liệu API và sandbox, TL34 Q1)',
   'Danh mục ICD-10, thuốc và đơn mẫu: tập con minh họa, chưa được cố vấn y khoa duyệt, chưa phải danh mục chính thức',
   'Đăng nhập: chọn người dùng demo, chưa có mật khẩu (T-IDP)',
+  'Gửi đơn qua Zalo: nút ở màn hình kết quả ký chỉ mở bản xem trước tin nhắn, không gửi gì; tin nhắn không có thuốc hay chẩn đoán (gửi thật cần bệnh nhân đồng ý và mẫu tin ZNS được duyệt, M1)',
 ];
 const MISSING = [
   'Ngoại tuyến, phần chưa có: hai máy thấy nhau khi phòng khám mất Internet (mỗi máy tự làm, có mạng lại mới thấy nhau); giải quyết xung đột (bản này chỉ phát hiện và báo)',
   'Ngoại tuyến, phần chưa có: chờ ký số và gửi cổng khi mất mạng ở mức đầy đủ; lưu toàn bộ danh sách bệnh nhân trên máy (chỉ có người trong hàng chờ hôm nay, hồ sơ đã mở trong ngày và người tạo trên máy này); mã PIN cho kho trên máy (khóa mã hóa nằm cùng máy với dữ liệu)',
-  'Gửi đơn qua Zalo (ở M0 sẽ chỉ là bản xem trước mô phỏng, chưa làm), đặt lịch, nhắc lịch',
+  'Zalo, phần chưa có: gửi tin thật (ZNS); đặt lịch, nhắc lịch',
   'Thu tiền, hóa đơn điện tử, bệnh án điện tử đầy đủ, tương tác thuốc, đơn thuốc cổ truyền',
   'Đồng ý điện tử, xuất/xóa dữ liệu theo yêu cầu, phân quyền chi tiết, nhiều cơ sở',
 ];

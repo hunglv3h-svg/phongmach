@@ -5,10 +5,11 @@ import { usePoll } from '../hooks';
 import { clock } from '../format';
 import { printSaved } from '../print';
 import { useOffline } from '../local/OfflineProvider';
+import { ZaloButton } from './ZaloPreview';
 
 const BADGE: Record<GatewayStatus, string> = { signed: 'warn', sending: 'warn', retry: 'warn', sent: 'ok', failed: 'bad' };
 
-/** Kết quả sau khi ký: mã đơn, trạng thái liên thông (tự cập nhật), thời gian phiên khám, in lại (cả khi mất mạng). */
+/** Kết quả sau khi ký: mã đơn, trạng thái liên thông (tự cập nhật), thời gian phiên khám, in lại (cả khi mất mạng), xem trước tin Zalo (mô phỏng). */
 export function SignResult({
   token,
   clinicName,
@@ -88,6 +89,7 @@ export function SignResult({
         {printErr && <p className="error" role="alert">Không in được: {printErr}</p>}
         <div className="actions">
           {rx && detail && <button className="secondary" onClick={reprint} data-testid="reprint">In lại đơn</button>}
+          {rx && detail && <ZaloButton detail={detail} clinicName={clinicName} />}
           <button className="primary" onClick={onBack} data-testid="back-to-queue">Về hàng chờ</button>
         </div>
       </section>
