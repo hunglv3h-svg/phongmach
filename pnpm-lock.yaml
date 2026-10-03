@@ -193,6 +193,9 @@ importers:
         specifier: ^19.0.0
         version: 19.3.0(react@19.3.0)
     devDependencies:
+      '@phongmach/trial':
+        specifier: workspace:*
+        version: link:../../packages/trial
       '@types/react':
         specifier: ^19.0.0
         version: 19.3.0
@@ -304,6 +307,28 @@ importers:
         specifier: ^5.0.0
         version: 5.0.3(@types/node@22.20.4)(vite@8.3.1(@types/node@22.20.4)(esbuild@0.28.2)(terser@5.51.2)(tsx@4.23.15))
 
+  packages/trial:
+    dependencies:
+      '@phongmach/catalogs':
+        specifier: workspace:*
+        version: link:../catalogs
+      '@phongmach/clinical':
+        specifier: workspace:*
+        version: link:../clinical
+      '@phongmach/rules':
+        specifier: workspace:*
+        version: link:../rules
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.4
+      typescript:
+        specifier: ^6.0.0
+        version: 6.0.3
+      vitest:
+        specifier: ^5.0.0
+        version: 5.0.3(@types/node@22.20.4)(vite@8.3.1(@types/node@22.20.4)(esbuild@0.28.2)(terser@5.51.2)(tsx@4.23.15))
+
   services/bff:
     dependencies:
       '@medplum/core':
@@ -337,6 +362,9 @@ importers:
         specifier: ^4.0.0
         version: 4.6.5
     devDependencies:
+      '@phongmach/trial':
+        specifier: workspace:*
+        version: link:../../packages/trial
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.4
