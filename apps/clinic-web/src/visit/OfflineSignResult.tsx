@@ -6,6 +6,7 @@ import { depState, needsAttention } from '../local/deps';
 import type { AnyOp } from '../local/ops';
 import { useOffline } from '../local/OfflineProvider';
 import { printLocal, printSaved } from '../print';
+import { ZaloButton } from './ZaloPreview';
 
 type SyncView = { status: 'pending' | 'done' | 'conflict' | 'rules' | 'error' | 'held'; op?: AnyOp };
 
@@ -103,6 +104,8 @@ export function OfflineSignResult({ result, onBack }: { result: Extract<SignOutc
         {reprinted && <p className="notice" role="status">Đã in lại.</p>}
         <div className="actions">
           {detail && <button className="secondary" onClick={() => void reprint()} data-testid="reprint">In lại đơn</button>}
+          {/* Đã đồng bộ thì dùng mã đơn của máy chủ (khác mã đã in khi đồng hồ máy lệch qua nửa đêm), như "In lại đơn". */}
+          {detail && <ZaloButton detail={serverRx ? { ...detail, prescription: { ...detail.prescription, ...serverRx } } : detail} clinicName={client.clinicName()} />}
           <button className="primary" onClick={onBack} data-testid="back-to-queue">Về hàng chờ</button>
         </div>
       </section>

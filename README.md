@@ -1,7 +1,7 @@
 # PHONGMACH
 
 Phần mềm quản lý phòng mạch tư nhân (Việt Nam). Kế hoạch triển khai: [`docs/ke-hoach-trien-khai.md`](docs/ke-hoach-trien-khai.md).
-Đang ở **M0-S3**: phần ngoại tuyến đã xong (mất mạng vẫn tiếp đón, khám, ký, in trên từng máy; có mạng lại thì tự đồng bộ, không mất, không trùng), làm trên nền M0-S1 và M0-S2 (tiếp đón, hàng chờ, khám một trang, kê đơn, in, liên thông mô phỏng). Còn lại tới M0: Zalo mô phỏng, phiên thử với bác sĩ thật, kịch bản trình diễn và bản dự phòng (kế hoạch, mục 5.9). MVP trình nhà đầu tư dự kiến 13/11/2026.
+Đang ở **M0-S3**: phần ngoại tuyến đã xong (mất mạng vẫn tiếp đón, khám, ký, in trên từng máy; có mạng lại thì tự đồng bộ, không mất, không trùng), làm trên nền M0-S1 và M0-S2 (tiếp đón, hàng chờ, khám một trang, kê đơn, in, liên thông mô phỏng). Nút "Gửi đơn qua Zalo" là mô phỏng: chỉ hiện bản xem trước tin nhắn, không gửi. Còn lại tới M0: phiên thử với bác sĩ thật, kịch bản trình diễn và bản dự phòng (kế hoạch, mục 5.9). MVP trình nhà đầu tư dự kiến 13/11/2026.
 
 ## Cấu trúc
 
@@ -67,13 +67,14 @@ infra/dev-up.sh --stop
 ## Đi qua kịch bản trình diễn
 
 1. Đăng nhập **Phụ tá Nguyễn Thị Lan** (phòng khám Nội) → Tiếp đón → gõ `nguyen van an` → thấy dị ứng Penicillin → "Cấp số". Thêm "Trần Thị Bình" với ưu tiên "Đã hẹn": Bình được gọi trước. Mở "Màn hình chờ".
-2. Đăng xuất, đăng nhập **BS. Lê Thị Thu Hà** → Hàng chờ → "Gọi vào khám" → nhập sinh hiệu, gõ tắt `viem hong` → chọn đơn mẫu "Viêm họng cấp có chỉ định kháng sinh". Hệ thống cảnh báo **dị ứng** (amoxicillin) và, nếu thêm paracetamol hai dạng, **trùng hoạt chất**; phải ghi lý do mới ký được. "Ký & In" mở hộp thoại in đơn A5 có mã QR.
+2. Đăng xuất, đăng nhập **BS. Lê Thị Thu Hà** → Hàng chờ → "Gọi vào khám" → nhập sinh hiệu, gõ tắt `viem hong` → chọn đơn mẫu "Viêm họng cấp có chỉ định kháng sinh". Hệ thống cảnh báo **dị ứng** (amoxicillin) và, nếu thêm paracetamol hai dạng, **trùng hoạt chất**; phải ghi lý do mới ký được. "Ký & In" mở hộp thoại in đơn A5 có mã QR. Ở màn hình kết quả, "Gửi đơn qua Zalo" (MÔ PHỎNG) chỉ mở bản xem trước tin nhắn: số điện thoại đã che, không có thuốc hay chẩn đoán.
 3. "Liên thông": bấm "Mất kết nối cổng", kê tiếp cho Bình bằng nút "Kê lại đơn này". Đơn đã ký hiện "Chờ gửi lại" kèm lý do. Bật lại cổng: đơn tự gửi được, không mất.
 4. **Ngắt mạng trên một máy.** Ngoại tuyến tính theo từng máy (hai máy không thấy nhau khi mất Internet), nên cả đoạn này làm trên máy bác sĩ, bác sĩ tự tiếp đón người mới đến. Vẫn là BS. Hà:
    - Lúc còn mạng, cấp số cho một bệnh nhân rồi mở "Hàng chờ" một lần: máy nạp trước hồ sơ và dị ứng của người đang chờ.
    - Ngắt mạng của trình duyệt: DevTools (F12) → Network → "Offline" (mọi thứ chạy trên localhost nên rút dây mạng không có tác dụng). Thanh trên đổi từ "Có mạng" sang "Mất mạng".
    - "Tiếp đón" → gõ tên người đang chờ: ô tìm ghi "Mất mạng: chỉ tìm trong N hồ sơ trên máy này", vẫn thấy dị ứng đã nạp. Tạo một bệnh nhân mới → "Cấp số": số có nhãn "(tạm)", hiện cả ở "Màn hình chờ".
    - "Hàng chờ" → "Gọi vào khám" người vừa tạo: máy chưa có dữ liệu dị ứng của người này nên đòi bác sĩ hỏi bệnh nhân và ghi lý do. "Ký & In": đơn A5 in từ dữ liệu trên máy, có nhãn "KÝ KHI MẤT MẠNG", mã đơn sinh ngay trên máy. Thanh trên ghi số mục chờ đồng bộ.
+   - Ở màn hình kết quả ký, "Gửi đơn qua Zalo" vẫn mở được bản xem trước tin nhắn (nhãn "MÔ PHỎNG: không có tin nhắn nào được gửi"): chỉ dựng từ dữ liệu trên màn hình, không gọi mạng.
    - Bỏ "Offline": các mục tự gửi, thanh trên về "Đã đồng bộ hết". Máy chủ có đúng một bệnh nhân, một lượt khám, một đơn trùng mã đã in, và giữ số tạm nếu chưa ai lấy số đó.
    - Làm đoạn này trên bản build (`preview`, xem trên): chỉ bản build có service worker giữ vỏ ứng dụng, nên tải lại trang trong lúc mất mạng vẫn mở được ứng dụng.
 5. Đăng nhập chủ phòng khám → "Thời gian khám" (đo ở máy chủ; lượt làm lúc mất mạng đo bằng đồng hồ máy khám và đếm riêng; so với mục tiêu 60/120 giây) và "Nhật ký truy cập". Trang "Phạm vi" nêu rõ cái gì thật, cái gì mô phỏng, cái gì chưa làm.
@@ -84,7 +85,7 @@ infra/dev-up.sh --stop
 pnpm typecheck
 pnpm test                                       # đơn vị: danh mục, quy tắc, mô hình, clinical, BFF, web (không cần Medplum)
 pnpm --filter @phongmach/bff test:integration   # BFF với Medplum thật (cần stack đang chạy)
-pnpm e2e                                        # Chromium thật, 13 + 24 + 13 + 12 bước (hai bài cuối ngắt mạng thật, bài cuối dùng hai máy); cần stack + seed + BFF + web đang chạy
+pnpm e2e                                        # Chromium thật, 13 + 25 + 14 + 12 bước (hai bài cuối ngắt mạng thật, bài cuối dùng hai máy); cần stack + seed + BFF + web đang chạy
 pnpm e2e:cycles                                 # M0-2: 20 chu kỳ ngắt và khôi phục mạng, đếm 0 mất, 0 trùng; chỉ cần stack đang chạy (tự dựng phần còn lại)
 ```
 
@@ -101,9 +102,10 @@ e2e mặc định mở `http://127.0.0.1:5173`; giao diện ở cổng khác th�
 ## Giới hạn của bản hiện tại
 
 - **Chưa có xác thực thật** (T-IDP). BFF chỉ chạy khi đặt `DEMO_AUTH=1`, chỉ lắng nghe trên localhost, và chỉ nên dùng với dữ liệu giả.
-- **Mô phỏng**: chữ ký số (băm nội dung, chưa gọi nhà cung cấp) và cổng đơn thuốc quốc gia (bộ nối giả có nút chèn lỗi). Mọi nơi hiển thị đều có nhãn.
+- **Mô phỏng**: chữ ký số (băm nội dung, chưa gọi nhà cung cấp), cổng đơn thuốc quốc gia (bộ nối giả có nút chèn lỗi) và nút "Gửi đơn qua Zalo" (chỉ hiện bản xem trước tin nhắn, không gửi, không gọi mạng). Mọi nơi hiển thị đều có nhãn.
+- Tin Zalo xem trước chỉ có tên phòng khám, tên bệnh nhân, mã đơn, ngày kê, số nhận đã che (`091****678`) và chỗ cho đường dẫn xem đơn (M1); **không** có thuốc hay chẩn đoán. Gửi thật (ZNS) cần bệnh nhân đồng ý, mẫu tin được duyệt và ý kiến pháp chế (kế hoạch, T-ZALO, T-CONSENT). Nội dung tin dựng bằng hàm thuần `zaloPrescriptionMessage` (`packages/clinical/src/zalo.ts`) để M1 dùng lại.
 - Danh mục ICD-10, thuốc và đơn mẫu là **tập con minh họa**, chưa được cố vấn y khoa duyệt, không dùng lâm sàng.
-- Chưa có: Zalo (kể cả phần mô phỏng), thu tiền (xem kế hoạch, mục 5 và 6).
+- Chưa có: gửi tin Zalo thật (ZNS), đặt lịch, nhắc lịch, thu tiền (xem kế hoạch, mục 5 và 6).
 - **Ngoại tuyến** chạy thật, trong phạm vi sau (kế hoạch, mục 5.8 và 5.9):
   - Tính theo **từng máy**: khi phòng khám mất Internet, hai máy không thấy nhau; người được cấp số ở máy lễ tân chỉ hiện ở máy bác sĩ khi có mạng lại.
   - Khi mất mạng chỉ tìm được người trong hàng chờ hôm nay, hồ sơ đã mở trong ngày và bệnh nhân tạo trên máy đó; không lưu toàn bộ danh sách bệnh nhân. Tìm bằng CCCD chỉ ra bệnh nhân tạo trên máy đó.

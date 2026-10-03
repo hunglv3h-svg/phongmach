@@ -7,3 +7,4 @@ export * from './queue.js';
 export * from './time.js';
 export * from './visit.js';
 export * from './vitals.js';
+export * from './zalo.js';
