@@ -1,7 +1,7 @@
 # PHONGMACH
 
 Phần mềm quản lý phòng mạch tư nhân (Việt Nam). Kế hoạch triển khai: [`docs/ke-hoach-trien-khai.md`](docs/ke-hoach-trien-khai.md).
-Đang ở **M0-S3**: phần ngoại tuyến đã xong (mất mạng vẫn tiếp đón, khám, ký, in trên từng máy; có mạng lại thì tự đồng bộ, không mất, không trùng), làm trên nền M0-S1 và M0-S2 (tiếp đón, hàng chờ, khám một trang, kê đơn, in, liên thông mô phỏng). Nút "Gửi đơn qua Zalo" là mô phỏng: chỉ hiện bản xem trước tin nhắn, không gửi. Còn lại tới M0: phiên thử với bác sĩ thật, kịch bản trình diễn và bản dự phòng (kế hoạch, mục 5.9). MVP trình nhà đầu tư dự kiến 13/11/2026.
+Đang ở **M0-S3**: phần ngoại tuyến đã xong (mất mạng vẫn tiếp đón, khám, ký, in trên từng máy; có mạng lại thì tự đồng bộ, không mất, không trùng), làm trên nền M0-S1 và M0-S2 (tiếp đón, hàng chờ, khám một trang, kê đơn, in, liên thông mô phỏng). Nút "Gửi đơn qua Zalo" là mô phỏng: chỉ hiện bản xem trước tin nhắn, không gửi. Phiên thử với 3 bác sĩ (tiêu chí M0-1) đã chuẩn bị xong, **chưa đo**: xem [`docs/phien-thu-bac-si.md`](docs/phien-thu-bac-si.md). Còn lại tới M0: buổi thử thật với bác sĩ, kịch bản trình diễn và bản dự phòng (kế hoạch, mục 5.9). MVP trình nhà đầu tư dự kiến 13/11/2026.
 
 ## Cấu trúc
 
@@ -14,9 +14,10 @@ Phần mềm quản lý phòng mạch tư nhân (Việt Nam). Kế hoạch tri�
 | `packages/rules` | Quy tắc kê đơn (hàm thuần, dùng chung giao diện và BFF): trùng hoạt chất, dị ứng, số ngày tối đa, thiếu CCCD, trẻ em, "chưa rõ dị ứng" khi mở hồ sơ lúc mất mạng |
 | `packages/clinical` | Hàng chờ, sinh hiệu, dị ứng/tiền sử, đơn thuốc, outbox trên FHIR R4; gói hoàn tất lượt khám chạy lại được; đo thời gian phiên khám theo giờ máy chủ hoặc giờ máy khách (lượt làm lúc mất mạng) |
 | `packages/print` | Mẫu in đơn A5 có mã QR, dùng chung cho BFF (in khi có mạng) và trình duyệt (in từ dữ liệu trên máy khi mất mạng) |
-| `infra` | `dev-up.sh` (dựng và chạy môi trường dev), `e2e-cycles.mjs` (bài 20 chu kỳ ngắt và khôi phục mạng trên phòng khám thử riêng) |
+| `packages/trial` | Bộ ca khám mô phỏng và phiếu ca của phiên thử với bác sĩ (M0-1): 12 ca nội, 12 ca nhi, 3 + 3 ca làm quen. **Minh họa, chưa duyệt y khoa**; không vào giao diện, chỉ script và kiểm thử dùng |
+| `infra` | `dev-up.sh` (dựng và chạy môi trường dev), `e2e-cycles.mjs` (bài 20 chu kỳ ngắt và khôi phục mạng trên phòng khám thử riêng), `trial.mjs` (chạy BFF và giao diện riêng cho phiên thử với bác sĩ, và bài diễn tập của nó) |
 | `infra/medplum` | Backend Medplum (Docker Compose), smoke test, thử nghiệm hiệu năng và vòng đời phòng khám |
-| `docs` | Kế hoạch triển khai |
+| `docs` | Kế hoạch triển khai; `phien-thu-bac-si.md` (cách chạy buổi thử M0-1, phiếu phản hồi, phiếu quan sát, mẫu biên bản); `phien-thu/ca-mo-phong.md` (bộ ca) |
 
 ## Chạy thử cục bộ
 
@@ -87,6 +88,7 @@ pnpm test                                       # đơn vị: danh mục, quy t�
 pnpm --filter @phongmach/bff test:integration   # BFF với Medplum thật (cần stack đang chạy)
 pnpm e2e                                        # Chromium thật, 13 + 25 + 14 + 12 bước (hai bài cuối ngắt mạng thật, bài cuối dùng hai máy); cần stack + seed + BFF + web đang chạy
 pnpm e2e:cycles                                 # M0-2: 20 chu kỳ ngắt và khôi phục mạng, đếm 0 mất, 0 trùng; chỉ cần stack đang chạy (tự dựng phần còn lại)
+pnpm trial:rehearsal                            # diễn tập kỹ thuật của phiên thử M0-1 trên một phòng khám diễn tập mới; chỉ cần stack đang chạy
 ```
 
 e2e mặc định mở `http://127.0.0.1:5173`; giao diện ở cổng khác thì đặt `E2E_URL` (`dev-up.sh` in ra giá trị đúng). Bài e2e tạo thêm bệnh nhân (tên bắt đầu bằng `Zq`) và các lượt khám trong hai phòng khám demo mỗi lần chạy, và tự dọn hàng chờ (kể cả sau lần chạy hỏng). Để chạy nhanh bước chèn lỗi cổng, khởi động BFF với `OUTBOX_BASE_MS=500 OUTBOX_CAP_MS=2000`. Muốn dữ liệu demo sạch: `pnpm stack:down`, xóa volume
@@ -98,6 +100,25 @@ e2e mặc định mở `http://127.0.0.1:5173`; giao diện ở cổng khác th�
 - Cổng 8111 hoặc 4174 đang bị giữ thì script dừng và báo; đổi bằng `CYCLES_BFF_PORT`, `CYCLES_WEB_PORT`. Đã build sẵn thì `CYCLES_SKIP_BUILD=1`.
 - Tệp phòng khám tạm, nhật ký và log của lần chạy nằm ở `services/bff/.data/e2e-cycles/` (đã gitignore). Mỗi lần chạy để lại một Project thử trong Medplum.
 - `apps/clinic-web/vite.config.ts` đọc `BFF_URL` (mặc định `http://127.0.0.1:8110`) và `PREVIEW_PORT` (mặc định 4173) từ môi trường.
+
+## Phiên thử với bác sĩ (M0-1)
+
+Buổi thử chạy trên một phòng khám thử riêng (phiên `m0-1`), không dùng hai phòng khám demo. Cách điều phối, phiếu phản hồi, phiếu quan sát và mẫu biên bản: [`docs/phien-thu-bac-si.md`](docs/phien-thu-bac-si.md). **Chưa có con số M0-1 nào**; số của bài diễn tập là số chạy thử kỹ thuật.
+
+```bash
+pnpm trial:up                     # tạo hoặc dùng lại phòng khám thử, chạy BFF (8112) và bản build (http://127.0.0.1:4175); Ctrl+C để dừng
+pnpm trial queue bs1 noi warmup   # xếp 3 ca làm quen cho bác sĩ thử 1 (nội); "nhi" cho nhi
+pnpm trial queue bs1 noi          # xếp 12 ca tính số đo
+pnpm trial clear                  # dọn hàng chờ sau lượt của một bác sĩ
+pnpm trial export                 # CSV từng lượt và bảng p50/p90 theo bác sĩ, do đúng hàm tính của BFF (computeMetrics) tính
+pnpm trial sheets                 # sinh lại phiếu ca: docs/phien-thu/ca-mo-phong.md và hai tệp HTML để in, mỗi ca một trang
+pnpm trial:rehearsal              # diễn tập: hai bác sĩ thử đi trọn lượt trên Chromium, xuất số đo, so với màn hình "Thời gian khám"
+```
+
+- Bộ ca (`packages/trial`) là dữ liệu minh họa, **chưa được cố vấn y khoa duyệt**: phải duyệt trước buổi thử.
+- Tệp của phiên nằm ở `services/bff/.data/trial/<phiên>/` (đã gitignore): tệp phòng khám có bí mật của tài khoản máy, nhật ký truy cập, log, bản xuất. Phiên khác: `TRIAL=<tên> pnpm trial …`; tên bắt đầu bằng `dien-tap` là phiên diễn tập và mọi bản xuất của nó tự đóng nhãn "số chạy thử kỹ thuật".
+- `pnpm trial:rehearsal` không nằm trong `pnpm e2e` và chưa chạy trong CI. Mỗi lần chạy để lại một Project diễn tập trong Medplum.
+- BFF chỉ nghe trên localhost, nên bác sĩ phải ngồi đúng máy đang chạy `pnpm trial:up`.
 
 ## Giới hạn của bản hiện tại
 

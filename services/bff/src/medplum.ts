@@ -409,7 +409,17 @@ export class MedplumClinicStore implements ClinicStore {
       const individual = e.participant?.[0]?.individual;
       const seconds = e.extension?.find((x) => x.url === EXTENSIONS.visitSeconds)?.valueInteger;
       const source = e.extension?.find((x) => x.url === EXTENSIONS.visitSecondsSource)?.valueCode as VisitSecondsSource | undefined;
-      return { doctorName: individual?.display, doctorUserId: individual?.identifier?.value, seconds, source };
+      return {
+        doctorName: individual?.display,
+        doctorUserId: individual?.identifier?.value,
+        seconds,
+        source,
+        encounterId: e.id,
+        patientId: refId(e.subject?.reference, 'Patient'),
+        code: e.identifier?.find((i) => i.system === SYSTEMS.visitCode)?.value,
+        openedAt: e.extension?.find((x) => x.url === EXTENSIONS.examOpened)?.valueDateTime,
+        finishedAt: e.period?.end,
+      };
     });
     return { visits, truncated: found.length > limit };
   }
