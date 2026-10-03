@@ -2,3 +2,5 @@
 .env
 config/
 experiments/.bench-state.json
+experiments/.stack-do/
+experiments/.bff-search/
