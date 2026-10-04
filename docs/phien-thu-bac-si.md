@@ -53,7 +53,7 @@ Máy Windows 11 có Git Bash, Docker Desktop đang mở, Node 22 (như `README.m
 
 ```bash
 pnpm install
-pnpm stack:up          # nếu stack Medplum chưa chạy; trên máy dev hiện tại stack đã chạy sẵn
+pnpm stack:up          # nếu stack Medplum chưa chạy
 pnpm trial:up          # tạo hoặc dùng lại phòng khám thử, build giao diện, chạy BFF (8112) và giao diện (4175)
 ```
 
