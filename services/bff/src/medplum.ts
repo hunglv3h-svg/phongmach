@@ -4,7 +4,6 @@ import {
   DEFAULT_RETRY,
   buildAllergy,
   buildCheckIn,
-  buildCompletionBundle,
   buildHistoryItem,
   claim,
   failedEntries,
@@ -15,6 +14,7 @@ import {
   markSent,
   measureVisit,
   nextNumber,
+  planCompletion,
   queueNumberOf,
   requeue,
   toAllergyView,
@@ -43,8 +43,9 @@ import {
   type VisitSummary,
 } from '@phongmach/clinical';
 import { EXTENSIONS, SYSTEMS, buildPatient, clientUuidQuery, patchPatient, rankByPhoneSuffix, toPatientSummary, type NewPatientInput, type PatientSummary, type SearchIntent } from '@phongmach/fhir-vn-model';
+import { DEFAULT_CONFLICT_RETRY, backoff, isConflictEntry, retryOnConflict, type ConflictRetry } from './conflict.js';
 import type { GatewayPayload } from './gateway.js';
-import type { CheckInOptions, ClinicStore, CompleteCommand, CompleteResult, Doctor, FinishedVisit, OpenResult, OutboxJob, StoreFactory } from './store.js';
+import { BusyError, type CheckInOptions, type ClinicStore, type CompleteCommand, type CompleteResult, type Doctor, type FinishedVisit, type OpenResult, type OutboxJob, type StoreFactory } from './store.js';
 import type { Tenant } from './tenants.js';
 
 /** Số kết quả lấy về khi tìm theo đoạn số, trước khi xếp hạng theo "kết thúc bằng". */
@@ -61,6 +62,8 @@ const REVINCLUDES = ['Condition:encounter', 'Observation:encounter', 'ClinicalIm
 
 const isPreconditionFailed = (err: unknown): boolean => err instanceof OperationOutcomeError && err.outcome.id === 'precondition-failed';
 const refId = (ref: string | undefined, type: string): string | undefined => (ref?.startsWith(`${type}/`) ? ref.slice(type.length + 1) : undefined);
+/** id trong `location` của một mục phản hồi (`Loại/id`, có thể kèm `/_history/...`). */
+const locationId = (location: string | undefined, type: string): string | undefined => refId(location, type)?.split('/')[0] || undefined;
 const ifMatch = (r: Resource): { headers: Record<string, string> } | undefined => (r.meta?.versionId ? { headers: { 'If-Match': `W/"${r.meta.versionId}"` } } : undefined);
 
 function entries<T extends Resource>(bundle: Bundle, type: T['resourceType']): T[] {
@@ -70,7 +73,8 @@ function entries<T extends Resource>(bundle: Bundle, type: T['resourceType']): T
 export class MedplumClinicStore implements ClinicStore {
   constructor(
     private readonly medplum: MedplumClient,
-    private readonly policy: RetryPolicy = DEFAULT_RETRY
+    private readonly policy: RetryPolicy = DEFAULT_RETRY,
+    private readonly conflict: ConflictRetry = DEFAULT_CONFLICT_RETRY
   ) {}
 
   // ---------------------------------------------------------------------------------------------------- bệnh nhân
@@ -103,7 +107,7 @@ export class MedplumClinicStore implements ClinicStore {
     const existing = await this.medplum.searchOne('Patient', query);
     if (existing) return { patient: toPatientSummary(existing), created: false };
     // Create có điều kiện để hai yêu cầu đồng thời cùng một clientUuid vẫn chỉ tạo một bản ghi.
-    const saved = await this.medplum.createResourceIfNoneExist(patient, query);
+    const saved = await this.retry('patient', () => this.medplum.createResourceIfNoneExist(patient, query));
     return { patient: toPatientSummary(saved), created: true };
   }
 
@@ -142,10 +146,12 @@ export class MedplumClinicStore implements ClinicStore {
       const enc = buildCheckIn(input, { day, number, now: arrived });
       const code = enc.identifier!.find((i) => i.system === SYSTEMS.visitCode)!.value!;
       // Tạo có điều kiện theo mã lượt khám: hai lễ tân cùng lấy số một lúc thì chỉ một người được số đó, người kia thử số kế tiếp.
-      const saved = await this.medplum.createResourceIfNoneExist(enc, `identifier=${SYSTEMS.visitCode}|${code}`);
+      // Xung đột giao dịch thì gửi lại đúng lời này (cùng số): không tính vào số vòng, không bỏ số.
+      const saved = await this.retry('check-in', () => this.medplum.createResourceIfNoneExist(enc, `identifier=${SYSTEMS.visitCode}|${code}`));
       if (saved.identifier?.some((i) => i.system === SYSTEMS.clientUuid && i.value === uuid)) return { item: this.item(saved, patient), created: true };
     }
-    throw new Error('Không cấp được số thứ tự sau nhiều lần thử');
+    // Quá nhiều lễ tân giành số cùng lúc: chưa cấp gì, máy khách gửi lại cùng clientUuid (503 `busy`, không phải 500).
+    throw new BusyError('check-in-number');
   }
 
   async listQueue(day: string): Promise<QueueItem[]> {
@@ -245,7 +251,7 @@ export class MedplumClinicStore implements ClinicStore {
     const openedSource = enc.extension?.find((e) => e.url === EXTENSIONS.examOpenedSource)?.valueCode === 'client' ? 'client' : 'server';
     // Ký lúc mất mạng: mốc thời gian của bản ghi là giờ ký của máy khách (đúng với tờ đã in), số đo chỉ tính khi hợp lý (OFF-3).
     const measure = measureVisit({ now: cmd.now, opened: opened ? { at: opened, source: openedSource } : undefined, client: cmd.clientTimes });
-    const bundle = buildCompletionBundle({
+    const plan = planCompletion({
       clientUuid: cmd.clientUuid,
       patientId,
       encounter: enc,
@@ -257,10 +263,28 @@ export class MedplumClinicStore implements ClinicStore {
       visitSeconds: measure.seconds,
       visitSecondsSource: measure.source,
     });
-    const response = await this.medplum.executeBatch(bundle);
-    // Medplum không hoàn tác khi một mục lỗi (xem buildCompletionBundle): HTTP 200 vẫn có thể kèm mục 412/400.
-    const failed = failedEntries(response);
-    if (failed.length) return { kind: 'incomplete', failed };
+    // Ghi theo từng bước, bước sau chỉ chạy khi MỌI mục của bước trước đã được ghi (xem planCompletion; F11, F13).
+    // Dừng giữa chừng thì lượt khám CHƯA đóng: gửi lại cùng clientUuid chạy lại từ đầu, mục đã có trả 200, không sinh bản trùng.
+    const records = await this.writeAll(plan.records);
+    if (records.failed.length) return { kind: 'incomplete', failed: records.failed };
+    let written = plan.records.entry?.length ?? 0;
+    if (plan.prescription) {
+      const ids = plan.prescription.requestIndexes.map((i) => locationId(records.response.entry?.[i]?.response?.location, 'MedicationRequest'));
+      if (ids.some((id) => !id)) throw new Error('Medplum không trả id của thuốc đã ghi');
+      const list = plan.prescription.list(ids as string[]);
+      const savedList = await this.retry('complete', () => this.medplum.createResourceIfNoneExist(list.resource, list.ifNoneExist));
+      written += 1;
+      const signed = await this.writeAll(plan.prescription.signed(savedList.id!));
+      if (signed.failed.length) return { kind: 'incomplete', failed: signed.failed.map((f) => ({ ...f, index: f.index + written })) };
+      written += signed.response.entry?.length ?? 0;
+    }
+    // Điểm chốt: chỉ tới đây mới đóng lượt khám. Có người sửa chen ngang (412) thì báo ghi dở như trước, chạy lại sẽ hội tụ.
+    try {
+      await this.medplum.updateResource(plan.closed, ifMatch(enc));
+    } catch (err) {
+      if (isPreconditionFailed(err)) return { kind: 'incomplete', failed: [{ index: written, status: '412' }] };
+      throw err;
+    }
     return { kind: 'ok', visit: (await this.loadVisits({ _id: enc.id! }))[0]!, replayed: false };
   }
 
@@ -274,7 +298,7 @@ export class MedplumClinicStore implements ClinicStore {
   async addAllergy(patientId: string, input: { clientUuid: string; kind: 'class' | 'ingredient'; value: string; label?: string | undefined }, now: Date): Promise<AllergyView | undefined> {
     if (!(await this.readOrUndefined('Patient', patientId))) return undefined;
     const resource = buildAllergy(patientId, input, now);
-    const saved = await this.medplum.createResourceIfNoneExist(resource, clientUuidQuery(input.clientUuid.toLowerCase()));
+    const saved = await this.retry('allergy', () => this.medplum.createResourceIfNoneExist(resource, clientUuidQuery(input.clientUuid.toLowerCase())));
     return toAllergyView(saved);
   }
 
@@ -292,7 +316,7 @@ export class MedplumClinicStore implements ClinicStore {
 
   async addHistory(patientId: string, input: { clientUuid: string; text: string }, now: Date): Promise<HistoryItem | undefined> {
     if (!(await this.readOrUndefined('Patient', patientId))) return undefined;
-    const saved = await this.medplum.createResourceIfNoneExist(buildHistoryItem(patientId, input, now), clientUuidQuery(input.clientUuid.toLowerCase()));
+    const saved = await this.retry('history', () => this.medplum.createResourceIfNoneExist(buildHistoryItem(patientId, input, now), clientUuidQuery(input.clientUuid.toLowerCase())));
     return toHistoryItem(saved);
   }
 
@@ -416,6 +440,24 @@ export class MedplumClinicStore implements ClinicStore {
 
   // ----------------------------------------------------------------------------------------------- nội bộ
 
+  /**
+   * Gửi một gói gồm toàn mục tạo có điều kiện rồi kiểm từng mục. Mục 409 do xung đột giao dịch (F13) không được ghi: chờ ngẫu nhiên
+   * rồi gửi lại cả gói (mục đã ghi trả 200), có giới hạn. Còn mục lỗi loại khác, hoặc hết lượt: trả các mục lỗi để người gọi dừng lại.
+   */
+  private async writeAll(bundle: Bundle): Promise<{ response: Bundle; failed: ReturnType<typeof failedEntries> }> {
+    for (let attempt = 0; ; attempt++) {
+      const response = await this.retry('complete', () => this.medplum.executeBatch(bundle));
+      const failed = failedEntries(response);
+      if (!failed.length || !failed.every(isConflictEntry) || attempt >= this.conflict.retries) return { response, failed };
+      await backoff('complete', attempt, this.conflict);
+    }
+  }
+
+  /** Lời tạo có điều kiện (định danh xác định + `ifNoneExist`): gặp xung đột giao dịch thì thử lại có giới hạn (F13). */
+  private retry<T>(what: string, fn: () => Promise<T>): Promise<T> {
+    return retryOnConflict(what, fn, this.conflict);
+  }
+
   private item(e: Encounter, patient: Patient): QueueItem {
     const item = toQueueItem(e, patient);
     if (!item) throw new Error('Lượt khám thiếu trường bắt buộc');
@@ -532,12 +574,13 @@ export class MedplumTenants {
   constructor(
     private readonly baseUrl: string,
     tenants: Tenant[],
-    private readonly policy: RetryPolicy = DEFAULT_RETRY
+    private readonly policy: RetryPolicy = DEFAULT_RETRY,
+    private readonly conflict: ConflictRetry = DEFAULT_CONFLICT_RETRY
   ) {
     this.tenants = new Map(tenants.map((t) => [t.slug, t]));
   }
 
-  readonly store: StoreFactory = async (slug) => new MedplumClinicStore(await this.client(slug), this.policy);
+  readonly store: StoreFactory = async (slug) => new MedplumClinicStore(await this.client(slug), this.policy, this.conflict);
 
   private client(slug: string): Promise<MedplumClient> {
     const tenant = this.tenants.get(slug);

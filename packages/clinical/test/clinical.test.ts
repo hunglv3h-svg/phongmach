@@ -8,13 +8,13 @@ import {
   backoffMs,
   buildAllergy,
   buildCheckIn,
-  buildCompletionBundle,
   buildHistoryItem,
   buildMedicationRequest,
   buildSendTask,
   buildVitalObservations,
   claim,
   failedEntries,
+  planCompletion,
   cleanVitals,
   initialsOf,
   isDue,
@@ -38,6 +38,7 @@ import {
   toPrescriptionSummary,
   toQueueItem,
   toVisitSummary,
+  wasCompletedBy,
   toLineView,
   vnDay,
   vnDayRange,
@@ -230,7 +231,7 @@ describe('đơn thuốc', () => {
   });
 });
 
-describe('gói hoàn tất lượt khám', () => {
+describe('kế hoạch hoàn tất lượt khám', () => {
   const encounter: Encounter = { ...buildCheckIn({ patientId: 'p1', clientUuid: UUID, specialty: 'noi', priority: 'normal', reason: 'Đau họng' }, { day: '2026-10-20', number: 1, now: NOW }), id: 'e1', meta: { versionId: 'v7' } };
   const called = markCalled(encounter, { id: 'dr1', name: 'BS. Hà' }, NOW);
   const dx = [getIcd10('J02.9')!];
@@ -247,43 +248,59 @@ describe('gói hoàn tất lượt khám', () => {
   const types = (b: Bundle) => (b.entry ?? []).map((e) => e.resource?.resourceType);
   const digestBase64 = () => 'ZGlnZXN0'; // "digest" dạng base64 hợp lệ (Medplum kiểm tra định dạng base64Binary)
 
-  it('khám không kê đơn: không có List, Task, Provenance', () => {
-    const b = buildCompletionBundle(base);
-    expect(b.type).toBe('transaction');
-    expect(types(b)).toEqual(['Observation', 'Observation', 'Condition', 'ClinicalImpression', 'Encounter']);
-    const enc = b.entry!.at(-1)!;
-    expect(enc.request).toMatchObject({ method: 'PUT', url: 'Encounter/e1', ifMatch: 'W/"v7"' });
-    expect(enc.resource).toMatchObject({ status: 'finished', reasonCode: [{ text: 'Đau họng 2 ngày' }], period: { end: base.now.toISOString() } });
+  it('khám không kê đơn: một bước ghi, không có đơn; đóng lượt khám là lời ghi riêng', () => {
+    const p = planCompletion(base);
+    expect(p.records.type).toBe('transaction');
+    expect(types(p.records)).toEqual(['Observation', 'Observation', 'Condition', 'ClinicalImpression']);
+    expect(p.prescription).toBeUndefined();
+    // Điểm chốt không nằm trong gói nào: người gọi gửi nó sau cùng, kèm If-Match theo phiên bản đã đọc (meta.versionId giữ nguyên).
+    expect(p.closed).toMatchObject({ resourceType: 'Encounter', id: 'e1', meta: { versionId: 'v7' }, status: 'finished', reasonCode: [{ text: 'Đau họng 2 ngày' }], period: { end: base.now.toISOString() } });
+    expect(wasCompletedBy(p.closed, UUID)).toBe(true);
   });
-  it('kê đơn: List, thuốc, chữ ký mô phỏng và Task cùng một giao dịch, tham chiếu urn khớp', () => {
+  it('kê đơn: thuốc ở bước 1, đơn ở bước 2 trỏ tới id thật của thuốc, chữ ký mô phỏng và Task ở bước 3 trỏ tới id thật của đơn', () => {
     const lines = [line('Amoxicillin 500 mg', { perDose: 1, timesPerDay: 3, days: 5 }), line('Paracetamol 500 mg', { perDose: 1, quantity: 10 })];
-    const b = buildCompletionBundle({ ...base, prescription: { code: 'PM-261020-ABC123', lines, advice: 'Uống nhiều nước', followUpDays: 3, acks: [{ key: 'k', message: 'm', reason: 'đã cân nhắc' }], digestBase64 } });
-    expect(types(b)).toEqual(['Observation', 'Observation', 'Condition', 'ClinicalImpression', 'MedicationRequest', 'MedicationRequest', 'List', 'Provenance', 'Task', 'Encounter']);
-    const list = b.entry!.find((e) => e.resource?.resourceType === 'List')!;
-    const mrUrls = b.entry!.filter((e) => e.resource?.resourceType === 'MedicationRequest').map((e) => e.fullUrl);
-    expect((list.resource as List).entry?.map((x) => x.item?.reference)).toEqual(mrUrls);
-    const prov = b.entry!.find((e) => e.resource?.resourceType === 'Provenance')!.resource as { target: Array<{ reference: string }>; extension: Array<{ valueBoolean: boolean }>; signature: Array<{ data: string }> };
-    expect(prov.target[0]!.reference).toBe(list.fullUrl);
+    const p = planCompletion({ ...base, prescription: { code: 'PM-261020-ABC123', lines, advice: 'Uống nhiều nước', followUpDays: 3, acks: [{ key: 'k', message: 'm', reason: 'đã cân nhắc' }], digestBase64 } });
+    expect(types(p.records)).toEqual(['Observation', 'Observation', 'Condition', 'ClinicalImpression', 'MedicationRequest', 'MedicationRequest']);
+    const rx = p.prescription!;
+    expect(rx.requestIndexes).toEqual([4, 5]);
+    // Bước 1 không có tham chiếu nội bộ gói: một mục lỗi không làm mục khác trỏ tới id chưa từng tồn tại (F13).
+    expect(p.records.entry!.some((e) => e.fullUrl)).toBe(false);
+    expect(JSON.stringify(p.records)).not.toContain('urn:uuid:');
+
+    const { resource: list, ifNoneExist } = rx.list(['mr-a', 'mr-b']);
+    expect(list.entry?.map((x) => x.item?.reference)).toEqual(['MedicationRequest/mr-a', 'MedicationRequest/mr-b']);
+    expect(list.identifier?.map((i) => i.value)).toEqual([`${UUID}:list`, 'PM-261020-ABC123']);
+    expect(ifNoneExist).toBe(`identifier=urn:phongmach:client-uuid|${UUID}:list`);
+    // Thiếu id của một thuốc nghĩa là bước 1 chưa xong: không dựng đơn.
+    expect(() => rx.list(['mr-a'])).toThrow(DomainError);
+    expect(() => rx.list(['mr-a', ''])).toThrow(DomainError);
+
+    const signed = rx.signed('l1');
+    expect(types(signed)).toEqual(['Provenance', 'Task']);
+    const prov = signed.entry![0]!.resource as { target: Array<{ reference: string }>; extension: Array<{ valueBoolean: boolean }>; signature: Array<{ data: string }> };
+    expect(prov.target[0]!.reference).toBe('List/l1');
     expect(prov.extension[0]!.valueBoolean).toBe(true); // nhãn mô phỏng
     expect(prov.signature[0]!.data).toBe('ZGlnZXN0');
-    const task = b.entry!.find((e) => e.resource?.resourceType === 'Task')!.resource as Task;
-    expect(task.focus?.reference).toBe(list.fullUrl);
+    const task = signed.entry![1]!.resource as Task;
+    expect(task.focus?.reference).toBe('List/l1');
     expect(task.status).toBe('requested');
     expect(task.identifier?.map((i) => i.value)).toContain('PM-261020-ABC123');
-    // Mọi mục đều là giao dịch hợp lệ: có request.
-    expect(b.entry!.every((e) => e.request?.method && e.request.url)).toBe(true);
-    // Điểm chốt đứng cuối.
-    expect(b.entry!.at(-1)!.resource?.resourceType).toBe('Encounter');
+    expect(JSON.stringify(signed)).not.toContain('urn:uuid:');
+    expect(() => rx.signed('')).toThrow(DomainError);
+    // Mọi mục của cả hai gói đều là lời tạo có điều kiện hợp lệ.
+    expect([...p.records.entry!, ...signed.entry!].every((e) => e.request?.method === 'POST' && e.request.url && e.request.ifNoneExist)).toBe(true);
+    // Lượt khám không nằm trong gói nào.
+    expect([...types(p.records), ...types(signed)]).not.toContain('Encounter');
   });
   it('khứ hồi toàn bộ: dựng gói, giả lập máy chủ gán id, đọc lại thành VisitSummary', () => {
     const lines = [line('Amoxicillin 500 mg', { perDose: 1, timesPerDay: 3, days: 5 })];
-    const b = buildCompletionBundle({ ...base, prescription: { code: 'PM-X', lines, advice: 'Nghỉ ngơi', followUpDays: 5, acks: [{ key: 'allergy:x', message: 'Dị ứng X', reason: 'đã dùng trước đây' }], digestBase64 } });
-    const res = (t: string) => b.entry!.filter((e) => e.resource?.resourceType === t).map((e, i) => ({ ...e.resource!, id: t === 'Encounter' ? 'e1' : `${t}-${i}` }));
+    const p = planCompletion({ ...base, prescription: { code: 'PM-X', lines, advice: 'Nghỉ ngơi', followUpDays: 5, acks: [{ key: 'allergy:x', message: 'Dị ứng X', reason: 'đã dùng trước đây' }], digestBase64 } });
+    const res = (t: string) => p.records.entry!.filter((e) => e.resource?.resourceType === t).map((e, i) => ({ ...e.resource!, id: `${t}-${i}` }));
     const requests = res('MedicationRequest') as MedicationRequest[];
-    const list = { ...(res('List')[0] as List), entry: requests.map((r) => ({ item: { reference: `MedicationRequest/${r.id}` } })) };
-    const task = { ...(res('Task')[0] as Task), id: 't1' };
+    const list = { ...p.prescription!.list(requests.map((r) => r.id!)).resource, id: 'l1' };
+    const task = { ...(p.prescription!.signed('l1').entry![1]!.resource as Task), id: 't1' };
     const v = toVisitSummary({
-      encounter: res('Encounter')[0] as Encounter,
+      encounter: p.closed,
       conditions: res('Condition') as never,
       impression: res('ClinicalImpression')[0] as never,
       observations: res('Observation') as never,
@@ -306,15 +323,21 @@ describe('gói hoàn tất lượt khám', () => {
   });
   it('chạy lại được: mọi mục tạo mới có định danh xác định và ifNoneExist, hai lần dựng cho cùng khóa', () => {
     const lines = [line('Amoxicillin 500 mg', { perDose: 1, timesPerDay: 3, days: 5 })];
-    const make = (clientUuid: string) => buildCompletionBundle({ ...base, clientUuid, prescription: { code: 'PM-X', lines, acks: [], digestBase64 } });
+    // Mọi lời tạo của cả kế hoạch: bước 1, đơn, bước 3.
+    const make = (clientUuid: string) => {
+      const p = planCompletion({ ...base, clientUuid, prescription: { code: 'PM-X', lines, acks: [], digestBase64 } });
+      const list = p.prescription!.list(['mr-0']);
+      return [...p.records.entry!, { resource: list.resource, request: { method: 'POST' as const, url: 'List', ifNoneExist: list.ifNoneExist } }, ...p.prescription!.signed('l1').entry!];
+    };
     const a = make(UUID);
-    const keys = (b: Bundle) => b.entry!.filter((e) => e.request?.method === 'POST').map((e) => e.request!.ifNoneExist);
+    const keys = (entries: typeof a) => entries.map((e) => e.request!.ifNoneExist);
+    expect(keys(a)).toHaveLength(8); // 2 sinh hiệu, 1 chẩn đoán, 1 nhận định, 1 thuốc, đơn, chữ ký, Task
     expect(keys(a)).toEqual(keys(make(UUID)));
     expect(keys(a).every((k) => k && /^(identifier|_tag)=urn:phongmach:client-uuid\|/.test(k))).toBe(true);
     expect(new Set(keys(a)).size).toBe(keys(a).length); // không mục nào dùng chung khóa
     expect(keys(make('22222222-2222-4222-8222-222222222222'))).not.toEqual(keys(a));
     // Điều kiện tạo trùng với định danh trên chính tài nguyên (nếu khác nhau, tạo có điều kiện sẽ không bao giờ khớp).
-    for (const e of a.entry!.filter((x) => x.request?.method === 'POST' && x.request.ifNoneExist!.startsWith('identifier='))) {
+    for (const e of a.filter((x) => x.request!.ifNoneExist!.startsWith('identifier='))) {
       const values = ((e.resource as { identifier?: Array<{ value?: string }> }).identifier ?? []).map((i) => i.value);
       expect(values.some((v) => e.request!.ifNoneExist!.endsWith(`|${v}`))).toBe(true);
     }
@@ -332,10 +355,10 @@ describe('gói hoàn tất lượt khám', () => {
       return { drug, input, resolved: resolveLine(drug, input) };
     });
     // Đường máy chủ: gói hoàn tất, giả lập gán id, đọc ngược.
-    const b = buildCompletionBundle({ ...base, now: new Date(signedAt), prescription: { code: 'PM-261020-ABC123', lines: signedLines, advice: '  Uống nhiều nước ', followUpDays: 3, acks, digestBase64 } });
-    const res = (t: string) => b.entry!.filter((e) => e.resource?.resourceType === t).map((e, i) => ({ ...e.resource!, id: `${t}-${i}` }));
+    const p = planCompletion({ ...base, now: new Date(signedAt), prescription: { code: 'PM-261020-ABC123', lines: signedLines, advice: '  Uống nhiều nước ', followUpDays: 3, acks, digestBase64 } });
+    const res = (t: string) => p.records.entry!.filter((e) => e.resource?.resourceType === t).map((e, i) => ({ ...e.resource!, id: `${t}-${i}` }));
     const requests = res('MedicationRequest') as MedicationRequest[];
-    const list = { ...(res('List')[0] as List), entry: requests.map((r) => ({ item: { reference: `MedicationRequest/${r.id}` } })) };
+    const list = { ...p.prescription!.list(requests.map((r) => r.id!)).resource, id: 'List-0' };
     const server = toPrescriptionSummary(list, requests, undefined, 'Nguyễn Văn An')!;
     // Đường trên máy.
     const local = localPrescriptionDetail({
@@ -365,9 +388,12 @@ describe('gói hoàn tất lượt khám', () => {
     const response: Bundle = { resourceType: 'Bundle', type: 'transaction-response', entry: [{ response: { status: '201' } }, { response: { status: '412', outcome: { resourceType: 'OperationOutcome', issue: [{ severity: 'error', code: 'processing', details: { text: 'Precondition Failed' } }] } } }, { response: { status: '200' } }, { response: { status: '404' } }] };
     expect(failedEntries(response)).toEqual([{ index: 1, status: '412', message: 'Precondition Failed' }, { index: 3, status: '404' }]);
     expect(failedEntries({ resourceType: 'Bundle', type: 'transaction-response', entry: [{ response: { status: '201 Created' } }] })).toEqual([]);
+    // Mục bị từ chối vì xung đột giao dịch (F13): đúng hình dạng Medplum 5.2.0 trả về, mã 40001 được đưa ra để người gọi phân biệt.
+    const conflict: Bundle = { resourceType: 'Bundle', type: 'transaction-response', entry: [{ response: { status: '409', outcome: { resourceType: 'OperationOutcome', id: 'conflict', issue: [{ severity: 'error', code: 'conflict', details: { coding: [{ code: '40001' }], text: 'could not serialize access' } }] } } }, { response: { status: '201' } }] };
+    expect(failedEntries(conflict)).toEqual([{ index: 0, status: '409', message: 'could not serialize access', code: '40001' }]);
   });
   it('lượt khám chưa có id thì từ chối', () => {
-    expect(() => buildCompletionBundle({ ...base, encounter: { ...called, id: undefined } })).toThrow(DomainError);
+    expect(() => planCompletion({ ...base, encounter: { ...called, id: undefined } })).toThrow(DomainError);
   });
 });
 

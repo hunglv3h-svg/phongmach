@@ -58,7 +58,7 @@ export type CompleteResult =
   /** Lượt khám đã đóng bằng một lần hoàn tất khác (khác clientUuid). */
   | { kind: 'already-closed' }
   /** Ghi dở: một số mục lỗi. Chạy lại với cùng clientUuid sẽ hoàn tất. */
-  | { kind: 'incomplete'; failed: Array<{ index: number; status: string; message?: string }> };
+  | { kind: 'incomplete'; failed: Array<{ index: number; status: string; message?: string; code?: string }> };
 
 export interface OutboxJob {
   taskId: string;
@@ -84,6 +84,18 @@ export interface OutboxStore {
   claim(job: OutboxJob, now: Date): Promise<boolean>;
   complete(job: OutboxJob, nationalCode: string, now: Date): Promise<void>;
   fail(job: OutboxJob, error: string, now: Date, retryable: boolean): Promise<void>;
+}
+
+/**
+ * Kho đang bận: xung đột giao dịch còn nguyên sau các lần thử lại (kế hoạch, F13), hoặc cấp số không giành được số trống
+ * sau nhiều vòng. Lời ghi này chưa được nhận; gửi lại cùng `clientUuid` là an toàn. BFF trả 503 `busy` kèm `retry: true`.
+ */
+export class BusyError extends Error {
+  /** `what`: loại lời ghi (không phải dữ liệu bệnh nhân), để ghi log. */
+  constructor(readonly what: string) {
+    super(`Kho đang bận: ${what}`);
+    this.name = 'BusyError';
+  }
 }
 
 /** Truy cập dữ liệu của MỘT phòng khám. Mọi thứ khác trong BFF chỉ biết giao diện này, không biết Medplum. */

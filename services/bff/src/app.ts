@@ -9,7 +9,7 @@ import { registerClinicalRoutes } from './routes/clinical.js';
 import type { RouteContext } from './routes/context.js';
 import type { Session, SessionService } from './session.js';
 import type { Role } from './tenants.js';
-import type { StoreFactory } from './store.js';
+import { BusyError, type StoreFactory } from './store.js';
 import type { TenantsFile } from './tenants.js';
 
 declare module 'fastify' {
@@ -74,6 +74,11 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     if (err instanceof DomainError) return reply.code(422).send({ error: err.code, message: err.message });
     if (err.statusCode && err.statusCode >= 400 && err.statusCode < 500) {
       return reply.code(err.statusCode).send({ error: err.code ?? 'bad-request', message: err.message });
+    }
+    if (err instanceof BusyError) {
+      // Xung đột giao dịch còn sau các lần thử lại (F13) hoặc cấp số hết vòng: lời ghi chưa được nhận, máy khách gửi lại cùng clientUuid.
+      req.log.warn({ what: err.what }, 'kho bận: lời ghi chưa được nhận sau các lần thử lại');
+      return reply.code(503).send({ error: 'busy', retry: true, message: 'Máy chủ đang bận, hãy gửi lại: dữ liệu sẽ không bị trùng.' });
     }
     // Chỉ ghi tên và thông điệp lỗi, không ghi cả đối tượng lỗi (có thể mang theo dữ liệu bệnh nhân).
     req.log.error({ errName: err.name, errMessage: err.message }, 'lỗi không xử lý được');

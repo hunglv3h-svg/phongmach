@@ -3,8 +3,9 @@ import { EXTENSIONS, SYSTEMS } from '@phongmach/fhir-vn-model';
 import type { GatewayStatus, GatewayView } from './dto.js';
 
 /**
- * Hộp thư đi (transactional outbox, A2): Task `send-prescription` được ghi CÙNG giao dịch với đơn đã ký,
- * nên không thể có đơn đã ký mà không có việc gửi, và ngược lại.
+ * Hộp thư đi (transactional outbox, A2): Task `send-prescription` được ghi trong cùng lần hoàn tất với đơn đã ký, ngay sau đơn
+ * và TRƯỚC khi lượt khám được đóng (xem `planCompletion`). Lượt khám đã đóng mà có đơn thì luôn có việc gửi; worker chỉ gửi đơn
+ * của lượt khám đã đóng. (Medplum không cho ghi cả hai trong một giao dịch nguyên tử: kế hoạch F11, F13.)
  *
  * Trạng thái FHIR Task ↔ trạng thái hiển thị:
  *   requested → Đã ký | in-progress → Đang gửi | on-hold → Chờ gửi lại | completed → Đã gửi | failed → Lỗi

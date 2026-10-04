@@ -1,6 +1,7 @@
 import { loadConfig } from './config.js';
 import { NdjsonAuditSink } from './audit.js';
 import { buildApp } from './app.js';
+import { DEFAULT_CONFLICT_RETRY } from './conflict.js';
 import { SimulatedGateway } from './gateway.js';
 import { MedplumTenants } from './medplum.js';
 import { startOutboxWorker } from './outbox.js';
@@ -21,7 +22,9 @@ if (config.host !== '127.0.0.1' && config.host !== 'localhost') {
 const tenants = loadTenantsFile(config.tenantsFile);
 const audit = new NdjsonAuditSink(config.auditFile);
 const retry = { baseMs: config.outbox.baseMs, capMs: config.outbox.capMs, maxAttempts: config.outbox.maxAttempts, leaseMs: 60_000 };
-const stores = new MedplumTenants(config.medplumUrl, tenants.tenants, retry).store;
+// Mỗi lần thử lại vì xung đột giao dịch (F13) ghi một dòng log: hành vi này không được chạy âm thầm.
+const conflict = { ...DEFAULT_CONFLICT_RETRY, onRetry: (info: { what: string; attempt: number }) => app.log.warn(info, 'thử lại vì xung đột giao dịch') };
+const stores = new MedplumTenants(config.medplumUrl, tenants.tenants, retry, conflict).store;
 // Bộ nối thật (T-RX) sẽ thay SimulatedGateway ở đây mà không đổi gì khác: cùng giao diện `Gateway`.
 const simulator = config.simulateGateway ? new SimulatedGateway() : undefined;
 const app = buildApp({
