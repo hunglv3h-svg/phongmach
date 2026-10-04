@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Sinh bí mật và cấu hình cho backend Medplum cục bộ (môi trường dev/thử nghiệm).
 //
-//   node infra/medplum/setup.mjs [--force] [--no-rate-limits]
+//   node infra/medplum/setup.mjs [--force] [--no-rate-limits] [--dir <thư mục>]
 //
 // Tạo ra (cả hai đã nằm trong .gitignore, KHÔNG commit):
 //   .env                         mật khẩu Postgres / Redis, dùng bởi docker-compose.yml
@@ -9,15 +9,19 @@
 //
 // Không ghi đè nếu file đã có (đổi mật khẩu sẽ làm hỏng volume Postgres cũ) trừ khi có --force.
 // --no-rate-limits tắt hạn mức FHIR và đăng nhập, chỉ để đo hiệu năng / nạp dữ liệu thử (xem experiments/).
+// --dir ghi hai tệp vào thư mục khác thay cho thư mục này: dùng cho một stack thứ hai chạy song song với stack dev
+// (experiments/stack-do.mjs), chạy compose với --project-directory trỏ tới đó.
+// MEDPLUM_PORT là cổng trên máy chủ; server trong container luôn lắng nghe ở 8103 (docker-compose.yml ánh xạ cổng).
 // Chỉ cần Node >= 18 và openssl; không cần cài gói nào.
 
 import { execFileSync } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const dir = dirname(fileURLToPath(import.meta.url));
+const dirArg = process.argv.indexOf('--dir');
+const dir = dirArg > 0 && process.argv[dirArg + 1] ? resolve(process.argv[dirArg + 1]) : dirname(fileURLToPath(import.meta.url));
 const force = process.argv.includes('--force');
 const noRateLimits = process.argv.includes('--no-rate-limits');
 const envPath = join(dir, '.env');
@@ -44,7 +48,8 @@ const port = Number(process.env.MEDPLUM_PORT ?? 8103);
 const baseUrl = `http://localhost:${port}/`;
 
 const config = {
-  port,
+  // Cổng trong container (docker-compose.yml ánh xạ MEDPLUM_PORT → 8103); baseUrl mang cổng trên máy chủ.
+  port: 8103,
   baseUrl,
   issuer: baseUrl,
   audience: baseUrl,

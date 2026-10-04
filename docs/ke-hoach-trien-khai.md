@@ -1,6 +1,6 @@
 # Kế hoạch triển khai chi tiết — PHONGMACH
 
-Cập nhật 03/10/2026 (lần 5). Dựa trên ba nguồn:
+Cập nhật 03/10/2026 (lần 6: đo M0-3 qua BFF, mục 2). Dựa trên ba nguồn:
 
 1. Báo cáo "Quản lý Phòng mạch Việt Nam" v2.0 (29/09/2026), viết cho nhà đầu tư.
 2. Tài liệu nội bộ "Phân tích – Kế hoạch triển khai SaaS Quản lý Phòng mạch" v1.0 (29/09/2026, 34 trang), viết tắt **TL34**.
@@ -86,13 +86,82 @@ Tải hỗn hợp trên **một** node Medplum (Postgres, Redis và bộ tạo t
 
 Thông lượng bão hòa quanh 700 req/s; ở lần đo đầu là 758 req/s với p95 = 446 ms tại 200 đồng thời. Từ 128 đồng thời trở lên độ trễ tăng gần tuyến tính theo số người dùng.
 
+### Tìm bệnh nhân qua BFF: tiêu chí M0-3 [Đã đo, 03/10/2026]
+
+Các số trên gọi thẳng Medplum. M0-3 (mục 5.3) hỏi về ứng dụng: tìm theo 4 số cuối và tên không dấu, **đúng** và p95 ≤ 200 ms, trên 20.000 bệnh nhân của một phòng khám.
+Đo bằng `infra/medplum/experiments/bff-search.mjs` (cách chạy ở `experiments/README.md`):
+
+- **Dữ liệu.** Một phòng khám đo mới, 20.000 bệnh nhân giả dựng bằng `buildPatient` của `@phongmach/fhir-vn-model` (có `HumanName` không dấu như ứng dụng ghi). Họ theo tỉ lệ người Việt (Nguyễn khoảng 31%), tên gọi phổ biến nhất khoảng 5% mỗi giới, đầu số theo nhà mạng, 12% dùng chung số điện thoại với người nhà, 3% không có số, CCCD giả ở 75% người từ 14 tuổi. Nạp 20.000 trong 233 giây, kiểm từng phần tử của `batch` (20.000 phần tử 201), đếm lại trong Medplum được 20.000, rồi `ANALYZE`. Postgres của stack đo có tổng cộng 53.531 bệnh nhân ở 5 project (các lần chạy thử và hai lần nạp dừng giữa chừng).
+- **Đường đo.** Một BFF thật (`services/bff/src/server.ts`) trỏ vào phòng khám đo, phiên của một phụ tá, `GET /api/patients/search?q=…` như giao diện (tối đa 20 kết quả). Sáu loại truy vấn, mỗi loại 200 truy vấn khác nhau, chọn ngẫu nhiên người cần tìm; riêng "một từ" chỉ có 198 (bằng số tên gọi khác nhau có trong dữ liệu). Chạy tuần tự (một người dùng, trộn thứ tự các loại), rồi ở 16 yêu cầu đồng thời.
+- **Máy.** Máy dev Windows 11 Pro, Intel i7-11800H (8 nhân, 16 luồng), 32 GB RAM, ổ NTFS. Docker Desktop (WSL2) cấp 8 CPU và 19,5 GB cho Medplum 5.2.0, PostgreSQL 16, Redis 7: **stack đo riêng** (`stack-do.mjs`, hạn mức FHIR tắt, `saveAuditEvents` bật), không phải stack dev. BFF và bộ tạo tải là Node 22.23.2 chạy thẳng trên Windows. **BFF, Medplum, Postgres, Redis và bộ tạo tải chạy chung một máy**; cùng lúc máy còn chạy stack Medplum dev và khoảng 25 container của hai dự án khác (không tải nặng).
+
+Độ trễ đo ở phía khách qua BFF (ms), hai lần đo trên cùng dữ liệu với hai bộ truy vấn khác nhau (hạt giống 1739684244 và 411205329):
+
+| Loại truy vấn | Tuần tự p50 / p95 / p99 | Lần 2: p50 / p95 / p99 | 16 đồng thời p50 / p95 / p99 |
+|---|---|---|---|
+| 4 số cuối | 15 / 23 / 27 | 16 / 24 / 26 | 31 / 42 / 47 |
+| Tên không dấu, một từ (tên gọi) | 16 / 23 / 27 | 17 / 25 / 28 | 33 / 45 / 83 |
+| Tên không dấu, hai từ (họ + tên) | 18 / 27 / 29 | 18 / 26 / 32 | 35 / 45 / 53 |
+| Tên không dấu, đủ họ tên | 18 / 30 / 34 | 19 / 29 / 35 | 36 / 55 / 79 |
+| Số điện thoại đầy đủ | 14 / 24 / 29 | 15 / 22 / 27 | 30 / 38 / 44 |
+| CCCD | 15 / 25 / 27 | 15 / 25 / 28 | 30 / 39 / 45 |
+| Tất cả (lâu nhất) | 16 / 26 / 30 (39) | 16 / 26 / 30 (36) | 32 / 45 / 65 (104); 479 yêu cầu/giây |
+
+Tính đúng, so với dữ liệu gốc (lần 1; lần 2 trong ngoặc). "Khớp đúng từng từ" là mỗi từ đã gõ trùng một từ của tên không dấu. Truy vấn có hơn 20 người khớp đúng từng từ thì giao diện không thể hiện hết, nên người cần tìm vắng mặt ở đó là chính đáng; chúng được đếm riêng:
+
+| Loại truy vấn | Có người cần tìm | Khi ≤ 20 người khớp | > 20 người khớp | Ghi chú |
+|---|---|---|---|---|
+| 4 số cuối | 198/200 (199/200) | 198/200 (199/200) | 0 | Mọi người có số **kết thúc** bằng 4 số đều đứng trước người chỉ chứa 4 số ở giữa (0 sai thứ tự); nhưng 5 (4) truy vấn **thiếu** người có số kết thúc bằng 4 số |
+| 4 số cuối, 50 ca khó (4 số bắt đầu bằng đầu số di động, ví dụ `0975`) | 41/50 (41/50) | như bên trái | 0 | 11 (18) truy vấn thiếu người có số kết thúc bằng 4 số; 17 (28) truy vấn có hơn 50 số **chứa** 4 số đó, nhiều nhất 113 |
+| Tên, một từ | 39/198 (45/198) | không có truy vấn nào | 198 (198) | Ở 20.000 bệnh nhân, tên gọi nào cũng có hơn 20 người |
+| Tên, hai từ | 157/200 (142/200) | 120/124 (110/119) | 76 (81) | Ví dụ `vu ha`: 5 người khớp đúng từng từ, 44 người có tên bắt đầu bằng hai từ đó, người cần tìm không có trong 20 kết quả |
+| Tên, đủ họ tên | 196/200 (195/200) | 192/193 (192/193) | 7 (7) | |
+| Số điện thoại đầy đủ, CCCD | 200/200 (200/200) | 200/200 | 0 | |
+
+Mọi kết quả trả về đều khớp truy vấn. 23 (22) trên 1.198 truy vấn ra tập kết quả khác nhau giữa lần chạy tuần tự và lần chạy đồng thời. Tất cả đều là truy vấn có hơn 20 người khớp: mỗi lần Medplum trả một tập 20 người khác.
+
+**Kết quả M0-3: tốc độ đạt, tính đúng chưa đạt.**
+
+- **Tốc độ đạt xa ngưỡng**: p95 tuần tự 23–30 ms cho 4 số cuối và tên không dấu (ngưỡng 200 ms), 41–55 ms ở 16 đồng thời.
+- **4 số cuối sai khi có hơn 50 số chứa 4 số đó.** BFF lấy 50 kết quả `phone:contains` rồi mới xếp người có số kết thúc bằng 4 số lên trước (`FRAGMENT_FETCH`, `rankByPhoneSuffix`). Medplum dịch `phone:contains` thành một biểu thức chính quy (`~*`) trên mọi số của phòng khám, `LIMIT 51`, **không sắp xếp** [Đã đo qua log Postgres]. Khi 4 số trông như một đầu số (`03x`, `08x`, `09x`), hàng trăm số chứa chúng ở đầu, và người cần tìm có thể nằm ngoài 50 kết quả đầu: 1–2 trên 200 truy vấn ngẫu nhiên, 9 trên 50 ca khó (cả hai lần đo). Số số "chứa" tăng tuyến tính theo cỡ phòng khám, nên lỗi tăng theo.
+- **Tên khớp theo đầu từ và không được xếp hạng.** Medplum dịch mỗi từ thành `to_tsquery('simple', 'an:*')` (đầu từ) trên `HumanName`, mỗi từ một `EXISTS`, `LIMIT 21`, không `ORDER BY` [Đã đo qua log Postgres]. Gõ `bui an` ra cả những người họ Bùi tên Anh hoặc Ánh. Khi số người khớp đầu từ vượt 20, người khớp đúng từng từ có thể bị đẩy ra ngoài: 4/124 và 9/119 truy vấn hai từ dù chỉ có 3–20 người khớp đúng, 1/193 truy vấn đủ họ tên (ví dụ `le thuy thu`: 3 người khớp đúng, 102 người khớp đầu từ).
+- **Truy vấn mơ hồ là chuyện thường ở 20.000 bệnh nhân**: mọi truy vấn một từ, 38–41% truy vấn họ + tên và 3,5% truy vấn đủ họ tên có hơn 20 người khớp đúng từng từ. Khi đó giao diện hiện 20 người bất kỳ, đổi giữa hai lần gọi, và không báo là còn người khác.
+
+Tách thời gian (ms, mọi loại gộp lại, lần 1):
+
+| Thành phần | Tuần tự p50 / p95 | 16 đồng thời p50 / p95 |
+|---|---|---|
+| Phía khách, đầu-cuối qua BFF | 16 / 26 | 32 / 45 |
+| BFF tự đo (`responseTime` của Fastify) | 15 / 25 | 32 / 45 |
+| Phần Medplum: `searchPatients` của BFF gọi bằng `fetch`, như BFF | 15 / 24 | 29 / 49 |
+| Phần Medplum: cùng hàm, gọi bằng `http.request` (thời gian của riêng Medplum) | 5,9 / 11 | 22 / 31 |
+| Ghi nhật ký truy cập (`NdjsonAuditSink`: ghi nối rồi `fsync`), đo riêng | 1,0 / 1,1 (p99 3,6) | 14 / 18 (16 lần ghi xếp hàng) |
+| Sàn HTTP tới BFF (`/api/health`): bằng `http.request` / bằng `fetch` | 0,5 / 0,7 và 16 / 17 | |
+
+- **Gần như toàn bộ thời gian của BFF là một lượt gọi Medplum.** Ở p50 tuần tự, BFF mất 15 ms, bằng một lượt gọi Medplum qua `fetch` (15 ms). Phần còn lại (nhật ký truy cập khoảng 1 ms đo riêng; xác thực phiên, kiểm tra tham số, log, trả JSON) nằm trong sai số của phép đo này, cỡ 1–2 ms.
+- **Trên Windows, `fetch` của Node có sàn khoảng 15 ms mỗi yêu cầu**, dù bên kia trả lời ngay: máy chủ Node trống trả lời `fetch` sau 15,4 ms, `http.request` giữ kết nối sau 0,16 ms; cùng bài thử trong container Linux trên máy này cho `fetch` 1,6 ms. `MedplumClient` của BFF gọi bằng `fetch`, nên trên máy này mỗi lời gọi Medplum tốn ít nhất 15 ms, trong khi Medplum tự làm 5–10 ms. Trên Linux, phần tìm của BFF ước còn khoảng 10 ms ở p50 [Phân tích: trừ sàn của `fetch`, chưa đo BFF trên Linux]. Bộ tạo tải gọi BFF bằng `http.request` để không cộng thêm sàn đó ở phía khách (trình duyệt không có).
+- **Nhật ký truy cập là một phần nhỏ của ngân sách**, nhưng các lần ghi xếp hàng nối tiếp (mỗi lần một `fsync`, khoảng 1 ms trên ổ này): 16 lần ghi cùng lúc thì mỗi lần mất 14–18 ms (p50–p95). Trần của một tiến trình BFF vào khoảng 1.000 dòng nhật ký mỗi giây trên ổ này [Phân tích]. Không ảnh hưởng M0; tính vào T-AUD khi một BFF phục vụ nhiều phòng khám (ghi gộp nhiều dòng một lần `fsync`).
+
+Hướng sửa tính đúng [Đề xuất; phiên đo không sửa mã sản phẩm]:
+
+1. **4 số cuối: một khóa tìm chính xác thay cho `contains`.** Lúc tạo và sửa bệnh nhân, ghi thêm 4 số cuối thành một định danh riêng (cùng cách làm với `HumanName` không dấu ở T-NAME), ví dụ hệ `urn:phongmach:sdt-4-so-cuoi`. Tìm chính xác theo token (có chỉ mục) ra đủ người có số kết thúc bằng 4 số; sau đó mới gọi `phone:contains` để thêm người có 4 số ở giữa, bỏ trùng. Phải ghi bổ sung cho bệnh nhân đã có (seed, dữ liệu nhập). Cách khác là một `SearchParameter` tùy biến (cần reindex, T4). Chỉ tăng `FRAGMENT_FETCH` thì chỉ đẩy ngưỡng lên: ở 20.000 bệnh nhân đã có 113 số chứa cùng 4 số.
+2. **Tên: xếp hạng ở BFF.** Lấy nhiều hơn 20 (ví dụ 100) rồi xếp người khớp đúng từng từ trước người chỉ khớp đầu từ, giống `rankByPhoneSuffix`. Chi phí của `_count=100` chưa đo. Vẫn hụt khi số người khớp đầu từ vượt số lấy về (ví dụ `nguyen phu`: 311 người); muốn chắc chắn thì cần thêm một khóa tên không dấu đầy đủ để tìm chính xác trước.
+3. **Truy vấn mơ hồ.** Lấy 21 để biết còn người khác, giao diện báo "còn người trùng tên, gõ thêm năm sinh hoặc 4 số cuối". Cho phép gõ lẫn tên và số (`an 5678`, `nguyen van an 1985`): hiện `classifyQuery` coi chuỗi số là một từ của tên [Đã đọc mã], nên truy vấn đó có lẽ ra 0 kết quả [Chưa kiểm chứng]. Ổn định thứ tự bằng `_sort` (ví dụ người mới cập nhật lên trước), chi phí chưa đo.
+4. **Tốc độ không cần sửa cho M0.** Nếu buổi trình diễn chạy BFF trên Windows (Q16), sàn 15 ms của `fetch` cộng dồn ở các đường gọi Medplum nối tiếp nhiều lần (cấp số, hoàn tất lượt khám), không ở đường tìm. Cách gỡ: chạy BFF trên Linux, hoặc truyền cho `MedplumClient` một `fetch` không có sàn đó [Đề xuất, ngoài phạm vi M0-3].
+
+Bài học khi đo:
+
+- **Đo ngay sau khi nạp hàng loạt thì sai.** Lần chạy thử 500 bệnh nhân đo xong trước khi autovacuum kịp `ANALYZE`: truy vấn tên hai, ba từ bắt đầu bằng "nguyen" mất 300–400 ms; sau `ANALYZE` cùng truy vấn còn 11–18 ms. Script nay tự `ANALYZE`. Việc này cũng áp dụng cho nhập dữ liệu thật (T-MIG): phòng khám vừa nhập Excel có thể tìm chậm trong vài chục giây đầu [Phân tích].
+- **Nạp song song có `ifNoneExist` gặp lỗi tuần tự hóa của Postgres** (F13).
+- **Bộ sinh dữ liệu phải gần thực tế mới đo đúng được tính đúng.** Bản đầu cho "Linh" ở 16% phụ nữ ("Nguyễn Thị Linh" 156 người): quá nhiều truy vấn mơ hồ. Đã làm phẳng; kết luận về hai lỗi trên không đổi.
+
 ### Chưa thử
 
 Giao diện web Medplum, Bot, Subscription (webhook), xác thực hai lớp, chạy nhiều bản server, nâng cấp phiên bản, PITR, ảnh Docker 3.x, mã hóa cấp trường,
 lưu trữ S3/MinIO, mọi bộ nối (Cổng Đơn thuốc, ký số, Zalo, thanh toán, hóa đơn điện tử), phương án B.
 Ngoại tuyến đã làm và đo ở M0-S3 trong phạm vi M0 (mục 5.9); T6 đầy đủ thì chưa.
 
-### Phát hiện từ việc cài đặt và xây dựng (F1–F12)
+### Phát hiện từ việc cài đặt và xây dựng (F1–F13)
 
 | # | Phát hiện | Mức | Tác động | Công việc |
 |---|---|---|---|---|
@@ -108,6 +177,7 @@ Ngoại tuyến đã làm và đo ở M0-S3 trong phạm vi M0 (mục 5.9); T6 �
 | F10 | Dev dùng lưu trữ tệp cục bộ (`binaryStorage: file:`) | [Đã đo] | Không dùng được khi chạy nhiều bản server; production cần S3/MinIO [Chưa kiểm chứng] | T-HA |
 | F11 | `Bundle` loại `transaction` của Medplum 5.2.0 **không nguyên tử**: một mục lỗi (412 do `If-Match` cũ, 400, 404) được báo riêng trong phản hồi **HTTP 200**, còn các mục khác vẫn được ghi. Tạo có điều kiện (`ifNoneExist`) trong gói hoạt động: mục đã có trả 200 và tham chiếu `urn:uuid:` nối vào bản ghi đã có | [Đã đo] 5 ca trên server thật: `PUT` id lạ (201,400), `GET` id lạ (201,404), `If-Match` cũ (201,201,412 và 2 bản ghi vẫn được tạo), tạo có điều kiện trùng (201,200); chạy lại cùng gói sau lỗi 412 cho toàn 200, không bản ghi trùng, mọi tham chiếu đúng | Không được dựa vào hoàn tác hay vào `If-Match` trong gói để chặn ghi đồng thời. Mọi gói ghi nhiều bản ghi phải **chạy lại được** (định danh xác định + `ifNoneExist`), có một mục "điểm chốt" đứng cuối, và người gọi phải kiểm tra từng mục của phản hồi | T-IDEM, T-OUTBOX |
 | F12 | Chromium (bản không giao diện, Playwright) **bỏ mất sự kiện trả về của yêu cầu IndexedDB đang dở** khi trang gọi `print()` trên iframe: lời hứa của yêu cầu đó không bao giờ xong, kể cả sau 10 giây. fetch, hẹn giờ và WebCrypto không bị. Với kho chạy lần lượt, một yêu cầu bị mất làm treo mọi thao tác sau nó, và hàng đợi đồng bộ không gửi được nữa cho tới khi tải lại trang | [Đã đo] IndexedDB thuần mất 8–14 trên 200 yêu cầu đang dở; với kho của ứng dụng: 3 trong 6 lần thử một lần đọc rồi in bị treo; trình duyệt có giao diện [Chưa thử] | Ký khi mất mạng rồi in ngay, đúng lúc hàng đợi đang đọc kho: lần chạy đầu của bài e2e và hai lần chạy gỡ lỗi đều treo đồng bộ | M0-S3 lát 3b: hàng rào in (`whileLocalStoreQuiet`) và hạn 20 giây cho mỗi thao tác kho; e2e đo bất biến "không in khi còn yêu cầu đang dở" |
+| F13 | Tạo có điều kiện (`ifNoneExist`) trong nhiều `batch` chạy song song: Postgres trả lỗi tuần tự hóa 40001 ("could not serialize access due to read/write dependencies among transactions"), Medplum báo **HTTP 409 ở từng phần tử** trong khi `batch` vẫn trả 200; gửi lại ngay các phần tử đó, tới lần thứ 5 vẫn 409 | [Đã đo] 4 batch × 500 bệnh nhân song song, hai lần nạp đều dừng (ở phần tử 1.500 và 9.500); một batch một lúc: 0 lần 409 qua hai lần nạp 20.000 | Nhập dữ liệu hàng loạt phải chạy lần lượt hoặc gửi lại có chờ, và đếm 409 như một lỗi tạm thời (giống 429 ở F5). Ứng dụng cũng gặp: ba lời `POST /api/patients` cùng lúc, một lời nhận 500 vì giao dịch `serializable` của Medplum xung đột và bỏ sau 3 lần thử, BFF không thử lại [Đã đo, 1 lần ở CI: mục 5.9, đoạn M0-ZALO]. Gửi lại cùng `clientUuid` thì không tạo trùng | T-MIG, T-IDEM |
 
 ---
 
@@ -130,7 +200,7 @@ Phần dưới chỉ nêu những chỗ **đã kiểm chứng bằng thực nghi
 | 5 | "AuditEvent cho mọi đọc/ghi PHI" và "cảnh báo truy cập bất thường (đọc > N hồ sơ/phút)" (D.1) | Có điều kiện (F3). Truy cập bất thường thường là quét danh sách/tìm kiếm, mà tìm kiếm **không** sinh sự kiện. Phải ghi nhật ký ở BFF | [Đã đo] | T-AUD |
 | 6 | Idempotency theo UUID client cho mọi lệnh ghi (A.4, C.1, C.5) | `PUT /Patient/{uuid do client chọn}` khi chưa tồn tại → **404**: không dùng được id làm khóa. **`If-None-Exist` theo identifier hoạt động**: POST 2 lần → 201 rồi 200, 1 bản ghi; transaction bundle gửi lại → 201 rồi 200, 1 bản ghi | [Đã đo] | Lưu UUID client thành `identifier`, dùng create có điều kiện (T-IDEM) |
 | 7 | "Transactional outbox": ghi MedicationRequest vào Medplum và outbox "GửiĐơnQuốcGia" **cùng giao dịch** (C.5 bước 4) | Không khả thi như mô tả: ghi vào Medplum đi qua API của nó, ghi outbox nằm ở DB của BFF, **không có giao dịch chung** (ghi kép). Mất điện giữa hai bước làm đơn đã ký mà không được gửi, hoặc ngược lại | [Phân tích] | Ghi ý định gửi trước, ghi FHIR idempotent theo mã đơn, và có bộ quét đối soát định kỳ tìm đơn đã ký chưa có trạng thái liên thông (T-OUTBOX). **Đã làm ở M0-S2** (xem A2, F11 và mục 5.7) |
-| 8 | Tìm 4 số cuối điện thoại dưới 200 ms (D.5) | 6–7 ms ở 20.000 bệnh nhân/project. Tìm không dấu thì hỏng (F4). TL34 tìm trong cache client trước nên không dấu phải được chuẩn hóa ở client, còn phía server vẫn cần T-NAME | [Đã đo] | Giữ ngân sách; thêm kiểm tra ở quy mô 500 tenant (T2) |
+| 8 | Tìm 4 số cuối điện thoại dưới 200 ms (D.5) | 6–7 ms ở 20.000 bệnh nhân/project. Tìm không dấu thì hỏng (F4). TL34 tìm trong cache client trước nên không dấu phải được chuẩn hóa ở client, còn phía server vẫn cần T-NAME. Qua BFF của M0 (mục 2, M0-3): p95 23–24 ms, nhưng 1–2 trên 200 truy vấn không ra người cần tìm khi hơn 50 số chứa 4 số đó | [Đã đo] | Giữ ngân sách; tìm 4 số cuối bằng khóa chính xác thay cho `contains` (T-NAME); thêm kiểm tra ở quy mô 500 tenant (T2) |
 | 9 | Patient-summary p95 < 300 ms ở 500 tenant, 200 người dùng đồng thời (E.2) | Một node chia sẻ 4 vCPU đạt p95 = 294 ms ở 128 đồng thời và 477 ms ở 200 (mục 2). Khả thi nhưng **cần nhiều bản server và DB riêng**; một node dùng chung không đủ | [Đã đo] | T-CAP; chạy T2 trên triển khai nhiều node |
 | 10 | Mã hóa cấp trường theo khóa từng tenant (C.1, D.1): đây là nghĩa của "khóa riêng" | Hợp lý, nhưng trường đã mã hóa **không tìm kiếm được ở server**. CCCD là khóa tìm bệnh nhân và là khóa của `If-None-Exist` | [Phân tích] | Chỉ số mù (HMAC có khóa theo tenant) cho CCCD, quyết định trường nào mã hóa (T-ENC) |
 | 11 | "Pin nhánh LTS" (A.4, D.6) | Không có tag `lts` trên npm lẫn Docker. npm: `latest` = 5.2.0 (30/09/2026), `backport` = 3.3.1 (11/09/2026; 3.3.0 ra từ 02/2025). Docker có `3.3.1`, `5.1`, `5.1.44`. Đã cài 5.2.0 | [Đã đo] | Chốt "LTS" nghĩa là gì (Q12) |
@@ -968,6 +1038,7 @@ M0-S3 (02–13/11) được làm trước lịch, ngay sau M0-S2. Phần ngoại
 | Bài 20 chu kỳ ngắt và khôi phục mạng (M0-2) | **Đạt** | Xem "Kết quả M0-2" bên dưới |
 | Nhãn và tài liệu sau ngoại tuyến (M0-5) | Xong | Trang "Phạm vi" và dải nhãn nói đúng hiện trạng theo cả hai chiều; `e2e:visit` bước 22 (bước 23 từ M0-ZALO) kiểm từng khối, 6 đột biến đều đỏ ở đúng bước đó (mục 5.8, "Lát 6 xong") |
 | Màn hình nhật ký truy cập cho quản trị | Xong từ M0-S1 | Mục 5.6 |
+| Đo M0-3: tìm bệnh nhân qua BFF trên 20.000 bệnh nhân | **Tốc độ đạt, tính đúng chưa đạt** | p95 tuần tự 23–30 ms cho 4 số cuối và tên không dấu (ngưỡng 200 ms). Người cần tìm vắng mặt dù không quá 20 người khớp: 4 số cuối 1–2/200 truy vấn (9/50 ca khó), tên hai từ 4/124 và 9/119, đủ họ tên 1/193. Nguyên nhân, cấu hình máy và hướng sửa ở mục 2 ("Tìm bệnh nhân qua BFF"); chưa sửa mã |
 | Zalo mô phỏng (nút, bản xem trước tin nhắn) | Xong (M0-ZALO, PR #11) | Nút có huy hiệu MÔ PHỎNG ở màn hình kết quả ký, cả khi có mạng lẫn khi ký lúc mất mạng; hộp thoại ghi "MÔ PHỎNG: không có tin nhắn nào được gửi". Tin không có thuốc hay chẩn đoán, số nhận đã che; bài e2e ghi mọi yêu cầu mạng từ lúc bấm tới lúc đóng. Trang "Phạm vi" và dải nhãn đưa Zalo trở lại "Mô phỏng". Xem đoạn "M0-ZALO" bên dưới |
 | Phiên thử với 3 bác sĩ (M0-1) | **Chưa**: cần người thật | Đồng hồ phiên khám và trang số đo đã có (mục 5.7) |
 | Kịch bản 10 phút, bản dự phòng, diễn tập hai lần (M0-6) | **Chưa** | `README.md` có các bước đi qua bằng tay, gồm đoạn ngắt mạng trên một máy; chưa có bài diễn tập tự động, video hay máy dự phòng |
@@ -1108,7 +1179,7 @@ Mục "Mới" là việc phát sinh từ thử nghiệm hoặc từ quyết đ�
 | T-TEN | Cấp phòng khám | Dịch vụ tạo `Project`, `ClientApplication`, `AccessPolicy`, hạn mức, `Project.link` tới danh mục; tạo/tạm khóa/xóa; không dùng quyền siêu quản trị cho vận hành thường xuyên. M0: mức tối thiểu cho hai phòng khám demo | L | M0, 1 | |
 | T-QUOTA | Hạn mức | `userFhirQuota`/`totalFhirQuota` từng project; tài khoản nhập dữ liệu hạn mức cao; proxy chuyển IP thật để hạn mức đăng nhập không gộp phòng khám | S | 1 | |
 | T-AUD | Nhật ký truy cập | Kiến trúc hai tầng (A3); nhật ký BFF cho mở hồ sơ/tìm kiếm/xuất; kho bất biến; phân vùng và lưu giữ AuditEvent; cảnh báo truy cập bất thường. M0: nhật ký ở BFF và màn hình xem | L | M0, 1 | |
-| T-NAME | Tìm tên không dấu | Hai hướng ở A7; gồm xếp hạng kết quả theo 4 số cuối | M | M0, 1 | |
+| T-NAME | Tìm tên không dấu | Hai hướng ở A7; gồm xếp hạng kết quả theo 4 số cuối. Sau đo M0-3 (mục 2): khóa chính xác cho 4 số cuối, xếp người khớp đúng từng từ trước người khớp đầu từ, báo khi còn người trùng tên | M | M0, 1 | |
 | T-FHIR | Hồ sơ FHIR và định danh | `StructureDefinition` cho CCCD, mã đơn, ICD-10; định danh chuẩn thay URN tạm | M | 1 | |
 | T-IDEM | Ghi lặp lại được | A1: identifier + `If-None-Exist`, `urn:uuid:` trong transaction, kiểm thử gửi lại | M | M0, 1 | ✓ |
 | T-OUTBOX | Gửi cổng không mất đơn | A2: outbox ý định, đối soát, gửi idempotent theo mã đơn; gộp với T-RX khi thiết kế | L | 1 | ✓ |
