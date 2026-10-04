@@ -2,20 +2,26 @@ import { describe, expect, it } from 'vitest';
 import {
   DomainError,
   EXTENSIONS,
+  SEARCH_TAGS,
   SYSTEMS,
   buildPatient,
   classifyQuery,
   clientUuidQuery,
   foldName,
+  hasSearchKeys,
   maskCccd,
   nameTokens,
+  nameWordTag,
   normalizeCccd,
   normalizePhone,
   parseFullName,
   patchPatient,
+  phoneSuffixTagQuery,
+  rankByNameWords,
   rankByPhoneSuffix,
   stripDiacritics,
   toPatientSummary,
+  withSearchKeys,
 } from '../src/index.js';
 
 const UUID = '3f2b8d1e-6c4a-4f0e-9a57-2d1c8b7e5a10';
@@ -149,5 +155,74 @@ describe('patchPatient', () => {
     expect(() => patchPatient(base, { cccd: '123' })).toThrow(DomainError);
     expect(() => patchPatient(base, { birthDate: '2999-01-01' })).toThrow(DomainError);
     expect(base.identifier).toHaveLength(1);
+  });
+});
+
+describe('khóa tìm chính xác (meta.tag)', () => {
+  const codes = (p: { meta?: { tag?: Array<{ system?: string; code?: string }> } }, system: string) => (p.meta?.tag ?? []).filter((t) => t.system === system).map((t) => t.code);
+
+  it('buildPatient ghi từng từ của tên không dấu, chữ thường, và 4 số cuối điện thoại', () => {
+    const p = buildPatient({ clientUuid: UUID, fullName: 'Nguyễn Đức Ân', phone: '+84 912 345 678' });
+    expect(codes(p, SEARCH_TAGS.nameWord)).toEqual(['nguyen', 'duc', 'an']);
+    expect(codes(p, SEARCH_TAGS.phoneSuffix)).toEqual(['5678']);
+  });
+  it('từ lặp lại chỉ ghi một lần; không có số điện thoại thì không có khóa 4 số cuối', () => {
+    const p = buildPatient({ clientUuid: UUID, fullName: 'Lê Thị Lê' });
+    expect(codes(p, SEARCH_TAGS.nameWord)).toEqual(['le', 'thi']);
+    expect(codes(p, SEARCH_TAGS.phoneSuffix)).toEqual([]);
+  });
+  it('withSearchKeys tính lại được nhiều lần, thay khóa cũ và giữ tag của hệ khác', () => {
+    const built = buildPatient({ clientUuid: UUID, fullName: 'Nguyễn Văn An', phone: '0912345678' });
+    const foreign = { system: 'urn:khac', code: 'x' };
+    const stale = { ...built, meta: { versionId: '7', tag: [foreign, { system: SEARCH_TAGS.nameWord, code: 'cu' }, { system: SEARCH_TAGS.phoneSuffix, code: '0000' }] } };
+    const fixed = withSearchKeys(stale);
+    expect(fixed.meta?.versionId).toBe('7');
+    expect(fixed.meta?.tag?.[0]).toEqual(foreign);
+    expect(codes(fixed, SEARCH_TAGS.nameWord)).toEqual(['nguyen', 'van', 'an']);
+    expect(codes(fixed, SEARCH_TAGS.phoneSuffix)).toEqual(['5678']);
+    expect(withSearchKeys(fixed)).toEqual(fixed);
+    expect(stale.meta.tag).toHaveLength(3);
+  });
+  it('hasSearchKeys: hồ sơ tạo trước khi có khóa tìm thì chưa có; khóa sai cũng tính là chưa', () => {
+    const built = buildPatient({ clientUuid: UUID, fullName: 'Nguyễn Văn An', phone: '0912345678' });
+    expect(hasSearchKeys(built)).toBe(true);
+    const { meta: _meta, ...old } = built;
+    expect(hasSearchKeys(old)).toBe(false);
+    expect(hasSearchKeys({ ...built, meta: { tag: built.meta!.tag!.slice(1) } })).toBe(false);
+    expect(hasSearchKeys({ ...built, meta: { tag: [...built.meta!.tag!, { system: SEARCH_TAGS.nameWord, code: 'thua' }] } })).toBe(false);
+  });
+  it('patchPatient giữ khóa tìm, và ghi khóa cho hồ sơ cũ chưa có (PUT không gửi tag thì Medplum xóa tag)', () => {
+    const built = buildPatient({ clientUuid: UUID, fullName: 'Nguyễn Văn An', phone: '0912345678' });
+    expect(patchPatient(built, { birthDate: '1985-03-15' }).meta?.tag).toEqual(built.meta?.tag);
+    const { meta: _meta, ...old } = built;
+    const patched = patchPatient({ ...old, meta: { versionId: '3' } }, { cccd: '000123456789' });
+    expect(codes(patched, SEARCH_TAGS.nameWord)).toEqual(['nguyen', 'van', 'an']);
+    expect(codes(patched, SEARCH_TAGS.phoneSuffix)).toEqual(['5678']);
+    expect(patched.meta?.versionId).toBe('3');
+  });
+  it('tham số _tag cho một từ của tên', () => {
+    expect(nameWordTag('nguyen')).toBe('urn:phongmach:tim:tu-ten|nguyen');
+  });
+  it.each([
+    ['5678', 'urn:phongmach:tim:sdt-4-so-cuoi|5678'],
+    ['345678', 'urn:phongmach:tim:sdt-4-so-cuoi|5678'],
+  ])('tham số _tag cho đoạn số %s: tìm theo 4 số cuối của đoạn', (digits, expected) => {
+    expect(phoneSuffixTagQuery(digits)).toBe(expected);
+  });
+  it('đoạn 3 số: OR của 10 khả năng cho chữ số đứng trước', () => {
+    const values = phoneSuffixTagQuery('678').split(',');
+    expect(values).toHaveLength(10);
+    expect(values[0]).toBe('urn:phongmach:tim:sdt-4-so-cuoi|0678');
+    expect(values[9]).toBe('urn:phongmach:tim:sdt-4-so-cuoi|9678');
+  });
+});
+
+describe('xếp hạng theo từ của tên', () => {
+  const people = [{ fullName: 'Bùi Thị Anh' }, { fullName: 'Bùi Văn An' }, { fullName: 'Bùi Ánh Tuyết' }, { fullName: 'Bùi Thị Ân' }];
+  it('người có đủ từng từ đã gõ lên trước người chỉ khớp đầu từ, giữ thứ tự trong mỗi nhóm', () => {
+    expect(rankByNameWords(people, ['bui', 'an']).map((p) => p.fullName)).toEqual(['Bùi Văn An', 'Bùi Thị Ân', 'Bùi Thị Anh', 'Bùi Ánh Tuyết']);
+  });
+  it('thiếu một từ thì không tính là khớp đúng', () => {
+    expect(rankByNameWords(people, ['bui', 'van', 'anh']).map((p) => p.fullName)).toEqual(people.map((p) => p.fullName));
   });
 });
