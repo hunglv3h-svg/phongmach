@@ -12,7 +12,7 @@
     "trial": "tsx scripts/trial.ts",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run test/unit",
-    "test:integration": "vitest run test/integration"
+    "test:integration": "vitest run test/integration --silent=false"
   },
   "dependencies": {
     "@medplum/core": "5.2.0",

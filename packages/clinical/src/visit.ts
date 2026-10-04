@@ -38,20 +38,41 @@ export interface CompletionInput {
 const part = (clientUuid: string, role: string) => `${clientUuid.toLowerCase()}:${role}`;
 const identifier = (clientUuid: string, role: string) => ({ system: SYSTEMS.clientUuid, value: part(clientUuid, role) });
 const ifNone = (clientUuid: string, role: string) => `identifier=${SYSTEMS.clientUuid}|${part(clientUuid, role)}`;
-const urn = (n: number) => `urn:uuid:00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+
+/** Các bước ghi của một lần hoàn tất lượt khám, theo đúng thứ tự phải gửi. */
+export interface CompletionPlan {
+  /** Bước 1: các bản ghi KHÔNG tham chiếu lẫn nhau (sinh hiệu, chẩn đoán, nhận định, từng thuốc), mỗi mục tạo có điều kiện. */
+  records: Bundle;
+  /** Bước 2 và 3, chỉ có khi kê đơn. */
+  prescription?:
+    | {
+        /** Vị trí các mục thuốc trong `records.entry`, theo thứ tự dòng thuốc của đơn. */
+        requestIndexes: number[];
+        /** Bước 2: đơn thuốc, trỏ tới id THẬT của các thuốc đã ghi ở bước 1 (cùng thứ tự với `requestIndexes`). */
+        list(medicationRequestIds: string[]): { resource: List; ifNoneExist: string };
+        /** Bước 3: chữ ký mô phỏng và việc gửi cổng (outbox), trỏ tới id THẬT của đơn đã ghi ở bước 2. */
+        signed(listId: string): Bundle;
+      }
+    | undefined;
+  /** Bước cuối, điểm chốt: lượt khám đã đóng. Gửi bằng PUT kèm If-Match theo phiên bản đã đọc, SAU khi mọi bước trước đều đạt. */
+  closed: Encounter;
+}
 
 /**
- * Gói hoàn tất một lượt khám: sinh hiệu, chẩn đoán, nhận định, đơn thuốc (nếu có), chữ ký mô phỏng, việc gửi cổng
+ * Kế hoạch hoàn tất một lượt khám: sinh hiệu, chẩn đoán, nhận định, đơn thuốc (nếu có), chữ ký mô phỏng, việc gửi cổng
  * (outbox) và đóng lượt khám.
  *
- * LƯU Ý QUAN TRỌNG (đã đo trên Medplum 5.2.0, xem kế hoạch mục 5.6): `Bundle` loại `transaction` của Medplum KHÔNG nguyên tử.
- * Một mục lỗi (412 do If-Match, 400, 404) được báo riêng từng mục trong phản hồi HTTP 200 còn các mục khác vẫn được ghi.
- * Vì vậy gói này được thiết kế để CHẠY LẠI ĐƯỢC thay vì dựa vào hoàn tác:
- *   - mọi mục tạo mới đều có định danh xác định theo `clientUuid` và `ifNoneExist`, nên chạy lại không sinh bản ghi trùng;
- *   - mục đóng lượt khám (Encounter → finished) đứng CUỐI và là điểm chốt: worker chỉ gửi đơn của lượt khám đã đóng;
- *   - người gọi phải kiểm tra trạng thái từng mục trong phản hồi và coi bất kỳ mục >= 400 là thất bại (chạy lại cùng clientUuid).
+ * LƯU Ý QUAN TRỌNG (đã đo trên Medplum 5.2.0, kế hoạch F11 và F13). `Bundle` loại `transaction` của Medplum KHÔNG nguyên tử:
+ * một mục lỗi (409 do xung đột giao dịch, 412, 400) được báo riêng trong phản hồi HTTP 200, các mục sau nó VẪN chạy, và mục
+ * tham chiếu `urn:uuid:` tới mục lỗi được lưu với một id chưa từng tồn tại. Vì vậy việc hoàn tất KHÔNG gửi trong một gói:
+ *   - chia thành các bước; bước sau chỉ gửi khi mọi mục của bước trước đã được ghi, và chỉ tham chiếu tới id thật;
+ *   - mọi mục tạo mới đều có định danh xác định theo `clientUuid` và `ifNoneExist`, nên gửi lại một bước (hay cả kế hoạch)
+ *     không sinh bản ghi trùng;
+ *   - đóng lượt khám (Encounter → finished) là lời ghi RIÊNG, đứng cuối, và là điểm chốt: lượt khám đã đóng bằng `clientUuid`
+ *     này nghĩa là mọi bản ghi của nó đã có; worker chỉ gửi đơn của lượt khám đã đóng;
+ *   - người gọi phải kiểm tra trạng thái từng mục trong phản hồi (`failedEntries`) trước khi sang bước sau.
  */
-export function buildCompletionBundle(input: CompletionInput): Bundle {
+export function planCompletion(input: CompletionInput): CompletionPlan {
   const { encounter, patientId, now, doctor, clientUuid } = input;
   if (!encounter.id) throw new DomainError('invalid-state', 'Lượt khám chưa có id');
   const vitals = cleanVitals(input.exam.vitals);
@@ -60,9 +81,11 @@ export function buildCompletionBundle(input: CompletionInput): Bundle {
   const encRef = { reference: `Encounter/${encounter.id}` };
   const nowIso = now.toISOString();
   const recorder = doctor.id ? { recorder: { reference: `Practitioner/${doctor.id}`, display: doctor.name } } : {};
-  const create = (resource: BundleEntry['resource'] & { resourceType: string }, role: string, fullUrl?: string): void => {
-    entries.push({ ...(fullUrl ? { fullUrl } : {}), resource, request: { method: 'POST', url: resource.resourceType, ifNoneExist: ifNone(clientUuid, role) } });
-  };
+  const conditional = (resource: BundleEntry['resource'] & { resourceType: string }, role: string): BundleEntry => ({
+    resource,
+    request: { method: 'POST', url: resource.resourceType, ifNoneExist: ifNone(clientUuid, role) },
+  });
+  const create = (resource: BundleEntry['resource'] & { resourceType: string }, role: string): void => void entries.push(conditional(resource, role));
 
   for (const o of buildVitalObservations(vitals, { patientId, encounterId: encounter.id, effective: nowIso })) {
     const role = `obs:${o.code?.coding?.[0]?.code}`;
@@ -104,32 +127,37 @@ export function buildCompletionBundle(input: CompletionInput): Bundle {
   }
 
   const rx = input.prescription;
+  let prescription: CompletionPlan['prescription'];
   if (rx) {
     const diagnoses = input.diagnoses.map((d) => ({ code: d.code, name: d.name }));
-    const mrUrns = rx.lines.map((_, i) => urn(100 + i));
-    rx.lines.forEach((line, i) => {
+    const requestIndexes = rx.lines.map((line, i) => {
       const mr = buildMedicationRequest(line, i, { patientId, encounterId: encounter.id!, code: rx.code, now, doctor, diagnoses });
-      create({ ...mr, identifier: [identifier(clientUuid, `mr:${i}`)] }, `mr:${i}`, mrUrns[i]!);
+      create({ ...mr, identifier: [identifier(clientUuid, `mr:${i}`)] }, `mr:${i}`);
+      return entries.length - 1;
     });
-    const list: List = {
-      resourceType: 'List',
-      status: 'current',
-      mode: 'working',
-      title: `Đơn thuốc ${rx.code}`,
-      code: { coding: [{ system: SYSTEMS.task, code: 'prescription' }], text: 'Đơn thuốc' },
-      identifier: [identifier(clientUuid, 'list'), { system: SYSTEMS.prescriptionLocal, value: rx.code }],
-      subject,
-      encounter: encRef,
-      date: nowIso,
-      source: { ...(doctor.id ? { reference: `Practitioner/${doctor.id}` } : {}), display: doctor.name },
-      entry: mrUrns.map((u) => ({ item: { reference: u } })),
-      ...(rx.advice?.trim() ? { note: [{ text: rx.advice.trim() }] } : {}),
-      extension: [
-        ...(rx.followUpDays !== undefined ? [{ url: EXTENSIONS.followUpDays, valueInteger: rx.followUpDays }] : []),
-        ...acksToExtensions(rx.acks),
-      ],
+    const list = (medicationRequestIds: string[]): { resource: List; ifNoneExist: string } => {
+      // Đơn chỉ được trỏ tới thuốc ĐÃ ghi: thiếu một id nghĩa là bước 1 chưa xong, không được tạo đơn.
+      if (medicationRequestIds.length !== rx.lines.length || medicationRequestIds.some((id) => !id)) throw new DomainError('invalid-state', 'Chưa đủ id thuốc đã ghi để tạo đơn');
+      const resource: List = {
+        resourceType: 'List',
+        status: 'current',
+        mode: 'working',
+        title: `Đơn thuốc ${rx.code}`,
+        code: { coding: [{ system: SYSTEMS.task, code: 'prescription' }], text: 'Đơn thuốc' },
+        identifier: [identifier(clientUuid, 'list'), { system: SYSTEMS.prescriptionLocal, value: rx.code }],
+        subject,
+        encounter: encRef,
+        date: nowIso,
+        source: { ...(doctor.id ? { reference: `Practitioner/${doctor.id}` } : {}), display: doctor.name },
+        entry: medicationRequestIds.map((id) => ({ item: { reference: `MedicationRequest/${id}` } })),
+        ...(rx.advice?.trim() ? { note: [{ text: rx.advice.trim() }] } : {}),
+        extension: [
+          ...(rx.followUpDays !== undefined ? [{ url: EXTENSIONS.followUpDays, valueInteger: rx.followUpDays }] : []),
+          ...acksToExtensions(rx.acks),
+        ],
+      };
+      return { resource, ifNoneExist: ifNone(clientUuid, 'list') };
     };
-    create(list, 'list', urn(1));
 
     // Chữ ký MÔ PHỎNG: băm nội dung đơn, gắn nhãn rõ. Chưa gọi nhà cung cấp ký số (T1).
     const digest = rx.digestBase64(
@@ -144,33 +172,43 @@ export function buildCompletionBundle(input: CompletionInput): Bundle {
       })
     );
     const who = { ...(doctor.id ? { reference: `Practitioner/${doctor.id}` } : {}), display: doctor.name };
-    const provenance: Provenance = {
-      resourceType: 'Provenance',
-      // Provenance không có `identifier` trong R4: dùng thẻ để tạo có điều kiện, chạy lại không sinh bản trùng.
-      meta: { tag: [{ system: SYSTEMS.clientUuid, code: part(clientUuid, 'prov') }] },
-      target: [{ reference: urn(1) }],
-      recorded: nowIso,
-      agent: [{ type: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/provenance-participant-type', code: 'author' }] }, who }],
-      extension: [{ url: EXTENSIONS.simulated, valueBoolean: true }],
-      signature: [
-        {
-          type: [{ system: 'urn:iso-astm:signature-type', code: '1.2.840.10065.1.12.1.1', display: "Author's Signature" }],
-          when: nowIso,
-          who,
-          targetFormat: 'application/json',
-          data: digest,
-        },
-      ],
+    const signed = (listId: string): Bundle => {
+      if (!listId) throw new DomainError('invalid-state', 'Chưa có id đơn đã ghi để ký và gửi cổng');
+      const listRef = `List/${listId}`;
+      const provenance: Provenance = {
+        resourceType: 'Provenance',
+        // Provenance không có `identifier` trong R4: dùng thẻ để tạo có điều kiện, chạy lại không sinh bản trùng.
+        meta: { tag: [{ system: SYSTEMS.clientUuid, code: part(clientUuid, 'prov') }] },
+        target: [{ reference: listRef }],
+        recorded: nowIso,
+        agent: [{ type: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/provenance-participant-type', code: 'author' }] }, who }],
+        extension: [{ url: EXTENSIONS.simulated, valueBoolean: true }],
+        signature: [
+          {
+            type: [{ system: 'urn:iso-astm:signature-type', code: '1.2.840.10065.1.12.1.1', display: "Author's Signature" }],
+            when: nowIso,
+            who,
+            targetFormat: 'application/json',
+            data: digest,
+          },
+        ],
+      };
+      const task = buildSendTask({ listRef, patientId, localCode: rx.code, now });
+      return {
+        resourceType: 'Bundle',
+        type: 'transaction',
+        entry: [
+          { resource: provenance, request: { method: 'POST', url: 'Provenance', ifNoneExist: `_tag=${SYSTEMS.clientUuid}|${part(clientUuid, 'prov')}` } },
+          conditional({ ...task, identifier: [...(task.identifier ?? []), identifier(clientUuid, 'task')] }, 'task'),
+        ],
+      };
     };
-    entries.push({ resource: provenance, request: { method: 'POST', url: 'Provenance', ifNoneExist: `_tag=${SYSTEMS.clientUuid}|${part(clientUuid, 'prov')}` } });
-
-    const task = buildSendTask({ listRef: urn(1), patientId, localCode: rx.code, now });
-    create({ ...task, identifier: [...(task.identifier ?? []), identifier(clientUuid, 'task')] }, 'task');
+    prescription = { requestIndexes, list, signed };
   }
 
-  // Điểm chốt: đóng lượt khám đứng cuối, kèm If-Match theo phiên bản đã đọc.
+  // Điểm chốt: lượt khám đã đóng. Người gọi gửi nó sau cùng, bằng một lời ghi riêng kèm If-Match theo phiên bản đã đọc.
   const reason = input.exam.reason?.trim();
-  const finished: Encounter = {
+  const closed: Encounter = {
     ...encounter,
     identifier: [...(encounter.identifier ?? []).filter((i) => i.value !== part(clientUuid, 'complete')), identifier(clientUuid, 'complete')],
     status: 'finished',
@@ -182,21 +220,21 @@ export function buildCompletionBundle(input: CompletionInput): Bundle {
       ...(input.visitSecondsSource ? [{ url: EXTENSIONS.visitSecondsSource, valueCode: input.visitSecondsSource }] : []),
     ],
   };
-  entries.push({
-    resource: finished,
-    request: { method: 'PUT', url: `Encounter/${encounter.id}`, ...(encounter.meta?.versionId ? { ifMatch: `W/"${encounter.meta.versionId}"` } : {}) },
-  });
-
-  return { resourceType: 'Bundle', type: 'transaction', entry: entries };
+  return { records: { resourceType: 'Bundle', type: 'transaction', entry: entries }, prescription, closed };
 }
 
-/** Mục phản hồi lỗi (>= 400) của một gói đã gửi. Medplum báo lỗi từng mục trong HTTP 200: phải tự kiểm tra. */
-export function failedEntries(response: Bundle): Array<{ index: number; status: string; message?: string }> {
+/**
+ * Mục phản hồi lỗi (>= 400) của một gói đã gửi. Medplum báo lỗi từng mục trong HTTP 200: phải tự kiểm tra.
+ * `code`: mã đi kèm lỗi nếu có (40001 khi mục bị từ chối vì xung đột giao dịch, F13).
+ */
+export function failedEntries(response: Bundle): Array<{ index: number; status: string; message?: string; code?: string }> {
   return (response.entry ?? []).flatMap((e, index) => {
     const status = String(e.response?.status ?? '');
     if (status && Number.parseInt(status, 10) < 400) return [];
-    const message = e.response?.outcome?.issue?.[0]?.details?.text ?? e.response?.outcome?.issue?.[0]?.diagnostics;
-    return [{ index, status: status || '?', ...(message ? { message } : {}) }];
+    const issue = e.response?.outcome?.issue?.[0];
+    const message = issue?.details?.text ?? issue?.diagnostics;
+    const code = issue?.details?.coding?.[0]?.code;
+    return [{ index, status: status || '?', ...(message ? { message } : {}), ...(code ? { code } : {}) }];
   });
 }
 
