@@ -1,0 +1,27 @@
+{
+  "name": "@phongmach/trial",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Bộ ca khám mô phỏng và phiếu ca cho phiên thử với bác sĩ (tiêu chí M0-1). DỮ LIỆU MINH HỌA, chưa được cố vấn y khoa duyệt; không phải mã sản phẩm",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@phongmach/catalogs": "workspace:*",
+    "@phongmach/clinical": "workspace:*",
+    "@phongmach/rules": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^6.0.0",
+    "vitest": "^5.0.0"
+  }
+}
