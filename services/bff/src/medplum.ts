@@ -42,14 +42,19 @@ import {
   type VisitContext,
   type VisitSummary,
 } from '@phongmach/clinical';
-import { EXTENSIONS, SYSTEMS, buildPatient, clientUuidQuery, patchPatient, rankByPhoneSuffix, toPatientSummary, type NewPatientInput, type PatientSummary, type SearchIntent } from '@phongmach/fhir-vn-model';
+import { EXTENSIONS, SYSTEMS, buildPatient, clientUuidQuery, nameWordTag, patchPatient, phoneSuffixTagQuery, rankByNameWords, rankByPhoneSuffix, toPatientSummary, type NewPatientInput, type PatientSummary, type SearchIntent } from '@phongmach/fhir-vn-model';
 import { DEFAULT_CONFLICT_RETRY, backoff, isConflictEntry, retryOnConflict, type ConflictRetry } from './conflict.js';
 import type { GatewayPayload } from './gateway.js';
 import { BusyError, type CheckInOptions, type ClinicStore, type CompleteCommand, type CompleteResult, type Doctor, type FinishedVisit, type OpenResult, type OutboxJob, type StoreFactory } from './store.js';
 import type { Tenant } from './tenants.js';
 
-/** Số kết quả lấy về khi tìm theo đoạn số, trước khi xếp hạng theo "kết thúc bằng". */
+/** Số kết quả "chứa đoạn số" lấy về để lấp chỗ sau những người có số KẾT THÚC bằng đoạn đó (tìm riêng, theo khóa). */
 const FRAGMENT_FETCH = 50;
+/**
+ * Số người cùng 4 số cuối lấy về theo khóa tìm, trước khi lọc theo cả đoạn đã gõ. Ở 20.000 bệnh nhân, nhiều nhất 12 người chung
+ * 4 số cuối [Đã đo]; đoạn 3 số thì trung bình 20 người [Phân tích].
+ */
+const SUFFIX_FETCH = 100;
 const QUEUE_MAX = 200;
 const CHECK_IN_ATTEMPTS = 5;
 /** Số bệnh nhân mỗi lần hỏi dị ứng khi nạp trước (giữ URL ngắn). */
@@ -65,6 +70,16 @@ const refId = (ref: string | undefined, type: string): string | undefined => (re
 /** id trong `location` của một mục phản hồi (`Loại/id`, có thể kèm `/_history/...`). */
 const locationId = (location: string | undefined, type: string): string | undefined => refId(location, type)?.split('/')[0] || undefined;
 const ifMatch = (r: Resource): { headers: Record<string, string> } | undefined => (r.meta?.versionId ? { headers: { 'If-Match': `W/"${r.meta.versionId}"` } } : undefined);
+
+/** Bỏ bản trùng theo id, giữ lần xuất hiện đầu (thứ tự xếp hạng). */
+function uniqueById<T extends { id: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+}
 
 function entries<T extends Resource>(bundle: Bundle, type: T['resourceType']): T[] {
   return (bundle.entry ?? []).map((e) => e.resource).filter((r): r is T => r?.resourceType === type);
@@ -88,15 +103,31 @@ export class MedplumClinicStore implements ClinicStore {
       case 'phone':
         return this.search({ phone: intent.phone, _count: String(limit) });
       case 'phone-fragment': {
-        const found = await this.search({ 'phone:contains': intent.digits, _count: String(FRAGMENT_FETCH) });
-        return rankByPhoneSuffix(found, intent.digits).slice(0, limit);
+        // Hai truy vấn song song. `phone:contains` của Medplum không sắp xếp và bị cắt ở _count: khi hơn FRAGMENT_FETCH số chứa đoạn đã gõ
+        // (ví dụ "0975", trùng một đầu số), người có số KẾT THÚC bằng đoạn đó có thể nằm ngoài phần trả về [Đã đo, M0-3].
+        // Vì vậy những người đó được tìm riêng, chính xác, theo khóa 4 số cuối; kết quả "chứa" chỉ lấp chỗ còn lại,
+        // và vẫn đưa ra được hồ sơ tạo trước khi có khóa tìm.
+        const [bySuffix, containing] = await Promise.all([
+          this.search({ _tag: phoneSuffixTagQuery(intent.digits), _count: String(SUFFIX_FETCH) }),
+          this.search({ 'phone:contains': intent.digits, _count: String(FRAGMENT_FETCH) }),
+        ]);
+        const ending = bySuffix.filter((p) => p.phone?.endsWith(intent.digits));
+        return uniqueById([...ending, ...rankByPhoneSuffix(containing, intent.digits)]).slice(0, limit);
       }
       case 'name': {
-        // Mỗi token là một điều kiện AND; tên không dấu khớp nhờ HumanName không dấu thêm lúc tạo (T-NAME).
-        const params = new URLSearchParams();
-        for (const token of intent.tokens) params.append('name', token);
-        params.set('_count', String(limit));
-        return this.search(params);
+        // Hai truy vấn song song, mỗi từ là một điều kiện AND. Tham số `name` của Medplum khớp theo ĐẦU TỪ ("an" ra cả "Anh"),
+        // không sắp xếp: người khớp đúng cả từ có thể bị đẩy ra ngoài _count [Đã đo, M0-3]. Người khớp đúng từng từ được tìm riêng
+        // theo khóa; kết quả theo đầu từ (tên không dấu khớp nhờ HumanName không dấu thêm lúc tạo, T-NAME) lấp chỗ còn lại.
+        const exact = new URLSearchParams();
+        const prefix = new URLSearchParams();
+        for (const token of intent.tokens) {
+          exact.append('_tag', nameWordTag(token));
+          prefix.append('name', token);
+        }
+        exact.set('_count', String(limit));
+        prefix.set('_count', String(limit));
+        const [byWords, byPrefix] = await Promise.all([this.search(exact), this.search(prefix)]);
+        return uniqueById([...byWords, ...rankByNameWords(byPrefix, intent.tokens)]).slice(0, limit);
       }
     }
   }
