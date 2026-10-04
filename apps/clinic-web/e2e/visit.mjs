@@ -225,7 +225,10 @@ try {
   ok('nhập lý do vẫn kê (lý do 2 ký tự không đủ) thì mở khóa "Ký & In"');
 
   // Ký bằng bấm đúp: chỉ một đơn
-  const before = (await api('GET', `/api/patients/${await patientIdOf()}/visits?limit=50`)).json.visits.length;
+  // Đếm lượt khám mới theo id, không theo độ dài danh sách: BFF trả tối đa 50 lượt (mới nhất trước), mà bệnh nhân demo
+  // có thêm lượt khám sau mỗi lần chạy e2e, nên tới lần chạy thứ ~50 độ dài dừng ở 50 và phép đếm cũ luôn ra 0.
+  const visitIds = async () => (await api('GET', `/api/patients/${await patientIdOf()}/visits?limit=50`)).json.visits.map((v) => v.encounterId);
+  const before = new Set(await visitIds());
   const completed = page.waitForResponse((r) => /\/api\/visits\/.+\/complete/.test(r.url()) && r.request().method() === 'POST');
   await page.getByTestId('sign').dblclick();
   const res = await completed;
@@ -234,8 +237,8 @@ try {
   await page.getByTestId('sign-result').waitFor();
   assert.match(await page.getByTestId('rx-code').innerText(), /^PM-\d{6}-[0-9A-Z]{6}$/);
   assert.equal(signed.prescription.acknowledgements.length >= 2, true, 'lý do xác nhận được lưu cùng đơn');
-  const after = (await api('GET', `/api/patients/${await patientIdOf()}/visits?limit=50`)).json.visits.length;
-  assert.equal(after, before + 1, 'bấm đúp không tạo hai lượt khám');
+  const added = (await visitIds()).filter((id) => !before.has(id));
+  assert.equal(added.length, 1, `bấm đúp không tạo hai lượt khám, thực tế ${added.length} lượt mới`);
   const seconds = Number(/\((\d+) giây/.exec(await page.getByTestId('visit-seconds').innerText())[1]);
   assert.ok(seconds >= 1, 'đồng hồ phiên khám do server đo');
   await shot('13-sign-result');
@@ -249,6 +252,38 @@ try {
   const html = (await api('GET', `/api/prescriptions/${signed.prescription.id}/print`)).text;
   await assertOneA5Page(html, '14-print-a5');
   ok('in A5: có mã QR (SVG), mã đơn, nhãn mô phỏng; xuất PDF đúng 1 trang khổ A5');
+
+  // "Gửi đơn qua Zalo" là MÔ PHỎNG: chỉ hiện bản xem trước, không gửi gì. Ghi mọi yêu cầu của trang (mọi địa chỉ, mọi phương thức)
+  // từ lúc bấm tới lúc đóng. Chỉ bỏ qua các việc nền màn hình này vốn làm: hỏi trạng thái liên thông của chính đơn này (mỗi 2 giây),
+  // tải lại hàng chờ và nạp trước hồ sơ (mỗi 30 giây). Điểm mù: một lời gọi giống hệt các yêu cầu nền đó thì không bắt được.
+  const origin = new URL(BASE).origin;
+  const background = (r) => {
+    const u = new URL(r.url());
+    return r.method() === 'GET' && u.origin === origin && [`/api/prescriptions/${signed.prescription.id}`, '/api/queue', '/api/queue/prefetch'].includes(u.pathname);
+  };
+  const duringZalo = [];
+  const recordZalo = (r) => duringZalo.push(r);
+  page.on('request', recordZalo);
+  assert.match(await page.getByTestId('zalo-open').innerText(), /Gửi đơn qua Zalo\s*MÔ PHỎNG/);
+  await page.getByTestId('zalo-open').click();
+  const zalo = page.getByTestId('zalo-preview');
+  await zalo.waitFor();
+  assert.equal(await page.getByTestId('zalo-simulated').innerText(), 'MÔ PHỎNG: không có tin nhắn nào được gửi');
+  const zaloText = await zalo.innerText();
+  const signedDay = new Date(Date.parse(signed.prescription.signedAt) + 7 * 3_600_000).toISOString().slice(0, 10).split('-').reverse().join('/');
+  for (const part of ['Kính gửi Quý khách Nguyễn Văn An', signed.prescription.code, signedDay, '091****678', 'Xem đơn tại: (đường dẫn sẽ có ở M1)', 'không có tên thuốc hay chẩn đoán', 'T-ZALO, T-CONSENT']) {
+    assert.ok(zaloText.includes(part), `bản xem trước thiếu "${part}"`);
+  }
+  for (const secret of ['0912345678', 'Amoxicillin', 'amoxicillin', 'J02', 'Viêm họng', 'Đau họng', 'Penicillin']) assert.ok(!zaloText.includes(secret), `bản xem trước không được có "${secret}"`);
+  assert.ok(!(await page.getByTestId('zalo-recipient').innerText()).includes('2345'), 'người nhận không được lộ đoạn giữa của số điện thoại');
+  assert.deepEqual(await zalo.getByRole('button').allInnerTexts(), ['Đóng'], 'hộp thoại chỉ có nút "Đóng", không có nút gửi');
+  await shot('14c-zalo-preview');
+  await page.getByTestId('zalo-close').click();
+  await zalo.waitFor({ state: 'detached' });
+  page.off('request', recordZalo);
+  const zaloExtra = duringZalo.filter((r) => !background(r)).map((r) => `${r.method()} ${r.url()}`);
+  assert.deepEqual(zaloExtra, [], `bấm "Gửi đơn qua Zalo" không được phát sinh yêu cầu mạng nào: ${zaloExtra.join(', ')}`);
+  ok(`"Gửi đơn qua Zalo" (mô phỏng): nhãn "không có tin nhắn nào được gửi", số 091****678, không thuốc hay chẩn đoán; không phát sinh yêu cầu mạng nào (${duringZalo.length} yêu cầu trong lúc mở, đều là việc nền)`);
 
   // Mất mạng ngay sau khi ký: "In lại đơn" dựng trang in ngay trong trình duyệt từ dữ liệu trên máy, cùng mẫu với BFF.
   const framesBefore = await page.locator('iframe[data-testid="print-frame"]').count();
@@ -374,8 +409,16 @@ try {
   assert.ok(!/ngoại tuyến/i.test(bannerMissing), 'dải nhãn không được ghi ngoại tuyến là chưa có');
   assert.equal(/zalo/i.test(bannerSimulated), simulated.some((t) => /zalo/i.test(t)), 'dải nhãn và trang "Phạm vi" phải xếp Zalo vào cùng một nhóm (mô phỏng hay không)');
   assert.equal(/zalo/i.test(bannerMissing), !simulated.some((t) => /zalo/i.test(t)), 'Zalo chưa có phần mô phỏng thì dải nhãn phải ghi là chưa có');
+  // Zalo (M0-ZALO): bản xem trước nằm ở "Mô phỏng"; "Chưa làm" chỉ nêu phần còn thiếu (gửi thật, đặt lịch, nhắc lịch).
+  const zaloSimulated = simulated.filter((t) => /zalo/i.test(t));
+  assert.equal(zaloSimulated.length, 1, `khối "Mô phỏng" phải có đúng một dòng Zalo, thực tế ${zaloSimulated.length}`);
+  for (const part of [/xem trước/, /không gửi/, /không có thuốc hay chẩn đoán/]) assert.match(zaloSimulated[0], part, 'dòng Zalo ở "Mô phỏng" phải nói đúng cái đã làm');
+  assert.ok(!real.some((t) => /zalo/i.test(t)), 'Zalo không phải phần đã làm thật');
+  for (const t of missing.filter((x) => /zalo/i.test(x))) assert.match(t, /phần chưa có/, `khối "Chưa làm ở M0" không được ghi Zalo là chưa làm: "${t}"`);
+  assert.ok(missing.some((t) => /đặt lịch/.test(t) && /nhắc lịch/.test(t)), 'đặt lịch, nhắc lịch vẫn ở "Chưa làm ở M0"');
+  assert.match(bannerSimulated, /Zalo \(chỉ xem trước\)/, 'dải nhãn phải ghi Zalo là mô phỏng, chỉ xem trước');
   await shot('20-scope');
-  ok('trang "Phạm vi": ngoại tuyến nằm ở "Đã làm thật", phần còn thiếu của nó nằm ở "Chưa làm ở M0"; dải nhãn khớp với trang (tiêu chí M0-5)');
+  ok('trang "Phạm vi": ngoại tuyến nằm ở "Đã làm thật", Zalo (chỉ xem trước) ở "Mô phỏng", phần còn thiếu của chúng ở "Chưa làm ở M0"; dải nhãn khớp với trang (tiêu chí M0-5)');
 
   // ================================================================== Máy tính bảng ngang
   await logout();

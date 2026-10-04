@@ -315,3 +315,8 @@ tr.total td { background: var(--primary-soft); }
 .sync-notice.bad { background: var(--bad-bg); color: var(--danger); }
 .sync-notice.warn { background: var(--warn-bg); color: var(--warn-ink); }
 .sync-notice button { white-space: nowrap; }
+
+/* M0-ZALO: bản xem trước tin Zalo gửi đơn (mô phỏng, không gửi). */
+.zalo-simulated { display: inline-block; white-space: normal; font-weight: 600; margin: 0 0 .5rem; }
+.zalo-message { border: 1px solid var(--line); border-left: 4px solid var(--primary); border-radius: var(--radius); padding: .5rem .8rem; margin: .5rem 0; overflow-wrap: anywhere; }
+.zalo-message p { margin: .2rem 0; }

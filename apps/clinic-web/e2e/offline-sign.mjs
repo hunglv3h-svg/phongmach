@@ -155,6 +155,24 @@ try {
   for (const secret of [NEW_NAME, 'Ngoại Tuyến', phone, cccd, SYMPTOMS, 'Nguyễn Văn An', 'Amoxicillin', 'J02.9', 'Penicillin']) assert.ok(!raw.text.includes(secret), `kho trên máy không được có "${secret}" ở dạng rõ`);
   ok(`đọc thẳng IndexedDB: ${raw.rows.ops} mục chờ và bộ đệm, không có tên, số điện thoại, CCCD, triệu chứng, thuốc ở dạng rõ`);
 
+  // Bản xem trước Zalo (mô phỏng) mở được khi mất mạng: chỉ dựng từ dữ liệu trên màn hình. Lúc mất mạng màn hình này không có
+  // việc nền nào gọi mạng (hàng đợi không gửi khi trình duyệt báo mất mạng), nên đòi đúng 0 yêu cầu, kể cả yêu cầu hỏng.
+  const duringZalo = [];
+  const recordZalo = (r) => duringZalo.push(`${r.method()} ${r.url()}`);
+  page.on('request', recordZalo);
+  await page.getByTestId('zalo-open').click();
+  await page.getByTestId('zalo-preview').waitFor();
+  assert.equal(await page.getByTestId('zalo-simulated').innerText(), 'MÔ PHỎNG: không có tin nhắn nào được gửi');
+  const zaloText = await page.getByTestId('zalo-preview').innerText();
+  for (const part of [NEW_NAME, code, `${phone.slice(0, 3)}****${phone.slice(-3)}`]) assert.ok(zaloText.includes(part), `bản xem trước thiếu "${part}"`);
+  for (const secret of [phone, 'Amoxicillin', 'J02', 'Viêm họng', SYMPTOMS]) assert.ok(!zaloText.includes(secret), `bản xem trước không được có "${secret}"`);
+  assert.ok(!(await page.getByTestId('zalo-recipient').innerText()).includes(phone.slice(3, -3)), 'người nhận không được lộ đoạn giữa của số điện thoại');
+  await page.keyboard.press('Escape');
+  await page.getByTestId('zalo-preview').waitFor({ state: 'detached' });
+  page.off('request', recordZalo);
+  assert.deepEqual(duringZalo, [], `xem trước Zalo khi mất mạng không được phát sinh yêu cầu nào: ${duringZalo.join(', ')}`);
+  ok('mất mạng: "Gửi đơn qua Zalo" (mô phỏng) vẫn mở bản xem trước từ dữ liệu trên máy, số đã che, không thuốc hay chẩn đoán, 0 yêu cầu mạng; Esc đóng');
+
   // ============================================================ Có mạng lại: đồng bộ, đúng một đơn
   await offline(false);
   await syncedAll();
@@ -176,7 +194,10 @@ try {
   // ============================================================ Mất phản hồi: máy chủ đã ghi, trình duyệt thấy lỗi mạng
   await page.getByTestId('back-to-queue').click();
   const anId = (await doctor('GET', '/api/queue')).items.find((i) => i.patientName === 'Nguyễn Văn An' && i.status === 'waiting').patientId;
-  const before = (await doctor('GET', `/api/patients/${anId}/visits?limit=50`)).visits.length;
+  // Đếm lượt khám mới theo id, không theo độ dài danh sách: BFF trả tối đa 50 lượt (mới nhất trước), mà An có thêm lượt khám
+  // sau mỗi lần chạy e2e, nên tới lần chạy thứ ~50 độ dài dừng ở 50 và phép đếm cũ luôn ra 0.
+  const anVisits = async () => (await doctor('GET', `/api/patients/${anId}/visits?limit=50`)).visits;
+  const before = new Set((await anVisits()).map((v) => v.encounterId));
   await page.getByTestId('queue-row').filter({ hasText: 'Nguyễn Văn An' }).filter({ has: page.getByTestId('call') }).getByTestId('call').click();
   await page.getByTestId('visit').waitFor();
   assert.equal(await page.getByTestId('opened-offline').count(), 0, 'mở có mạng');
@@ -197,9 +218,9 @@ try {
   await syncedAll();
   d.expected = undefined;
   await page.locator('[data-testid="offline-sync-state"][data-status="done"]').waitFor();
-  const after = (await doctor('GET', `/api/patients/${anId}/visits?limit=50`)).visits;
-  assert.equal(after.length, before + 1, `mất phản hồi rồi gửi lại: đúng 1 lượt khám mới, thực tế ${after.length - before}`);
-  assert.equal(after[0].prescription.code, lostCode, 'gửi lại cùng UUID: máy chủ trả đơn cũ, mã trùng mã đã in');
+  const added = (await anVisits()).filter((v) => !before.has(v.encounterId));
+  assert.equal(added.length, 1, `mất phản hồi rồi gửi lại: đúng 1 lượt khám mới, thực tế ${added.length}`);
+  assert.equal(added[0].prescription.code, lostCode, 'gửi lại cùng UUID: máy chủ trả đơn cũ, mã trùng mã đã in');
   ok(`mất phản hồi khi ký (máy chủ đã ghi): in từ máy, gửi lại cùng UUID, máy chủ vẫn chỉ có 1 lượt khám mới, mã ${lostCode} trùng`);
 
   // Đo trước khi tải lại trang (bộ đếm nằm trong trang): hai lần in ở trên (ký khi mất mạng, mất phản hồi).
