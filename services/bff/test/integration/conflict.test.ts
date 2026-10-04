@@ -248,7 +248,7 @@ describe('tái hiện: nhiều lời tạo bệnh nhân cùng lúc', () => {
         if (r.statusCode === 201) ids.add(r.json().patient.id);
       }
     }
-    // In ra để đọc được ở log (vitest --silent=false): bài đã gặp bao nhiêu xung đột và cần tới lần thử lại thứ mấy.
+    // In ra để đọc được ở log, kể cả của CI (`test:integration` chạy với --silent=false): đã gặp bao nhiêu xung đột, cần tới lần thử lại thứ mấy.
     console.info(`[xung đột, tạo bệnh nhân] ${rounds} vòng x ${N} lời, ${tap.seen} xung đột thật, lần thử lại xa nhất: ${Math.max(0, ...tap.retried.map((r) => r.attempt))}, mã trả về: ${tally(statuses)}`);
     // Điều kiện để bài có nghĩa: tình huống đã thật sự xảy ra. Không thấy xung đột nào thì bài chưa kiểm được gì.
     expect(tap.seen, `không tái hiện được xung đột sau ${rounds} vòng x ${N} lời: tăng N`).toBeGreaterThan(0);
