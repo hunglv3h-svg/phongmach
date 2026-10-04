@@ -95,6 +95,14 @@ describe('hàng chờ', () => {
     const queue = (await c.app.inject({ method: 'GET', url: '/api/queue', headers: auth(token) })).json();
     expect(queue.items).toHaveLength(1);
     expect(queue.day).toBe('2026-10-20');
+    // Mỗi lượt mang clientUuid của lần cấp số, để máy khách nhận ra lượt của chính nó khi mất phản hồi (xem mergeQueue ở clinic-web).
+    expect(queue.items[0]).toMatchObject({ id: visitId, clientUuid: U(6) });
+    // Nhật ký truy cập không đổi: dòng đọc hàng chờ chỉ có số kết quả, và không dòng nào chứa clientUuid.
+    const read = auditEntries(c).filter((e) => e.action === 'queue-read');
+    expect(read).toHaveLength(1);
+    expect(Object.keys(read[0]!).sort()).toEqual(['action', 'outcome', 'requestId', 'resultCount', 'role', 'tenant', 'ts', 'userId', 'userName']);
+    expect(read[0]).toMatchObject({ outcome: 'ok', resultCount: 1 });
+    expect(JSON.stringify(auditEntries(c))).not.toContain(U(6));
     expect((await c.app.inject({ method: 'POST', url: `/api/queue/${visitId}/cancel`, headers: auth(token) })).statusCode).toBe(200);
     expect((await c.app.inject({ method: 'POST', url: `/api/queue/${visitId}/cancel`, headers: auth(token) })).statusCode).toBe(409);
   });
@@ -114,6 +122,8 @@ describe('hàng chờ', () => {
     expect(board.waiting).toEqual([{ number: 1, initials: 'T.T.B', priority: 'normal' }]);
     expect(board.clinic).toBe('Phòng khám A');
     expect(JSON.stringify(board)).not.toMatch(/Trần|Bình|0912/);
+    // Màn hình chờ (nơi công cộng) không có clientUuid của lượt khám.
+    expect(JSON.stringify(board)).not.toContain(U(6));
   });
   it('hàng chờ của phòng khám B không lẫn bệnh nhân của A', async () => {
     const c = makeApp();

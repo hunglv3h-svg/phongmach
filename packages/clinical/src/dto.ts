@@ -30,6 +30,11 @@ export interface QueueItem {
   /** Người dùng đang giữ hồ sơ (để giao diện biết "bạn đang khám"). */
   doctorUserId?: string;
   reason?: string;
+  /**
+   * UUID của lần bấm "Cấp số" tạo ra lượt này (máy khách sinh ngẫu nhiên, viết thường). Không phải dữ liệu bệnh nhân.
+   * Máy khách dùng nó để nhận ra lượt của chính mình khi yêu cầu cấp số tới được máy chủ mà phản hồi không về.
+   */
+  clientUuid?: string;
 }
 
 /** Màn hình chờ chỉ có số thứ tự và chữ cái đầu: không có họ tên đầy đủ (tối thiểu hóa dữ liệu hiển thị nơi công cộng). */

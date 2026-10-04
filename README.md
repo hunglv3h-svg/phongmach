@@ -76,7 +76,7 @@ infra/dev-up.sh --stop
 pnpm typecheck
 pnpm test                                       # đơn vị: danh mục, quy tắc, mô hình, clinical, BFF, web (không cần Medplum)
 pnpm --filter @phongmach/bff test:integration   # BFF với Medplum thật (cần stack đang chạy)
-pnpm e2e                                        # Chromium thật, 13 + 24 + 13 + 12 bước (hai bài cuối ngắt mạng thật, bài cuối dùng hai máy); cần stack + seed + BFF + web đang chạy
+pnpm e2e                                        # Chromium thật, 13 + 24 + 14 + 12 bước (hai bài cuối ngắt mạng thật, bài cuối dùng hai máy); cần stack + seed + BFF + web đang chạy
 pnpm e2e:cycles                                 # M0-2: 20 chu kỳ ngắt và khôi phục mạng, đếm 0 mất, 0 trùng; chỉ cần stack đang chạy (tự dựng phần còn lại)
 ```
 

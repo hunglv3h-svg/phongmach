@@ -108,6 +108,8 @@ export class FakeBff {
         patientId: patient.id,
         patientName: patient.fullName,
         arrivedAt: String(body!['arrivedAt'] ?? new Date().toISOString()),
+        // Như BFF thật: lượt khám mang clientUuid của lần cấp số, viết thường.
+        clientUuid: uuid.toLowerCase(),
       };
       this.visits.set(item.id, { item, clientUuid: uuid });
       return json(201, { item, created: true });
