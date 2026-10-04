@@ -8,6 +8,7 @@
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
     "seed": "tsx scripts/seed-demo.ts",
+    "backfill:search-keys": "tsx scripts/backfill-search-keys.ts",
     "e2e:clinic": "tsx scripts/e2e-clinic.ts",
     "trial": "tsx scripts/trial.ts",
     "typecheck": "tsc -p tsconfig.json",

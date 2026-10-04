@@ -16,6 +16,7 @@ import { makePrescriptionCode, vnDay, type SignedLine } from '@phongmach/clinica
 import { buildPatient, clientUuidQuery, type NewPatientInput } from '@phongmach/fhir-vn-model';
 import { MedplumClinicStore } from '../src/medplum.js';
 import { parseTenantsFile, type DemoUser, type Tenant, type TenantsFile } from '../src/tenants.js';
+import { backfillSearchKeys } from './backfill-search-keys.js';
 import { MEDPLUM_URL, adminClient, createTenantProject, tenantClient as loginTenant } from './medplum-admin.js';
 
 const PATIENTS_PER_CLINIC = Number(process.env['SEED_PATIENTS'] ?? 400);
@@ -252,6 +253,9 @@ async function seedPatients(t: Tenant, spec: ClinicSpec): Promise<number> {
     }));
     await runBatch(medplum, entries);
   }
+  // Bệnh nhân đã có từ lần seed trước (tạo có điều kiện nên không được ghi lại) có thể chưa mang khóa tìm chính xác: ghi bổ sung.
+  const { updated } = await backfillSearchKeys(medplum, console.log);
+  if (updated) console.log(`  ${spec.slug}: ghi khóa tìm cho ${updated} bệnh nhân đã có`);
   const counted = await medplum.search('Patient', '_summary=count&_total=accurate');
   return counted.total ?? 0;
 }

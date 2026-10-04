@@ -17,7 +17,8 @@
 //    Medplum (gọi đúng hàm `searchPatients` của BFF trong tiến trình này, không qua BFF, không ghi nhật ký; một lần bằng fetch như BFF,
 //    một lần bằng http.request), riêng việc ghi nhật ký truy cập (`NdjsonAuditSink`, ghi nối rồi fsync, như BFF làm trước khi trả
 //    dữ liệu), và sàn HTTP tới BFF (`/api/health`, bằng http.request và bằng fetch).
-// 5. Kiểm tính đúng với dữ liệu gốc đã sinh (xem `evaluate`), kèm một bộ "ca khó" cho 4 số cuối.
+// 5. Kiểm tính đúng với dữ liệu gốc đã sinh (xem `evaluate`), kèm một bộ "ca khó" cho 4 số cuối. Lần đo đầu (03/10/2026) không đạt
+//    phần này; BFF sau đó tìm thêm theo khóa chính xác trong `meta.tag` (packages/fhir-vn-model/src/searchKeys.ts) và đạt.
 //
 // Biến môi trường: MEDPLUM_URL (http://localhost:8203), BENCH_PATIENTS (20000), BENCH_QUERIES (200), BENCH_CONCURRENCY (16),
 // BENCH_SEED (hạt giống dữ liệu, chỉ dùng khi nạp), BENCH_QUERY_SEED (hạt giống chọn truy vấn), SEARCH_BFF_PORT (8112).
@@ -50,7 +51,7 @@ const BFF_PORT = Number(process.env.SEARCH_BFF_PORT ?? 8112);
 const BFF = `http://127.0.0.1:${BFF_PORT}`;
 /** Số kết quả giao diện nhận (giao diện không gửi `limit`, BFF mặc định 20). */
 const LIMIT = 20;
-/** Bằng FRAGMENT_FETCH trong services/bff/src/medplum.ts: số kết quả BFF lấy về khi tìm theo đoạn số, trước khi xếp hạng. */
+/** Bằng FRAGMENT_FETCH trong services/bff/src/medplum.ts: số kết quả "chứa đoạn số" BFF lấy về. Chỉ dùng để đếm số ca khó vượt ngưỡng này. */
 const FRAGMENT_FETCH = 50;
 const BATCH = 500;
 /**

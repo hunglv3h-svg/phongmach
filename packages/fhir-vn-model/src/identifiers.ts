@@ -40,6 +40,18 @@ export const EXTENSIONS = {
   followUpDays: 'urn:phongmach:ext:tai-kham-sau-ngay',
 } as const;
 
+/**
+ * Hệ của các khóa tìm chính xác ghi vào `Patient.meta.tag` (T-NAME, tiêu chí M0-3). Medplum tìm tên theo ĐẦU TỪ và số điện thoại
+ * theo "chứa", không xếp hạng và cắt ở số kết quả yêu cầu; ở phòng khám lớn, người khớp đúng có thể nằm ngoài phần được trả về.
+ * Tìm theo `_tag` thì chính xác và có chỉ mục. Xem `searchKeys.ts`.
+ */
+export const SEARCH_TAGS = {
+  /** Một từ của tên không dấu, chữ thường ("nguyen", "an"). */
+  nameWord: 'urn:phongmach:tim:tu-ten',
+  /** 4 số cuối của số điện thoại. */
+  phoneSuffix: 'urn:phongmach:tim:sdt-4-so-cuoi',
+} as const;
+
 /** Tham số `If-None-Exist` để tạo có điều kiện theo UUID do client sinh (T-IDEM). */
 export function clientUuidQuery(clientUuid: string): string {
   return `identifier=${SYSTEMS.clientUuid}|${clientUuid}`;

@@ -61,6 +61,17 @@ node infra/medplum/experiments/stack-do.mjs down      # dừng, giữ dữ liệ
 5. **Tính đúng**, so với dữ liệu gốc: người cần tìm có trong kết quả; với 4 số cuối, mọi người có số **kết thúc** bằng 4 số đó đứng
    trước người chỉ chứa 4 số đó ở giữa, và không thiếu ai; mọi kết quả đều khớp truy vấn. Truy vấn có hơn 20 người khớp đúng từng từ
    được đếm riêng ("quá 20 người khớp"): giao diện chỉ hiện 20, nên người cần tìm vắng mặt ở đó là chính đáng (phụ tá phải gõ thêm).
+   Lần đo đầu (03/10/2026) không đạt phần này; từ khi BFF tìm thêm theo khóa chính xác trong `meta.tag` thì đạt (kế hoạch, mục 2).
+
+Đo lại sau khi đổi cách dựng `Patient` hay cách tìm của BFF: `--reload` để nạp bệnh nhân bằng `buildPatient` mới. Muốn thử đường di trú
+(hồ sơ cũ được ghi bổ sung khóa tìm) thì không nạp lại mà chạy trên phòng khám đo đang có:
+
+```bash
+MEDPLUM_URL=http://localhost:8203 TENANTS_FILE="$PWD/infra/medplum/experiments/.bff-search/tenants.json" \
+  pnpm --filter @phongmach/bff backfill:search-keys     # 20.000 hồ sơ: 143 giây trên máy dev [Đã đo]
+docker compose -p phongmach-medplum-do exec -T postgres psql -U medplum -d medplum -c ANALYZE
+node infra/medplum/experiments/bff-search.mjs
+```
 
 Tệp sinh ra nằm ở `experiments/.bff-search/` (gitignore): `tenants.json` (bí mật tài khoản máy), `patients.json` (dữ liệu gốc),
 `bff.log`, `audit.ndjson`, `result-*.json` (mọi số đo và kết quả từng truy vấn). Hạt giống chọn truy vấn in ra; `BENCH_QUERY_SEED` để chạy lại đúng bộ truy vấn.

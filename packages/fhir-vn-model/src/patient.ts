@@ -2,6 +2,7 @@ import type { HumanName, Patient } from '@medplum/fhirtypes';
 import { normalizeCccd, maskCccd } from './cccd.js';
 import { EXTENSIONS, SYSTEMS } from './identifiers.js';
 import { normalizePhone } from './phone.js';
+import { withSearchKeys } from './searchKeys.js';
 import { parseFullName, stripDiacritics } from './text.js';
 
 export type Gender = 'male' | 'female' | 'other' | 'unknown';
@@ -49,7 +50,8 @@ function validBirthDate(birthDate: string): string {
 
 /**
  * Dựng tài nguyên Patient từ dữ liệu nhập nhanh ở quầy tiếp đón.
- * Thêm một HumanName thứ hai không dấu (đánh dấu bằng extension) để tìm "nguyen" ra "Nguyễn" (T-NAME).
+ * Thêm một HumanName thứ hai không dấu (đánh dấu bằng extension) để tìm "nguyen" ra "Nguyễn" (T-NAME),
+ * và các khóa tìm chính xác trong `meta.tag` (từng từ của tên, 4 số cuối điện thoại; xem `searchKeys.ts`).
  */
 export function buildPatient(input: NewPatientInput): Patient {
   if (!UUID_RE.test(input.clientUuid)) throw new DomainError('invalid-client-uuid', 'clientUuid phải là UUID');
@@ -92,7 +94,7 @@ export function buildPatient(input: NewPatientInput): Patient {
   if (input.birthDate) patient.birthDate = validBirthDate(input.birthDate);
 
   if (input.gender) patient.gender = input.gender;
-  return patient;
+  return withSearchKeys(patient);
 }
 
 export interface PatientSummary {
@@ -127,7 +129,10 @@ export function rankByPhoneSuffix<T extends { phone?: string }>(items: T[], digi
 }
 
 
-/** Bổ sung CCCD hoặc ngày sinh cho bệnh nhân đã có (cùng kiểm tra như lúc tạo). Số CCCD đã có sẽ bị thay bằng số mới. */
+/**
+ * Bổ sung CCCD hoặc ngày sinh cho bệnh nhân đã có (cùng kiểm tra như lúc tạo). Số CCCD đã có sẽ bị thay bằng số mới.
+ * Khóa tìm được tính lại: hồ sơ tạo trước khi có khóa tìm sẽ có khóa ngay lần sửa đầu tiên, và lần ghi này không làm mất tag.
+ */
 export function patchPatient(patient: Patient, patch: { cccd?: string | undefined; birthDate?: string | undefined }): Patient {
   const next: Patient = { ...patient };
   if (patch.cccd?.trim()) {
@@ -136,5 +141,5 @@ export function patchPatient(patient: Patient, patch: { cccd?: string | undefine
     next.identifier = [...(patient.identifier ?? []).filter((i) => i.system !== SYSTEMS.cccd), { system: SYSTEMS.cccd, value: cccd }];
   }
   if (patch.birthDate?.trim()) next.birthDate = validBirthDate(patch.birthDate);
-  return next;
+  return withSearchKeys(next);
 }
