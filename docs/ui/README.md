@@ -1,17 +1,14 @@
 # Mockup giao diện PHONGMACH
 
-Ảnh chụp từ bản xem trước chạy bằng dữ liệu giả (DEMO), chụp bằng Chromium. Không phải thiết kế vẽ tay.
+Bắt đầu từ `v0.2/index.html` (mở bằng trình duyệt): bản demo tổng hợp theo ba vai trò (bệnh nhân, phụ tá, bác sĩ và chủ phòng mạch). Chi tiết ở `v0.2/README.md` và danh mục từng bước ở `v0.2/danh-muc.md`.
 
 | Thư mục | Nội dung |
 |---|---|
-| `v0.0-truoc` | Giao diện trước khi thiết kế lại (10 màn hình máy bàn + 1 điện thoại) |
-| `v0.1` | Sau UI v0.1: cột bên / thanh tab đáy, cảnh báo dị ứng, màn hình chờ lớn (máy bàn `01`–`14`, điện thoại `m1`–`m6`) |
-| `v0.2` | UI v0.2: "phiếu số" làm điểm nhấn, cột bên màu mực (máy bàn `01`–`10`, điện thoại `m1`–`m6`) |
-| `v0.2-sang-toi` | v0.2 ở chế độ sáng (`light-*`) và tối (`dark-*`): tiếp đón, hàng chờ, màn hình chờ, liên thông, thời gian khám, nhật ký, phạm vi |
+| `v0.2` | Thư mục đầu mối hiện hành: demo tổng hợp, 47 ảnh chụp thật (máy bàn, điện thoại, sáng, tối), 13 bản vẽ dự kiến GĐ1–GĐ3 |
+| `v0.1` | Ảnh chụp sau UI v0.1 (lưu lại để so sánh) |
+| `v0.0-truoc` | Giao diện trước khi thiết kế lại (lưu lại để so sánh) |
 
-Thiết kế trên Figma (tham khảo, dừng cập nhật; chỉ nâng cấp khi chủ đầu tư có kế hoạch rõ ràng):
+Ảnh chụp lấy từ bản xem trước chạy bằng dữ liệu giả, không phải thiết kế vẽ tay. Thiết kế trên Figma chỉ để tham khảo, dừng cập nhật (chỉ nâng cấp khi chủ đầu tư có kế hoạch rõ ràng):
 https://www.figma.com/design/OY5TtN1TQNrzaIEOMzrRWo
-
-Chưa có ảnh: màn in đơn.
 
 Tạo lại ảnh: chạy BFF xem trước (`services/bff/scripts/preview-server.ts`, chưa commit) và `pnpm --filter @phongmach/clinic-web dev`, rồi dùng Playwright. Kiểm truy cập: `pnpm --filter @phongmach/clinic-web e2e:a11y`.

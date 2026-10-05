@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>html{color-scheme:light}body{margin:0}</style>
+</head>
+<body>
+<title>PHONGMACH Demo tổng hợp</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap">
+<style>
+/* Hướng thiết kế: cùng ngôn ngữ với ứng dụng (mực xanh đậm, xanh ngọc, vàng hổ phách làm điểm nhấn);
+   bố cục: danh sách bước bên trái, màn hình lớn bên phải, ba khối giải thích dưới màn hình. */
+:root{
+  --bg:#f2f6f6; --surface:#ffffff; --raised:#f8fbfb; --ink:#0b2f2e; --text:#14282a; --muted:#56696c; --line:#d3dedf;
+  --primary:#0f766e; --primary-ink:#ffffff; --primary-soft:#dff3f1; --signal:#f2b84b; --signal-ink:#2b1d00;
+  --ph0:#0f766e; --ph0-bg:#dff3f1;
+  --ph1:#1d5fa3; --ph1-bg:#e1ecf8;
+  --ph2:#8a5a00; --ph2-bg:#fff0cf;
+  --ph3:#6b3f87; --ph3-bg:#efe3f6;
+  --ok:#14532d; --ok-bg:#dcf5e4; --bad:#b42318; --bad-bg:#fde4e1;
+  --font:'Be Vietnam Pro',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e1819; --surface:#152325; --raised:#1a2b2d; --ink:#0b2f2e; --text:#e6f0f0; --muted:#93a9ac; --line:#28393b;
+  --primary:#2dd4bf; --primary-ink:#04201d; --primary-soft:#12383a; --signal:#f2b84b; --signal-ink:#2b1d00;
+  --ph0:#5eead4; --ph0-bg:#12383a; --ph1:#8ab8ee; --ph1-bg:#15283d; --ph2:#f2c46d; --ph2-bg:#3a2f10; --ph3:#d3a8ec; --ph3-bg:#2e1f3a;
+  --ok:#b6efc8; --ok-bg:#123a22; --bad:#ff8a7a; --bad-bg:#3d1a17; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1819; --surface:#152325; --raised:#1a2b2d; --ink:#0b2f2e; --text:#e6f0f0; --muted:#93a9ac; --line:#28393b;
+  --primary:#2dd4bf; --primary-ink:#04201d; --primary-soft:#12383a; --signal:#f2b84b; --signal-ink:#2b1d00;
+  --ph0:#5eead4; --ph0-bg:#12383a; --ph1:#8ab8ee; --ph1-bg:#15283d; --ph2:#f2c46d; --ph2-bg:#3a2f10; --ph3:#d3a8ec; --ph3-bg:#2e1f3a;
+  --ok:#b6efc8; --ok-bg:#123a22; --bad:#ff8a7a; --bad-bg:#3d1a17; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font:15px/1.5 var(--font);margin:0;padding-inline:16px;padding-block:0}
+button{font:inherit;color:inherit}
+button:focus-visible,a:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--primary);outline-offset:2px}
+.wrap{max-width:1240px;margin-inline:auto}
+h1,h2,h3,p{margin:0}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* đầu trang */
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;padding-block:14px}
+.brand{font-weight:700;letter-spacing:-.01em;font-size:1.05rem;display:flex;align-items:center;gap:10px}
+.brand .tick{width:34px;height:22px;background:var(--primary);color:var(--primary-ink);display:grid;place-items:center;font:700 .8rem var(--mono);
+  border-radius:4px;-webkit-mask:radial-gradient(circle 5px at 0 50%,#0000 98%,#000) left/51% 100% no-repeat,radial-gradient(circle 5px at 100% 50%,#0000 98%,#000) right/51% 100% no-repeat;
+  mask:radial-gradient(circle 5px at 0 50%,#0000 98%,#000) left/51% 100% no-repeat,radial-gradient(circle 5px at 100% 50%,#0000 98%,#000) right/51% 100% no-repeat}
+.ver{color:var(--muted);font-size:.85rem}
+.legend{display:flex;flex-wrap:wrap;gap:6px;margin-left:auto}
+.ph{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;font-size:.78rem;font-weight:600;border:1px solid transparent;white-space:nowrap}
+.ph i{width:8px;height:8px;border-radius:50%;background:currentColor}
+.ph-0{color:var(--ph0);background:var(--ph0-bg)} .ph-1{color:var(--ph1);background:var(--ph1-bg)} .ph-2{color:var(--ph2);background:var(--ph2-bg)} .ph-3{color:var(--ph3);background:var(--ph3-bg)}
+button.ph{cursor:pointer;border-color:currentColor}
+button.ph[aria-pressed="false"]{opacity:.45;background:transparent;text-decoration:line-through}
+
+.intro{padding-block:10px 18px;display:grid;gap:14px}
+.intro h1{font-size:clamp(1.5rem,3.4vw,2.2rem);line-height:1.15;letter-spacing:-.02em;max-width:24ch;text-wrap:balance}
+.intro p{max-width:68ch;color:var(--muted)}
+.stats{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem}
+.stats b{font-size:1.15rem;margin-right:4px}
+
+/* chọn vai trò */
+.tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-block:6px 18px}
+.tab{text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;cursor:pointer;display:grid;gap:2px;min-width:0}
+.tab strong{font-size:1rem}
+.tab span{font-size:.82rem;color:var(--muted)}
+.tab[aria-selected="true"]{background:var(--ink);color:#e9f6f4;border-color:var(--ink);box-shadow:inset 0 -4px 0 var(--signal)}
+.tab[aria-selected="true"] span{color:#a9cfca}
+.tab[aria-selected="true"] strong{color:#fff}
+
+/* vùng làm việc */
+.work{display:grid;grid-template-columns:minmax(250px,320px) minmax(0,1fr);gap:20px;align-items:start;padding-bottom:30px}
+.steps{display:grid;gap:4px;list-style:none;margin:0;padding:0}
+.step{width:100%;text-align:left;background:transparent;border:1px solid transparent;border-radius:10px;padding:9px 10px;cursor:pointer;display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:start}
+.step:hover{background:var(--surface);border-color:var(--line)}
+.step[aria-current="step"]{background:var(--surface);border-color:var(--primary);box-shadow:inset 3px 0 0 var(--signal)}
+.step .dot{grid-row:1/3;margin-top:5px;width:10px;height:10px;border-radius:50%}
+.step .t{font-weight:600;line-height:1.3}
+.step .s{font-size:.78rem;color:var(--muted)}
+.dot-0{background:var(--ph0)} .dot-1{background:var(--ph1)} .dot-2{background:var(--ph2)} .dot-3{background:var(--ph3)}
+.step.dim{opacity:.4}
+
+.stage{min-width:0;display:grid;gap:14px;scroll-margin-top:8px}
+.tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.tools h2{font-size:1.25rem;letter-spacing:-.01em;line-height:1.25;margin-right:auto;min-width:0;text-wrap:balance}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg button{background:var(--surface);border:0;padding:6px 12px;cursor:pointer;font-size:.85rem}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--primary);color:var(--primary-ink);font-weight:600}
+.kind{font-size:.78rem;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:2px 8px}
+.kind.real{color:var(--ok);background:var(--ok-bg);border-color:transparent}
+.kind.draft{border-style:dashed}
+
+.frame{border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
+.frame.draft{border:2px dashed var(--c)}
+.chrome{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--raised);font-size:.78rem;color:var(--muted)}
+.chrome .pill{margin-left:auto;font-weight:600}
+.scroll{max-height:640px;overflow:auto;background:var(--bg)}
+.scroll img{display:block;width:100%;height:auto}
+.phone-wrap{display:grid;place-items:center;padding:22px 12px;background:var(--bg)}
+.phone{width:min(100%,330px);border:7px solid var(--ink);border-radius:30px;overflow:hidden;background:var(--surface);box-shadow:0 0 0 1px var(--line)}
+.phone .scroll{max-height:620px}
+.hint{font-size:.76rem;color:var(--muted);padding:6px 12px;border-top:1px solid var(--line);background:var(--raised)}
+
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:grid;gap:6px;align-content:start}
+.card h3{font-size:.95rem}
+.card p{font-size:.9rem;color:var(--muted)}
+.card.lim{border-style:dashed}
+.nav{display:flex;justify-content:space-between;gap:10px}
+.btn{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 16px;cursor:pointer;font-weight:600;min-height:40px}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.main{background:var(--primary);border-color:var(--primary);color:var(--primary-ink)}
+
+/* cả buổi khám */
+.flow{display:grid;gap:0;border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden;margin-bottom:30px}
+.frow{display:grid;grid-template-columns:150px repeat(3,minmax(0,1fr));border-top:1px solid var(--line)}
+.frow:first-child{border-top:0}
+.frow>*{padding:10px 12px;min-width:0}
+.fhead{background:var(--ink);color:#e9f6f4;font-weight:700;font-size:.88rem}
+.fwhen{font-weight:600;background:var(--raised);font-size:.9rem}
+.fcell{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.fcell .lane{display:none;font-size:.72rem;color:var(--muted);font-weight:600}
+.chipbtn{display:inline-flex;align-items:center;gap:7px;text-align:left;background:var(--raised);border:1px solid var(--line);border-radius:8px;padding:5px 9px;cursor:pointer;font-size:.84rem;line-height:1.3}
+.chipbtn:hover{border-color:var(--primary)}
+.chipbtn i{width:8px;height:8px;border-radius:50%;flex:none}
+.fnone{color:var(--muted)}
+
+/* tổng kết */
+.sum{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:30px}
+.sum .card b{font-size:1.6rem;line-height:1}
+.foot{color:var(--muted);font-size:.82rem;padding-bottom:28px;max-width:80ch}
+
+/* ===== bản vẽ dự kiến ===== */
+.mock{font-size:13px;color:var(--text);background:var(--bg);padding:16px;display:grid;gap:12px;container-type:inline-size}
+.mock *{min-width:0}
+.m-bar{display:flex;align-items:center;gap:10px;background:var(--ink);color:#e9f6f4;border-radius:10px;padding:9px 12px;font-weight:600}
+.m-bar small{margin-left:auto;font-weight:400;color:#a9cfca}
+.m-card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;display:grid;gap:8px}
+.m-card{align-content:start}.m-card>.m-chip,.m-card>.m-btn,.m-card>.note{justify-self:start}
+.m-card h4{margin:0;font-size:.95rem}
+.m-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.m-sp{margin-left:auto}
+.m-muted{color:var(--muted)}
+.m-chip{display:inline-block;border-radius:999px;padding:1px 9px;font-size:.78rem;font-weight:600;background:var(--primary-soft);color:var(--primary)}
+.m-chip.ok{background:var(--ok-bg);color:var(--ok)} .m-chip.warn{background:var(--ph2-bg);color:var(--ph2)} .m-chip.bad{background:var(--bad-bg);color:var(--bad)} .m-chip.off{background:var(--raised);color:var(--muted)}
+.m-btn{display:inline-block;border-radius:9px;padding:8px 14px;font-weight:600;border:1px solid var(--primary);color:var(--primary);background:transparent;text-align:center}
+.m-btn.pri{background:var(--primary);color:var(--primary-ink)}
+.m-field{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--surface);color:var(--muted)}
+.m-field b{color:var(--text);font-weight:500}
+.m-grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.m-grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.m-grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+@container (max-width:560px){.m-grid2,.m-grid3,.m-grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.m-kpi b{font-size:1.4rem;display:block;line-height:1.1}
+.m-table{width:100%;border-collapse:collapse}
+.m-table th,.m-table td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line)}
+.m-table th{font-size:.76rem;color:var(--muted)}
+.m-tab{overflow-x:auto}
+.m-time{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.m-time span{border:1px solid var(--line);border-radius:8px;padding:7px 0;text-align:center;background:var(--surface)}
+.m-time span.sel{background:var(--primary);color:var(--primary-ink);border-color:var(--primary);font-weight:700}
+.m-time span.off{color:var(--muted);text-decoration:line-through;background:var(--raised)}
+.chat{display:grid;gap:8px}
+.bub{max-width:88%;border-radius:14px;padding:9px 12px;background:var(--surface);border:1px solid var(--line)}
+.bub.me{margin-left:auto;background:var(--primary-soft);border-color:transparent;color:var(--text)}
+.ticket{background:var(--primary);color:var(--primary-ink);border-radius:8px;text-align:center;padding:12px;font:700 2.2rem/1 var(--mono);letter-spacing:.03em;
+  -webkit-mask:radial-gradient(circle 9px at 0 50%,#0000 98%,#000) left/51% 100% no-repeat,radial-gradient(circle 9px at 100% 50%,#0000 98%,#000) right/51% 100% no-repeat;
+  mask:radial-gradient(circle 9px at 0 50%,#0000 98%,#000) left/51% 100% no-repeat,radial-gradient(circle 9px at 100% 50%,#0000 98%,#000) right/51% 100% no-repeat}
+.otp{display:flex;gap:6px}.otp span{width:34px;height:42px;border:1px solid var(--line);border-radius:8px;display:grid;place-items:center;font:600 1.1rem var(--mono);background:var(--surface)}
+.vid{aspect-ratio:4/3;border-radius:12px;background:linear-gradient(160deg,#16403f,#0b2f2e);position:relative;color:#cfe7e3;display:grid;place-items:center}
+.vid small{position:absolute;left:10px;bottom:8px}.vid .me{position:absolute;right:10px;bottom:10px;width:70px;height:92px;border-radius:10px;background:#2c6764;display:grid;place-items:center;font-size:.7rem}
+.tl{display:grid;gap:10px;border-left:2px solid var(--line);padding-left:14px;margin-left:5px}
+.tl>div{position:relative}.tl>div::before{content:'';position:absolute;left:-21px;top:6px;width:10px;height:10px;border-radius:50%;background:var(--primary)}
+.alert{background:var(--bad-bg);color:var(--bad);border-radius:8px;padding:7px 10px;font-weight:600}
+.note{background:var(--ph2-bg);color:var(--ph2);border-radius:8px;padding:6px 10px;font-size:.8rem}
+
+@media (max-width:980px){.work{grid-template-columns:1fr}.steps{grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}.cards{grid-template-columns:1fr}.sum{grid-template-columns:repeat(2,minmax(0,1fr))}.tabs{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:720px){
+  .frow{grid-template-columns:1fr}.fhead{display:none}.fwhen{border-top:0}
+  .fcell .lane{display:block}
+}
+@media (prefers-reduced-motion:no-preference){.stage .frame{animation:in .25s ease-out}@keyframes in{from{opacity:.4}to{opacity:1}}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><span class="tick" aria-hidden="true">007</span> PHONGMACH</div>
+    <span class="ver">Demo tổng hợp giao diện v0.2</span>
+    <div class="legend" id="legend" role="group" aria-label="Lọc theo giai đoạn"></div>
+  </header>
+
+  <section class="intro">
+    <h1>Một buổi khám, nhìn từ ba phía</h1>
+    <p>Bệnh nhân, phụ tá và bác sĩ cùng đi qua một buổi khám. Mỗi bước là một màn hình: ảnh chụp thật khi đã chạy được, bản vẽ nét đứt khi còn ở giai đoạn sau. Bấm vào bước để xem ai làm gì và phòng mạch được gì.</p>
+    <div class="stats" id="stats"></div>
+  </section>
+
+  <div class="tabs" role="tablist" id="tabs" aria-label="Chọn góc nhìn"></div>
+  <div id="view"></div>
+
+  <section aria-labelledby="sum-h" id="summary"></section>
+  <p class="foot">Ảnh chụp thật lấy từ bản xem trước chạy bằng dữ liệu giả: tên, số điện thoại và CCCD đều là dữ liệu mẫu, chữ ký số và cổng đơn thuốc quốc gia là mô phỏng. Bản vẽ dự kiến minh họa hướng thiết kế, không phải cam kết tính năng hay tiến độ; giai đoạn theo kế hoạch hiện hành và có thể thay đổi. Số liệu trong bản vẽ là ví dụ.</p>
+</div>
+
+<script>
+const DATA = {"steps": [{"id": "bn-dat-lich", "role": "bn", "phase": 2, "kind": "draft", "title": "Đặt lịch hẹn bằng điện thoại", "mock": "m-dat-lich", "device": "phone", "who": "Bệnh nhân mở ứng dụng nhỏ trong ứng dụng nhắn tin, chọn ngày, giờ còn trống và nhập lý do khám.", "value": "Bệnh nhân đến đúng giờ hơn, phụ tá bớt nghe điện thoại hẹn lịch, phòng đợi bớt đông vào giờ cao điểm.", "note": "Dự kiến GĐ2 (Zalo Mini App). Chưa có trong bản demo hiện tại.", "short": "Đặt lịch"}, {"id": "bn-nhan-so", "role": "bn", "phase": 2, "kind": "draft", "title": "Nhắc lịch và nhận số từ xa", "mock": "m-nhan-so", "device": "phone", "who": "Bệnh nhân nhận tin nhắc lịch, bấm \"Tôi đã đến\" và nhận số thứ tự kèm số người đang chờ.", "value": "Bệnh nhân biết phải chờ bao lâu, không phải đứng quanh quầy tiếp đón; phụ tá ít phải trả lời \"còn mấy người nữa\".", "note": "Dự kiến GĐ2. Cần phòng mạch kết nối tài khoản tin nhắn chính thức và bệnh nhân đồng ý nhận tin.", "short": "Nhận số từ xa"}, {"id": "bn-theo-doi-so", "role": "bn", "phase": 0, "kind": "real", "title": "Theo dõi số trên màn hình chờ", "shot": "bn-theo-doi-so", "who": "Bệnh nhân ngồi phòng đợi, nhìn số của mình trên màn hình lớn. Số hiển thị dạng phiếu số, chỉ ghi tên viết tắt (N.V.A) để giữ riêng tư.", "value": "Phòng đợi tự điều phối, không ai phải gọi tên to; tên đầy đủ không lộ ra nơi công cộng.", "note": "Đã chạy được. Màn hình dùng cho TV hoặc máy tính bảng, có chế độ toàn màn hình.", "short": "Theo dõi số"}, {"id": "bn-duoc-goi", "role": "bn", "phase": 0, "kind": "real", "title": "Được mời vào khám", "shot": "bn-duoc-goi", "who": "Khi bác sĩ gọi, số của bệnh nhân hiện rất lớn ở mục \"Mời vào khám\"; những người còn chờ xếp bên dưới theo thứ tự.", "value": "Bệnh nhân nhìn thấy ngay từ xa, không cần loa gọi; người ưu tiên hoặc có hẹn được đánh dấu riêng.", "note": "Đã chạy được. Chưa có âm báo hay giọng đọc số.", "short": "Được mời vào khám"}, {"id": "bn-don-in", "role": "bn", "phase": 0, "kind": "real", "title": "Nhận đơn thuốc in", "shot": "bn-don-in", "who": "Bác sĩ ký xong, đơn thuốc được in ra: thông tin bệnh nhân, chẩn đoán, từng thuốc kèm cách dùng, lời dặn, mã QR và mã đơn.", "value": "Bệnh nhân cầm về đơn rõ ràng, nhà thuốc đọc được mã đơn; phòng mạch có mẫu in thống nhất.", "note": "Đã chạy được. Chữ ký số trên đơn hiện là mô phỏng (có dòng cảnh báo trên đơn); ký số thật ở GĐ1.", "short": "Đơn thuốc in"}, {"id": "bn-don-dien-tu", "role": "bn", "phase": 2, "kind": "draft", "title": "Nhận đơn điện tử và nhắc uống thuốc", "mock": "m-don-dien-tu", "device": "phone", "who": "Bệnh nhân nhận đơn thuốc trong tin nhắn, bật nhắc giờ uống thuốc và đặt lịch tái khám ngay trong cuộc trò chuyện.", "value": "Bệnh nhân ít làm mất đơn, uống thuốc đều hơn, tái khám đúng hẹn; phòng mạch giữ được bệnh nhân quay lại.", "note": "Dự kiến GĐ2. Phụ thuộc quy định về đơn thuốc điện tử và sự đồng ý của bệnh nhân.", "short": "Đơn điện tử, nhắc thuốc"}, {"id": "bn-so-suc-khoe", "role": "bn", "phase": 3, "kind": "draft", "title": "Sổ sức khỏe điện tử", "mock": "m-so-suc-khoe", "device": "phone", "who": "Bệnh nhân xem lịch sử khám ở các nơi, kể cả dị ứng, và quyết định chia sẻ hồ sơ với phòng khám nào.", "value": "Bác sĩ có thông tin dị ứng và tiền sử đầy đủ hơn ngay lần đầu khám; phòng mạch đáp ứng yêu cầu kết nối dữ liệu y tế.", "note": "Định hướng GĐ3. Chuẩn kết nối cho cơ sở tư nhân còn là câu hỏi mở của Giai đoạn 0.", "short": "Sổ sức khỏe"}, {"id": "bn-kham-tu-xa", "role": "bn", "phase": 3, "kind": "draft", "title": "Tái khám từ xa", "mock": "m-tu-xa", "device": "phone", "who": "Bệnh nhân tái khám bằng cuộc gọi video, sau đó nhận đơn và lời dặn trong tin nhắn.", "value": "Bệnh nhân ở xa hoặc bệnh mạn tính không phải đi lại mỗi lần; bác sĩ mở thêm một kênh khám.", "note": "Định hướng GĐ3, cần rà soát pháp lý trước khi triển khai.", "short": "Khám từ xa"}, {"id": "pt-dang-nhap", "role": "pt", "phase": 0, "kind": "real", "title": "Đăng nhập theo phòng khám và vai trò", "shot": "pt-dang-nhap", "who": "Phụ tá chọn phòng khám và tên của mình. Mỗi vai trò (phụ tá, bác sĩ, chủ phòng mạch) chỉ thấy phần việc của mình.", "value": "Dữ liệu từng phòng mạch tách riêng; nhân viên không xem được thứ không thuộc phần việc của họ.", "note": "Đã chạy được ở dạng demo (đăng nhập giả lập). Đăng nhập thật cần GĐ1.", "short": "Đăng nhập"}, {"id": "pt-tim", "role": "pt", "phase": 0, "kind": "real", "title": "Tìm bệnh nhân", "shot": "pt-tim", "who": "Phụ tá gõ tên (không cần dấu) hoặc số điện thoại, danh sách hiện ngay; CCCD chỉ hiện bốn số cuối.", "value": "Bệnh nhân cũ được tìm ra trong vài giây, tránh tạo hồ sơ trùng; số giấy tờ không lộ ra màn hình.", "note": "Đã chạy được. Bản xem trước dùng dữ liệu giả nên kết quả lọc còn rộng.", "short": "Tìm bệnh nhân", "shotPhone": "pt-tim-dt"}, {"id": "pt-ho-so", "role": "pt", "phase": 0, "kind": "real", "title": "Xem hồ sơ và cảnh báo dị ứng", "shot": "pt-ho-so", "who": "Hồ sơ mở ra với dòng cảnh báo dị ứng nổi bật ở đầu, rồi đến thông tin hành chính, tiền sử và dị ứng thuốc.", "value": "Dị ứng thuốc nằm ở nơi đầu tiên mắt nhìn tới, giảm nguy cơ sót thông tin quan trọng trước khi vào khám.", "note": "Đã chạy được.", "short": "Hồ sơ, dị ứng", "shotPhone": "pt-ho-so-dt"}, {"id": "pt-cap-so", "role": "pt", "phase": 0, "kind": "real", "title": "Cấp số thứ tự", "shot": "pt-cap-so", "who": "Phụ tá chọn chuyên khoa, mức ưu tiên (thường, hẹn, khẩn), ghi lý do khám rồi cấp số.", "value": "Một thao tác là bệnh nhân vào hàng chờ; thông báo xác nhận số vừa cấp tránh cấp nhầm hoặc cấp hai lần.", "note": "Đã chạy được. Màn hình nhắc thiếu CCCD vì cần để kê đơn liên thông.", "short": "Cấp số"}, {"id": "pt-hang-cho", "role": "pt", "phase": 0, "kind": "real", "title": "Điều phối hàng chờ", "shot": "pt-hang-cho", "who": "Hàng chờ hiện số, tên, tuổi, lý do khám và ai là người kế tiếp. Phụ tá có thể hủy lượt khi bệnh nhân bỏ về.", "value": "Cả phòng mạch nhìn cùng một danh sách; người có hẹn hoặc khẩn được xếp theo quy tắc rõ ràng.", "note": "Đã chạy được. Bản điện thoại dùng thanh tab ở đáy màn hình.", "short": "Hàng chờ", "shotPhone": "pt-hang-cho-dt"}, {"id": "pt-man-hinh", "role": "pt", "phase": 0, "kind": "real", "title": "Màn hình cho phòng đợi", "shot": "pt-man-hinh", "who": "Phụ tá mở trang màn hình chờ trên TV hoặc máy tính bảng ở phòng đợi và để chế độ toàn màn hình.", "value": "Không cần phần cứng riêng; một thiết bị có trình duyệt là dùng được.", "note": "Đã chạy được, có chế độ sáng và tối.", "short": "Màn hình chờ", "shotPhone": "pt-man-hinh-dt"}, {"id": "pt-mat-mang", "role": "pt", "phase": 0, "kind": "real", "title": "Vẫn làm việc khi mất mạng", "shot": "pt-mat-mang", "who": "Mất mạng, ứng dụng hiện dải thông báo và dùng dữ liệu đã tải trên máy; thao tác được lưu và đồng bộ khi có mạng lại.", "value": "Mạng chập chờn không làm phòng mạch ngừng khám; bác sĩ vẫn mở hồ sơ, kê đơn và in.", "note": "Đã chạy được ở mức cơ bản (\"offline-lite\"). Bản đầy đủ gồm cả xử lý xung đột nằm ở GĐ2.", "short": "Mất mạng"}, {"id": "pt-lich-hen", "role": "pt", "phase": 2, "kind": "draft", "title": "Lịch hẹn trong ngày", "mock": "m-lich-hen", "device": "desktop", "who": "Phụ tá xem ai hẹn giờ nào, ai đã đến, ai chưa, và nhắn nhắc những người chưa đến.", "value": "Giờ khám ít bị trống, ít bỏ hẹn; cấp số cho người có hẹn chỉ một bấm.", "note": "Dự kiến GĐ2, đi cùng ứng dụng đặt lịch cho bệnh nhân. Hàng chờ hiện có mức ưu tiên \"hẹn\" nhưng chưa có lịch.", "short": "Lịch hẹn"}, {"id": "pt-thu-tien", "role": "pt", "phase": 2, "kind": "draft", "title": "Thu tiền và hóa đơn điện tử", "mock": "m-thu-tien", "device": "desktop", "who": "Sau khi bác sĩ kết thúc, phụ tá thu tiền theo hình thức bệnh nhân chọn và xuất hóa đơn điện tử.", "value": "Doanh thu ghi ngay theo từng lượt khám, không phải đối chiếu sổ cuối ngày; hóa đơn đúng quy định.", "note": "Dự kiến GĐ2. Số tiền trong bản vẽ là ví dụ; bản demo hiện chưa có thu tiền.", "short": "Thu tiền"}, {"id": "bs-hang-cho", "role": "bs", "phase": 0, "kind": "real", "title": "Hàng chờ của bác sĩ", "shot": "bs-hang-cho", "who": "Bác sĩ thấy người kế tiếp và gọi vào khám bằng một nút. Số đang khám hiện ngay trên màn hình phòng đợi.", "value": "Bác sĩ không phải hỏi phụ tá \"ai tiếp theo\"; thời gian giữa hai ca ngắn lại.", "note": "Đã chạy được.", "short": "Hàng chờ"}, {"id": "bs-kham", "role": "bs", "phase": 0, "kind": "real", "title": "Khám bệnh: sinh hiệu, triệu chứng", "shot": "bs-kham", "who": "Bác sĩ ghi sinh hiệu, triệu chứng và khám lâm sàng. Bản nháp tự lưu trên máy; bên phải là dị ứng, tiền sử, lịch sử khám.", "value": "Mọi thứ cần cho một ca nằm trên một trang; mất điện hay tải lại trang không mất bài đang viết. Đồng hồ phiên khám giúp chủ phòng mạch đo thời gian.", "note": "Đã chạy được.", "short": "Khám bệnh"}, {"id": "bs-chan-doan", "role": "bs", "phase": 0, "kind": "real", "title": "Chẩn đoán theo ICD-10", "shot": "bs-chan-doan", "who": "Bác sĩ gõ mã hoặc tên bệnh (có dấu hay không đều được) và chọn từ danh mục ICD-10.", "value": "Chẩn đoán chuẩn hóa để làm báo cáo và liên thông; gõ nhanh hơn chọn trong danh sách dài.", "note": "Đã chạy được với bộ danh mục mẫu.", "short": "Chẩn đoán"}, {"id": "bs-ke-don", "role": "bs", "phase": 0, "kind": "real", "title": "Kê đơn, cảnh báo dị ứng và trùng hoạt chất", "shot": "bs-ke-don", "who": "Bác sĩ chọn đơn mẫu hoặc thêm thuốc. Hệ thống cảnh báo ngay thuốc thuộc nhóm bệnh nhân dị ứng và thuốc trùng hoạt chất.", "value": "Giảm sai sót kê đơn nguy hiểm nhất: dị ứng thuốc và trùng thuốc. Đơn mẫu giúp kê một đơn thường gặp trong vài thao tác.", "note": "Đã chạy được. Danh mục thuốc là bộ mẫu, chưa phải danh mục quốc gia.", "short": "Kê đơn, cảnh báo"}, {"id": "bs-xac-nhan", "role": "bs", "phase": 0, "kind": "real", "title": "Xác nhận cảnh báo trước khi ký", "shot": "bs-xac-nhan", "who": "Muốn vẫn kê thuốc có cảnh báo, bác sĩ phải nhập lý do (ít nhất 5 ký tự). Chưa xác nhận thì nút \"Ký & In\" bị khóa.", "value": "Cảnh báo không thể bị bấm bỏ qua; lý do được lưu cùng đơn để truy vết khi cần.", "note": "Đã chạy được. Thiếu CCCD của bệnh nhân cũng khóa nút ký.", "short": "Xác nhận cảnh báo"}, {"id": "bs-da-ky", "role": "bs", "phase": 0, "kind": "real", "title": "Ký đơn và in", "shot": "bs-da-ky", "who": "Ký xong, bác sĩ thấy mã đơn, trạng thái gửi cổng đơn thuốc, có thể in lại đơn hoặc về hàng chờ.", "value": "Kết thúc một ca bằng một màn hình rõ ràng; in lại không cần soạn lại.", "note": "Đã chạy được với chữ ký số và cổng đơn thuốc quốc gia là mô phỏng (có nhãn trên màn hình).", "short": "Ký và in"}, {"id": "bs-ky-so", "role": "bs", "phase": 1, "kind": "draft", "title": "Ký số thật và gửi cổng đơn thuốc quốc gia", "mock": "m-ky-so", "device": "desktop", "who": "Bác sĩ xác nhận bằng mã gửi về điện thoại; đơn được ký bằng chứng thư số từ xa rồi gửi cổng đơn thuốc quốc gia.", "value": "Đơn có giá trị pháp lý và liên thông; bác sĩ không phải cắm thiết bị ký riêng.", "note": "Dự kiến GĐ1. Nhà cung cấp ký số, chi phí và spec cổng đơn thuốc là các câu hỏi mở của Giai đoạn 0.", "short": "Ký số thật"}, {"id": "bs-lien-thong", "role": "bs", "phase": 0, "kind": "real", "title": "Theo dõi liên thông đơn thuốc", "shot": "cp-lien-thong", "who": "Chủ phòng mạch xem đơn nào đã gửi cổng, đơn nào chờ gửi lại. Có nút giả lập mất kết nối để thử.", "value": "Biết đơn nào chưa gửi được để xử lý, không bỏ sót đơn nào.", "note": "Đã chạy được với cổng mô phỏng (nhãn rõ trên màn hình). Cổng thật là GĐ1.", "short": "Liên thông"}, {"id": "bs-thoi-gian", "role": "bs", "phase": 0, "kind": "draft", "title": "Thời gian mỗi lượt khám", "mock": "m-thoi-gian", "device": "desktop", "who": "Chủ phòng mạch xem thời gian khám trung vị và p90 của từng bác sĩ trong 7, 14 hoặc 30 ngày.", "value": "Biết mỗi ca mất bao lâu để quyết định lịch khám và số bệnh nhân mỗi buổi; đây cũng là chỉ tiêu nghiệm thu (trung vị ≤ 60 giây).", "note": "Chức năng đã có; ảnh chụp thật lúc này trống vì dữ liệu mẫu chưa có lượt khám nên hình dưới là bản vẽ với số liệu ví dụ.", "short": "Thời gian khám"}, {"id": "bs-nhat-ky", "role": "bs", "phase": 0, "kind": "real", "title": "Nhật ký truy cập", "shot": "cp-nhat-ky", "who": "Chủ phòng mạch xem ai đã mở hồ sơ, in đơn, lúc nào.", "value": "Đáp ứng yêu cầu bảo vệ dữ liệu cá nhân và trả lời được \"ai đã xem hồ sơ này\" khi có khiếu nại.", "note": "Đã chạy được; chỉ vai trò chủ phòng mạch thấy mục này.", "short": "Nhật ký truy cập"}, {"id": "bs-pham-vi", "role": "bs", "phase": 0, "kind": "real", "title": "Phạm vi bản demo", "shot": "cp-pham-vi", "who": "Màn hình liệt kê rõ phần đã làm, phần mô phỏng và phần chưa có.", "value": "Chủ đầu tư và bác sĩ biết chính xác đang xem gì, không hiểu nhầm mô phỏng là thật.", "note": "Đã chạy được.", "short": "Phạm vi"}, {"id": "bs-bao-cao", "role": "bs", "phase": 2, "kind": "draft", "title": "Báo cáo doanh thu và lượt khám", "mock": "m-bao-cao", "device": "desktop", "who": "Chủ phòng mạch xem lượt khám, doanh thu, bệnh nhân mới, thời gian chờ và chẩn đoán thường gặp theo ngày, tuần, tháng.", "value": "Quyết định giờ mở cửa, số nhân viên và hàng thuốc dựa trên số liệu, không phải cảm giác.", "note": "Dự kiến GĐ2. Số liệu trong bản vẽ là ví dụ.", "short": "Báo cáo"}, {"id": "bs-benh-an", "role": "bs", "phase": 2, "kind": "draft", "title": "Bệnh án điện tử theo dòng thời gian", "mock": "m-benh-an", "device": "desktop", "who": "Bác sĩ xem toàn bộ lần khám của một bệnh nhân theo dòng thời gian, kèm xu hướng chỉ số như huyết áp.", "value": "Theo dõi bệnh mạn tính dễ hơn; đáp ứng yêu cầu bệnh án điện tử của phòng khám (hạn 31/12/2026 theo kế hoạch).", "note": "Dự kiến GĐ2. Hiện bản demo có lịch sử khám ở mức tóm tắt.", "short": "Bệnh án điện tử"}, {"id": "bs-da-co-so", "role": "bs", "phase": 2, "kind": "draft", "title": "Nhiều cơ sở trong một tài khoản", "mock": "m-da-co-so", "device": "desktop", "who": "Chủ phòng mạch có nhiều cơ sở chuyển giữa các cơ sở, xem lượt khám và hàng chờ từng nơi, phân quyền theo cơ sở.", "value": "Mở cơ sở thứ hai không cần hệ thống riêng; chủ nhìn được toàn chuỗi.", "note": "Dự kiến GĐ2 (gói Chuỗi).", "short": "Nhiều cơ sở"}, {"id": "bs-ai", "role": "bs", "phase": 3, "kind": "draft", "title": "Trợ lý tóm tắt hồ sơ và gợi ý tham khảo", "mock": "m-ai", "device": "desktop", "who": "Hệ thống tóm tắt hồ sơ trước khi khám và nêu gợi ý kèm nguồn; bác sĩ dùng hoặc bỏ qua.", "value": "Đọc hồ sơ nhanh hơn, ít sót thông tin; quyết định vẫn thuộc về bác sĩ.", "note": "Định hướng GĐ3, cần đánh giá an toàn và pháp lý trước khi làm.", "short": "Trợ lý AI"}], "flow": [{"when": "Trước khi đến", "bn": ["bn-dat-lich"], "pt": ["pt-lich-hen"], "bs": []}, {"when": "Đến phòng mạch", "bn": ["bn-nhan-so", "bn-theo-doi-so"], "pt": ["pt-dang-nhap", "pt-tim", "pt-ho-so", "pt-cap-so"], "bs": []}, {"when": "Chờ đến lượt", "bn": [], "pt": ["pt-hang-cho", "pt-man-hinh", "pt-mat-mang"], "bs": ["bs-hang-cho"]}, {"when": "Vào khám", "bn": ["bn-duoc-goi"], "pt": [], "bs": ["bs-kham", "bs-chan-doan"]}, {"when": "Kê đơn và ký", "bn": [], "pt": [], "bs": ["bs-ke-don", "bs-xac-nhan", "bs-da-ky", "bs-ky-so"]}, {"when": "Nhận đơn, thanh toán", "bn": ["bn-don-in", "bn-don-dien-tu"], "pt": ["pt-thu-tien"], "bs": ["bs-lien-thong"]}, {"when": "Sau buổi khám", "bn": ["bn-so-suc-khoe", "bn-kham-tu-xa"], "pt": [], "bs": ["bs-benh-an"]}, {"when": "Quản lý phòng mạch", "bn": [], "pt": [], "bs": ["bs-thoi-gian", "bs-nhat-ky", "bs-bao-cao", "bs-da-co-so", "bs-pham-vi", "bs-ai"]}], "images": {"bn-theo-doi-so": {"w": 1032, "h": 834, "light": "bn-02-man-hinh-cho", "dark": "bn-02-man-hinh-cho-toi"}, "bn-duoc-goi": {"w": 1032, "h": 834, "light": "bn-03-duoc-goi-vao-kham", "dark": "bn-03-duoc-goi-vao-kham-toi"}, "bn-don-in": {"w": 874, "h": 560, "light": "bn-04-don-thuoc-in"}, "pt-dang-nhap": {"w": 1280, "h": 860, "light": "pt-01-dang-nhap", "dark": "pt-01-dang-nhap-toi"}, "pt-tim": {"w": 1280, "h": 860, "light": "pt-02-tim-benh-nhan", "dark": "pt-02-tim-benh-nhan-toi"}, "pt-tim-dt": {"w": 780, "h": 1688, "light": "pt-02-tim-benh-nhan-dien-thoai", "dark": "pt-02-tim-benh-nhan-dien-thoai-toi"}, "pt-ho-so": {"w": 1280, "h": 860, "light": "pt-03-ho-so-di-ung", "dark": "pt-03-ho-so-di-ung-toi"}, "pt-ho-so-dt": {"w": 780, "h": 1688, "light": "pt-03-ho-so-di-ung-dien-thoai", "dark": "pt-03-ho-so-di-ung-dien-thoai-toi"}, "pt-cap-so": {"w": 1280, "h": 860, "light": "pt-04-cap-so", "dark": "pt-04-cap-so-toi"}, "pt-hang-cho": {"w": 1280, "h": 860, "light": "pt-05-hang-cho", "dark": "pt-05-hang-cho-toi"}, "pt-hang-cho-dt": {"w": 780, "h": 1688, "light": "pt-05-hang-cho-dien-thoai", "dark": "pt-05-hang-cho-dien-thoai-toi"}, "pt-man-hinh": {"w": 1280, "h": 860, "light": "pt-06-man-hinh-cho", "dark": "pt-06-man-hinh-cho-toi"}, "pt-man-hinh-dt": {"w": 780, "h": 1688, "light": "pt-06-man-hinh-cho-dien-thoai", "dark": "pt-06-man-hinh-cho-dien-thoai-toi"}, "pt-mat-mang": {"w": 1280, "h": 860, "light": "pt-07-mat-mang", "dark": "pt-07-mat-mang-toi"}, "pt-menu-dt": {"w": 780, "h": 1688, "light": "pt-08-menu-them-dien-thoai", "dark": "pt-08-menu-them-dien-thoai-toi"}, "bs-hang-cho": {"w": 1280, "h": 860, "light": "bs-01-hang-cho", "dark": "bs-01-hang-cho-toi"}, "bs-kham": {"w": 1280, "h": 1428, "light": "bs-02-kham-benh", "dark": "bs-02-kham-benh-toi"}, "bs-chan-doan": {"w": 1280, "h": 1421, "light": "bs-03-chan-doan", "dark": "bs-03-chan-doan-toi"}, "bs-ke-don": {"w": 1280, "h": 2214, "light": "bs-04-ke-don-canh-bao", "dark": "bs-04-ke-don-canh-bao-toi"}, "bs-xac-nhan": {"w": 1280, "h": 860, "light": "bs-05-xac-nhan-canh-bao", "dark": "bs-05-xac-nhan-canh-bao-toi"}, "bs-da-ky": {"w": 1280, "h": 860, "light": "bs-06-da-ky-don", "dark": "bs-06-da-ky-don-toi"}, "cp-lien-thong": {"w": 1280, "h": 860, "light": "cp-01-lien-thong", "dark": "cp-01-lien-thong-toi"}, "cp-nhat-ky": {"w": 1280, "h": 2303, "light": "cp-03-nhat-ky-truy-cap", "dark": "cp-03-nhat-ky-truy-cap-toi"}, "cp-pham-vi": {"w": 1280, "h": 1190, "light": "cp-04-pham-vi", "dark": "cp-04-pham-vi-toi"}}, "src": {"bn-02-man-hinh-cho": "man-hinh-that/bn-02-man-hinh-cho.png", "bn-02-man-hinh-cho-toi": "man-hinh-that/bn-02-man-hinh-cho-toi.png", "bn-03-duoc-goi-vao-kham": "man-hinh-that/bn-03-duoc-goi-vao-kham.png", "bn-03-duoc-goi-vao-kham-toi": "man-hinh-that/bn-03-duoc-goi-vao-kham-toi.png", "bn-04-don-thuoc-in": "man-hinh-that/bn-04-don-thuoc-in.png", "bs-01-hang-cho": "man-hinh-that/bs-01-hang-cho.png", "bs-01-hang-cho-toi": "man-hinh-that/bs-01-hang-cho-toi.png", "bs-02-kham-benh": "man-hinh-that/bs-02-kham-benh.png", "bs-02-kham-benh-toi": "man-hinh-that/bs-02-kham-benh-toi.png", "bs-03-chan-doan": "man-hinh-that/bs-03-chan-doan.png", "bs-03-chan-doan-toi": "man-hinh-that/bs-03-chan-doan-toi.png", "bs-04-ke-don-canh-bao": "man-hinh-that/bs-04-ke-don-canh-bao.png", "bs-04-ke-don-canh-bao-toi": "man-hinh-that/bs-04-ke-don-canh-bao-toi.png", "bs-05-xac-nhan-canh-bao": "man-hinh-that/bs-05-xac-nhan-canh-bao.png", "bs-05-xac-nhan-canh-bao-toi": "man-hinh-that/bs-05-xac-nhan-canh-bao-toi.png", "bs-06-da-ky-don": "man-hinh-that/bs-06-da-ky-don.png", "bs-06-da-ky-don-toi": "man-hinh-that/bs-06-da-ky-don-toi.png", "cp-01-lien-thong": "man-hinh-that/cp-01-lien-thong.png", "cp-01-lien-thong-toi": "man-hinh-that/cp-01-lien-thong-toi.png", "cp-03-nhat-ky-truy-cap": "man-hinh-that/cp-03-nhat-ky-truy-cap.png", "cp-03-nhat-ky-truy-cap-toi": "man-hinh-that/cp-03-nhat-ky-truy-cap-toi.png", "cp-04-pham-vi": "man-hinh-that/cp-04-pham-vi.png", "cp-04-pham-vi-toi": "man-hinh-that/cp-04-pham-vi-toi.png", "pt-01-dang-nhap": "man-hinh-that/pt-01-dang-nhap.png", "pt-01-dang-nhap-toi": "man-hinh-that/pt-01-dang-nhap-toi.png", "pt-02-tim-benh-nhan": "man-hinh-that/pt-02-tim-benh-nhan.png", "pt-02-tim-benh-nhan-dien-thoai": "man-hinh-that/pt-02-tim-benh-nhan-dien-thoai.png", "pt-02-tim-benh-nhan-dien-thoai-toi": "man-hinh-that/pt-02-tim-benh-nhan-dien-thoai-toi.png", "pt-02-tim-benh-nhan-toi": "man-hinh-that/pt-02-tim-benh-nhan-toi.png", "pt-03-ho-so-di-ung": "man-hinh-that/pt-03-ho-so-di-ung.png", "pt-03-ho-so-di-ung-dien-thoai": "man-hinh-that/pt-03-ho-so-di-ung-dien-thoai.png", "pt-03-ho-so-di-ung-dien-thoai-toi": "man-hinh-that/pt-03-ho-so-di-ung-dien-thoai-toi.png", "pt-03-ho-so-di-ung-toi": "man-hinh-that/pt-03-ho-so-di-ung-toi.png", "pt-04-cap-so": "man-hinh-that/pt-04-cap-so.png", "pt-04-cap-so-toi": "man-hinh-that/pt-04-cap-so-toi.png", "pt-05-hang-cho": "man-hinh-that/pt-05-hang-cho.png", "pt-05-hang-cho-dien-thoai": "man-hinh-that/pt-05-hang-cho-dien-thoai.png", "pt-05-hang-cho-dien-thoai-toi": "man-hinh-that/pt-05-hang-cho-dien-thoai-toi.png", "pt-05-hang-cho-toi": "man-hinh-that/pt-05-hang-cho-toi.png", "pt-06-man-hinh-cho": "man-hinh-that/pt-06-man-hinh-cho.png", "pt-06-man-hinh-cho-dien-thoai": "man-hinh-that/pt-06-man-hinh-cho-dien-thoai.png", "pt-06-man-hinh-cho-dien-thoai-toi": "man-hinh-that/pt-06-man-hinh-cho-dien-thoai-toi.png", "pt-06-man-hinh-cho-toi": "man-hinh-that/pt-06-man-hinh-cho-toi.png", "pt-07-mat-mang": "man-hinh-that/pt-07-mat-mang.png", "pt-07-mat-mang-toi": "man-hinh-that/pt-07-mat-mang-toi.png", "pt-08-menu-them-dien-thoai": "man-hinh-that/pt-08-menu-them-dien-thoai.png", "pt-08-menu-them-dien-thoai-toi": "man-hinh-that/pt-08-menu-them-dien-thoai-toi.png"}};
+const IMG = DATA.images;
+const PH = [
+  {n:'Đã chạy được', s:'Bản demo M0', c:'var(--ph0)'},
+  {n:'GĐ1', s:'12/2026–03/2027', c:'var(--ph1)'},
+  {n:'GĐ2', s:'04–07/2027', c:'var(--ph2)'},
+  {n:'GĐ3', s:'08–12/2027', c:'var(--ph3)'}
+];
+const ROLES = [
+  {id:'bn', name:'Bệnh nhân', sub:'Khách của phòng mạch: đặt lịch, chờ, nhận đơn'},
+  {id:'pt', name:'Phụ tá', sub:'Tiếp đón, cấp số, điều phối hàng chờ'},
+  {id:'bs', name:'Bác sĩ, chủ phòng mạch', sub:'Khám, kê đơn, ký, quản lý phòng mạch'},
+  {id:'all', name:'Cả buổi khám', sub:'Một trang cho ba vai trò theo thời gian'}
+];
+const $ = (s, r=document) => r.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const STEPS = DATA.steps;
+const byId = Object.fromEntries(STEPS.map(s => [s.id, s]));
+const state = {view:'bn', step:{bn:'bn-theo-doi-so', pt:'pt-dang-nhap', bs:'bs-hang-cho'}, device:'desktop', theme:'light', on:new Set([0,1,2,3])};
+
+/* ---------- bản vẽ dự kiến (HTML) ---------- */
+const MOCK = {
+'m-dat-lich': () => `<div class="mock"><div class="m-bar">Phòng khám Nội – BS. Hà <small>Đặt lịch</small></div>
+  <div class="m-card"><h4>Chọn ngày</h4><div class="m-row"><span class="m-chip off">T2 5/10</span><span class="m-chip">T3 6/10</span><span class="m-chip off">T4 7/10</span><span class="m-chip off">T5 8/10</span></div></div>
+  <div class="m-card"><h4>Giờ còn trống</h4><div class="m-time"><span>08:00</span><span class="off">08:20</span><span class="sel">08:40</span><span>09:00</span><span class="off">09:20</span><span>09:40</span><span>10:00</span><span class="off">10:20</span></div></div>
+  <div class="m-card"><h4>Lý do khám</h4><div class="m-field"><b>Ho kéo dài 5 ngày</b></div></div>
+  <span class="m-btn pri">Đặt lịch 08:40, thứ ba 6/10</span></div>`,
+'m-nhan-so': () => `<div class="mock"><div class="m-bar">Phòng khám Nội – BS. Hà <small>Tin nhắn</small></div><div class="chat">
+  <div class="bub">Nhắc lịch: <b>08:40 mai, thứ ba 6/10</b> tại Phòng khám Nội – BS. Hà. Bấm bên dưới khi bạn đến nơi.</div>
+  <div class="bub me">Tôi đã đến</div>
+  <div class="bub"><div class="ticket">007</div><p style="margin-top:8px">Còn <b>3 người</b> trước bạn, chờ khoảng <b>25 phút</b>. Bạn có thể ngồi chờ hoặc đi lại gần đó; chúng tôi báo khi đến lượt.</p></div>
+  <span class="m-btn">Xem hàng chờ</span></div></div>`,
+'m-don-dien-tu': () => `<div class="mock"><div class="m-bar">Phòng khám Nội – BS. Hà <small>Tin nhắn</small></div><div class="chat">
+  <div class="bub"><b>Đơn thuốc ngày 05/10</b><br>Chẩn đoán: Viêm họng cấp (J02.9)
+   <div class="tl" style="margin-top:8px"><div>Amoxicillin 500 mg<br><span class="m-muted">1 viên x 3 lần/ngày, 5 ngày</span></div><div>Paracetamol 500 mg<br><span class="m-muted">Khi sốt hoặc đau, cách 4–6 giờ</span></div></div></div>
+  <div class="bub"><b>Nhắc uống thuốc</b><br>8:00 · 14:00 · 20:00 <span class="m-chip ok">Đang bật</span></div>
+  <div class="bub"><b>Tái khám</b><br>Sau 7 ngày, nếu còn sốt hoặc khó nuốt.</div>
+  <span class="m-btn pri">Đặt lịch tái khám</span></div></div>`,
+'m-so-suc-khoe': () => `<div class="mock"><div class="m-bar">Sổ sức khỏe của tôi <small>Đồng bộ</small></div>
+  <div class="m-card"><h4>Nguyễn Văn An</h4><div class="alert">Dị ứng: Penicillin</div></div>
+  <div class="tl"><div><b>05/10/2026</b> · Phòng khám Nội – BS. Hà<br><span class="m-muted">Viêm họng cấp, 2 loại thuốc</span></div>
+   <div><b>12/06/2026</b> · Phòng khám Nội – BS. Hà<br><span class="m-muted">Tái khám huyết áp</span></div>
+   <div><b>03/02/2026</b> · Bệnh viện khác<br><span class="m-muted">Xét nghiệm đường huyết</span></div></div>
+  <div class="m-card"><div class="m-row"><b>Chia sẻ hồ sơ với phòng khám</b><span class="m-chip ok m-sp">Đồng ý</span></div><span class="m-muted">Bạn có thể thu hồi bất cứ lúc nào.</span></div></div>`,
+'m-tu-xa': () => `<div class="mock"><div class="m-bar">Tái khám từ xa <small>08:40</small></div>
+  <div class="vid"><span>BS. Nguyễn Văn Hà</span><small>Đang kết nối ổn định</small><div class="me">Bạn</div></div>
+  <div class="m-row" style="justify-content:center"><span class="m-btn">Tắt mic</span><span class="m-btn">Tắt camera</span><span class="m-btn" style="border-color:var(--bad);color:var(--bad)">Kết thúc</span></div>
+  <div class="m-card"><h4>Sau cuộc gọi</h4><span class="m-muted">Đơn thuốc và lời dặn sẽ gửi vào tin nhắn, kèm lịch tái khám nếu cần.</span></div></div>`,
+'m-lich-hen': () => `<div class="mock"><div class="m-bar">Lịch hẹn hôm nay <small>Thứ ba 6/10</small></div>
+  <div class="m-grid2" style="grid-template-columns:2fr 1fr"><div class="m-card m-tab"><table class="m-table"><tr><th>Giờ</th><th>Bệnh nhân</th><th>Lý do</th><th>Trạng thái</th></tr>
+   <tr><td>08:00</td><td>Trần Thị Bình</td><td>Tái khám huyết áp</td><td><span class="m-chip ok">Đã cấp số 002</span></td></tr>
+   <tr><td>08:20</td><td>Lê Quốc Cường</td><td>Sốt, đau họng</td><td><span class="m-chip ok">Đã cấp số 003</span></td></tr>
+   <tr><td>08:40</td><td>Nguyễn Văn An</td><td>Ho kéo dài</td><td><span class="m-chip warn">Chưa đến</span></td></tr>
+   <tr><td>09:00</td><td>Phạm Thu Dung</td><td>Đau lưng</td><td><span class="m-chip warn">Chưa đến</span></td></tr>
+   <tr><td>09:20</td><td>Hoàng Minh Khôi</td><td>Khám định kỳ</td><td><span class="m-chip off">Đã hủy</span></td></tr></table></div>
+   <div class="m-card"><h4>Tóm tắt</h4><div class="m-kpi"><b>5</b>lịch hẹn</div><div class="m-kpi"><b>2</b>đã đến</div><span class="m-btn">Nhắn người chưa đến</span></div></div></div>`,
+'m-thu-tien': () => `<div class="mock"><div class="m-bar">Thu tiền <small>Lượt khám số 001</small></div>
+  <div class="m-grid2"><div class="m-card"><h4>Nguyễn Văn An</h4>
+   <div class="m-row"><span>Khám bệnh</span><b class="m-sp">150.000 đ</b></div><div class="m-row"><span>Thủ thuật</span><b class="m-sp">0 đ</b></div><hr style="border:0;border-top:1px solid var(--line);width:100%">
+   <div class="m-row"><b>Tổng</b><b class="m-sp" style="font-size:1.2rem">150.000 đ</b></div>
+   <div class="m-row"><span class="m-chip">Tiền mặt</span><span class="m-chip off">Chuyển khoản</span><span class="m-chip off">Mã QR</span></div>
+   <span class="m-btn pri">Thu tiền và xuất hóa đơn</span></div>
+   <div class="m-card"><h4>Hóa đơn điện tử</h4><span class="m-muted">Số 000123 · 05/10/2026</span><span>Dịch vụ khám, chữa bệnh</span><span class="m-chip ok">Chưa gửi · gửi qua tin nhắn khi bệnh nhân đồng ý</span><span class="note">Số tiền là ví dụ.</span></div></div></div>`,
+'m-ky-so': () => `<div class="mock"><div class="m-bar">Ký số đơn thuốc <small>PM-261005-09RPY0</small></div>
+  <div class="m-grid2"><div class="m-card"><h4>Chứng thư số của bác sĩ</h4><div class="m-field"><b>BS. Nguyễn Văn Hà</b><br><small>Ký từ xa · hiệu lực đến 03/2028</small></div>
+   <h4>Mã xác nhận gửi về điện thoại</h4><div class="otp"><span>4</span><span>8</span><span>1</span><span>9</span><span>0</span><span>2</span></div><span class="m-btn pri">Ký và in</span></div>
+   <div class="m-card"><h4>Sau khi ký</h4><div class="tl"><div>Đơn có chữ ký số hợp lệ</div><div>Gửi cổng đơn thuốc quốc gia</div><div>Nhận mã liên thông, in lên đơn</div></div><span class="note">Mất mạng giữa chừng: đơn vẫn in được, tự gửi khi có mạng.</span></div></div></div>`,
+'m-thoi-gian': () => `<div class="mock"><div class="m-bar">Thời gian một lượt khám <small>14 ngày · số liệu ví dụ</small></div>
+  <div class="m-grid3"><div class="m-card m-kpi"><b>38</b>lượt khám</div><div class="m-card m-kpi"><b>52 giây</b>trung vị (mục tiêu ≤ 60)</div><div class="m-card m-kpi"><b>108 giây</b>p90 (mục tiêu ≤ 120)</div></div>
+  <div class="m-card m-tab"><table class="m-table"><tr><th>Bác sĩ</th><th>Số lượt</th><th>Trung vị</th><th>p90</th><th>Đo ở máy khám</th></tr>
+   <tr><td><b>Toàn phòng khám</b></td><td>38</td><td>52 giây</td><td>108 giây</td><td>3</td></tr><tr><td>BS. Nguyễn Văn Hà</td><td>38</td><td>52 giây</td><td>108 giây</td><td>3</td></tr></table></div></div>`,
+'m-bao-cao': () => { const d=[12,15,9,18,14,20,16], mx=20, days=['T2','T3','T4','T5','T6','T7','CN'];
+  const bars=d.map((v,i)=>{const h=Math.round(v/mx*96);return `<rect x="${14+i*38}" y="${110-h}" width="24" height="${h}" rx="3" fill="var(--primary)"/><text x="${26+i*38}" y="${106-h}" text-anchor="middle" font-size="10" fill="var(--text)">${v}</text><text x="${26+i*38}" y="126" text-anchor="middle" font-size="10" fill="var(--muted)">${days[i]}</text>`}).join('');
+  return `<div class="mock"><div class="m-bar">Báo cáo phòng mạch <small>7 ngày gần nhất · số liệu ví dụ</small></div>
+  <div class="m-grid4"><div class="m-card m-kpi"><b>104</b>lượt khám</div><div class="m-card m-kpi"><b>15,6 triệu đ</b>doanh thu</div><div class="m-card m-kpi"><b>11</b>bệnh nhân mới</div><div class="m-card m-kpi"><b>19 phút</b>chờ trung bình</div></div>
+  <div class="m-grid2"><div class="m-card"><h4>Lượt khám theo ngày</h4><svg viewBox="0 0 280 134" role="img" aria-label="Biểu đồ cột lượt khám 7 ngày" style="width:100%;height:auto"><line x1="8" y1="110" x2="276" y2="110" stroke="var(--line)"/>${bars}</svg></div>
+  <div class="m-card"><h4>Chẩn đoán thường gặp</h4><div class="m-row"><span>Viêm họng cấp</span><b class="m-sp">23</b></div><div class="m-row"><span>Tăng huyết áp</span><b class="m-sp">18</b></div><div class="m-row"><span>Viêm mũi họng</span><b class="m-sp">14</b></div><div class="m-row"><span>Đau lưng</span><b class="m-sp">9</b></div></div></div></div>`;},
+'m-benh-an': () => `<div class="mock"><div class="m-bar">Bệnh án điện tử <small>Nguyễn Văn An · 48 tuổi</small></div>
+  <div class="alert">Dị ứng: Penicillin · Tiền sử: tăng huyết áp, đái tháo đường típ 2</div>
+  <div class="m-grid2" style="grid-template-columns:2fr 1fr"><div class="tl"><div><b>05/10/2026</b> · Viêm họng cấp (J02.9)<br><span class="m-muted">Sốt 38,5 °C, mạch 96. Kê 2 thuốc, tái khám 7 ngày.</span></div>
+   <div><b>12/06/2026</b> · Tăng huyết áp (I10)<br><span class="m-muted">Huyết áp 138/86. Giữ amlodipin 5 mg.</span></div>
+   <div><b>03/02/2026</b> · Xét nghiệm đường huyết<br><span class="m-muted">Đường huyết đói 7,4 mmol/L.</span></div></div>
+   <div class="m-card"><h4>Huyết áp tâm thu</h4><svg viewBox="0 0 120 60" style="width:100%;height:auto" role="img" aria-label="Xu hướng huyết áp tâm thu"><polyline fill="none" stroke="var(--primary)" stroke-width="2" points="6,40 40,30 74,34 114,18"/><circle cx="114" cy="18" r="4" fill="var(--signal)"/><line x1="4" y1="54" x2="116" y2="54" stroke="var(--line)"/></svg><span class="m-muted">Ví dụ, 4 lần đo gần nhất</span></div></div></div>`,
+'m-da-co-so': () => `<div class="mock"><div class="m-bar">Nhiều cơ sở <small>Một tài khoản</small></div>
+  <div class="m-row"><span class="m-chip">Nội · Quận 1</span><span class="m-chip off">Nhi · Quận 7</span><span class="m-chip off">Tai mũi họng · Thủ Đức</span></div>
+  <div class="m-card m-tab"><table class="m-table"><tr><th>Cơ sở</th><th>Lượt khám hôm nay</th><th>Đang chờ</th><th>Bác sĩ</th></tr>
+   <tr><td>Nội · Quận 1</td><td>31</td><td>4</td><td>2</td></tr><tr><td>Nhi · Quận 7</td><td>26</td><td>6</td><td>2</td></tr><tr><td>Tai mũi họng · Thủ Đức</td><td>17</td><td>2</td><td>1</td></tr></table></div>
+  <div class="m-grid2"><div class="m-card"><h4>Phân quyền theo cơ sở</h4><span>Phụ tá Lan: chỉ cơ sở Quận 1</span><span>BS. Hà: Quận 1 và Quận 7</span></div><div class="m-card"><h4>Dữ liệu</h4><span class="m-muted">Hồ sơ bệnh nhân dùng chung giữa các cơ sở khi bệnh nhân đồng ý.</span></div></div></div>`,
+'m-ai': () => `<div class="mock"><div class="m-bar">Khám bệnh <small>Nguyễn Văn An</small></div>
+  <div class="m-grid2" style="grid-template-columns:3fr 2fr"><div class="m-card"><h4>Triệu chứng</h4><div class="m-field"><b>Ho khan 5 ngày, sốt nhẹ về chiều</b></div><h4>Chẩn đoán</h4><div class="m-row"><span class="m-chip">J02.9 Viêm họng cấp</span></div></div>
+   <div class="m-card" style="border-style:dashed"><h4>Tóm tắt từ hồ sơ</h4><span>Dị ứng Penicillin. Tăng huyết áp, đái tháo đường. Lần khám trước 12/06.</span><span class="m-muted">Nguồn: bệnh án 12/06, 03/02</span>
+   <h4>Gợi ý để cân nhắc</h4><span>Tránh nhóm Penicillin khi kê kháng sinh.</span><div class="m-row"><span class="m-btn">Dùng</span><span class="m-btn" style="border-color:var(--line);color:var(--muted)">Bỏ qua</span></div><span class="note">Chỉ tham khảo. Bác sĩ luôn là người quyết định.</span></div></div></div>`
+};
+
+/* ---------- vẽ giao diện ---------- */
+const phCls = p => `ph ph-${p}`;
+const visible = s => state.on.has(s.phase);
+function renderTop(){
+  $('#legend').innerHTML = PH.map((p,i)=>`<button type="button" class="${phCls(i)}" data-ph="${i}" aria-pressed="${state.on.has(i)}" title="${esc(p.s)}"><i></i>${esc(p.n)}</button>`).join('');
+  const real=STEPS.filter(s=>s.kind==='real').length, draft=STEPS.length-real;
+  $('#stats').innerHTML = `<span><b>${real}</b>màn hình thật đã chạy được</span><span><b>${draft}</b>bản vẽ dự kiến và minh họa</span><span><b>3</b>vai trò</span>`;
+  $('#tabs').innerHTML = ROLES.map(r=>`<button type="button" role="tab" class="tab" id="tab-${r.id}" data-view="${r.id}" aria-selected="${state.view===r.id}"><strong>${esc(r.name)}</strong><span>${esc(r.sub)}</span></button>`).join('');
+}
+function frameFor(s, device){
+  const dr = s.kind==='draft';
+  const label = dr ? 'Bản vẽ dự kiến, không phải ảnh chụp' : 'Ảnh chụp màn hình thật';
+  const phase = `<span class="pill ${phCls(s.phase)}"><i></i>${esc(PH[s.phase].n)}</span>`;
+  if (dr){
+    const body = MOCK[s.mock]();
+    const inner = s.device==='phone' ? `<div class="phone-wrap"><div class="phone"><div class="scroll">${body}</div></div></div>` : `<div class="scroll">${body}</div>`;
+    return `<div class="frame draft" style="--c:${PH[s.phase].c}"><div class="chrome"><span>${label}</span>${phase}</div>${inner}</div>`;
+  }
+  const key = device==='phone' && s.shotPhone ? s.shotPhone : s.shot;
+  const e = IMG[key]; const name = state.theme==='dark' && e.dark ? e.dark : e.light; const src = DATA.src[name];
+  const tall = e.h > 680;
+  const img = `<div class="scroll"><img src="${src}" alt="${esc(s.title)}: ${key.includes('dt')||device==='phone'?'điện thoại':'máy bàn'}" width="${e.w}" height="${e.h}" loading="lazy"></div>`;
+  const inner = device==='phone' && s.shotPhone ? `<div class="phone-wrap"><div class="phone">${img}</div></div>` : img;
+  return `<div class="frame"><div class="chrome"><span>${label}</span>${phase}</div>${inner}${tall?'<div class="hint">Cuộn trong khung để xem toàn bộ màn hình.</div>':''}</div>`;
+}
+function renderRole(role){
+  const list = STEPS.filter(s=>s.role===role);
+  const cur = byId[state.step[role]] || list[0];
+  const idx = list.indexOf(cur);
+  const hasDark = cur.kind==='real' && IMG[cur.shot].dark;
+  const hasPhone = cur.kind==='real' && cur.shotPhone;
+  if (!hasDark) state.theme = 'light'; if (!hasPhone && cur.kind==='real') state.device='desktop';
+  if (cur.kind==='draft') state.device = cur.device==='phone' ? 'phone' : 'desktop';
+  const steps = list.map((s,i)=>`<li><button type="button" class="step${visible(s)?'':' dim'}" data-step="${s.id}" ${s.id===cur.id?'aria-current="step"':''}><span class="dot dot-${s.phase}"></span><span class="t">${esc(s.title)}</span><span class="s">${esc(PH[s.phase].n)} · ${s.kind==='real'?'ảnh thật':'bản vẽ'}</span></button></li>`).join('');
+  const seg = (name, items) => `<div class="seg" role="group" aria-label="${name}">${items.map(([v,l,on])=>`<button type="button" data-${name==='Thiết bị'?'dev':'thm'}="${v}" aria-pressed="${on}">${l}</button>`).join('')}</div>`;
+  $('#view').innerHTML = `<div class="work" role="tabpanel" aria-labelledby="tab-${role}"><ol class="steps" aria-label="Các bước của ${esc(ROLES.find(r=>r.id===role).name)}">${steps}</ol>
+   <div class="stage"><div class="tools"><h2>${esc(cur.title)}</h2>
+     <span class="kind ${cur.kind==='real'?'real':'draft'}">${cur.kind==='real'?'Ảnh chụp thật':'Bản vẽ dự kiến'}</span>
+     ${hasPhone?seg('Thiết bị',[['desktop','Máy bàn',state.device==='desktop'],['phone','Điện thoại',state.device==='phone']]):''}
+     ${hasDark?seg('Giao diện',[['light','Sáng',state.theme==='light'],['dark','Tối',state.theme==='dark']]):''}</div>
+     ${frameFor(cur, state.device)}
+     <div class="cards"><div class="card"><h3>Ai làm gì</h3><p>${esc(cur.who)}</p></div><div class="card"><h3>Phòng mạch được gì</h3><p>${esc(cur.value)}</p></div><div class="card lim"><h3>Trạng thái và giới hạn</h3><p>${esc(cur.note)}</p></div></div>
+     <div class="nav"><button class="btn" data-go="-1" ${idx<=0?'disabled':''}>Bước trước</button><span class="m-muted" style="align-self:center">${idx+1} / ${list.length}</span><button class="btn main" data-go="1" ${idx>=list.length-1?'disabled':''}>Bước sau</button></div>
+   </div></div>`;
+}
+function renderAll(){
+  const rows = DATA.flow;
+  const chip = id => { const s=byId[id]; return `<button type="button" class="chipbtn" data-open="${id}"${visible(s)?'':' style="opacity:.4"'}><i class="dot-${s.phase}"></i>${esc(s.short||s.title)}</button>`; };
+  const cell = (ids,lane) => `<div class="fcell"><span class="lane">${lane}</span>${ids.length?ids.map(chip).join(''):'<span class="fnone">Không có việc ở bước này</span>'}</div>`;
+  $('#view').innerHTML = `<div class="flow" role="tabpanel" aria-labelledby="tab-all"><div class="frow fhead"><div>Thời điểm</div><div>Bệnh nhân</div><div>Phụ tá</div><div>Bác sĩ, chủ phòng mạch</div></div>
+   ${rows.map(r=>`<div class="frow"><div class="fwhen">${esc(r.when)}</div>${cell(r.bn,'Bệnh nhân')}${cell(r.pt,'Phụ tá')}${cell(r.bs,'Bác sĩ, chủ phòng mạch')}</div>`).join('')}</div>`;
+}
+function renderSummary(){
+  const c = p => STEPS.filter(s=>s.phase===p).length;
+  $('#summary').innerHTML = `<h2 id="sum-h" class="sr-only">Tóm tắt theo giai đoạn</h2><div class="sum">${PH.map((p,i)=>`<div class="card"><span class="${phCls(i)}" style="justify-self:start"><i></i>${esc(p.n)}</span><b>${c(i)}</b><p>${i===0?`màn hình đã chạy được: ${STEPS.filter(s=>s.phase===0&&s.kind==='real').length} ảnh chụp thật${STEPS.some(s=>s.phase===0&&s.kind==='draft')?', '+STEPS.filter(s=>s.phase===0&&s.kind==='draft').length+' vẽ với số liệu ví dụ':''}`:'màn hình dự kiến, '+esc(p.s)}</p></div>`).join('')}</div>`;
+}
+function render(){ renderTop(); if(state.view==='all') renderAll(); else renderRole(state.view); renderSummary(); }
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('button'); if(!t) return;
+  if (t.dataset.ph!==undefined){ const p=+t.dataset.ph; state.on.has(p)?state.on.delete(p):state.on.add(p); if(!state.on.size) state.on.add(p); render(); return; }
+  if (t.dataset.view){ state.view=t.dataset.view; render(); return; }
+  if (t.dataset.step){ state.step[state.view]=t.dataset.step; history.replaceState(null,'','#'+t.dataset.step); render(); if(innerWidth<=980){ const st=$('.stage'); if(st) st.scrollIntoView({block:'start'}); } return; }
+  if (t.dataset.dev){ state.device=t.dataset.dev; render(); return; }
+  if (t.dataset.thm){ state.theme=t.dataset.thm; render(); return; }
+  if (t.dataset.open){ const s=byId[t.dataset.open]; state.view=s.role; state.step[s.role]=s.id; history.replaceState(null,'','#'+s.id); render(); scrollTo({top:0}); return; }
+  if (t.dataset.go){ const list=STEPS.filter(s=>s.role===state.view); const i=list.findIndex(s=>s.id===state.step[state.view])+(+t.dataset.go); if(list[i]){ state.step[state.view]=list[i].id; history.replaceState(null,'','#'+list[i].id); render(); } }
+});
+document.addEventListener('keydown', e => {
+  if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName) || state.view==='all') return;
+  if (e.key==='ArrowRight'||e.key==='ArrowLeft'){ const b=$(`[data-go="${e.key==='ArrowRight'?1:-1}"]`); if(b&&!b.disabled){ b.click(); } }
+});
+(function init(){ const h=location.hash.slice(1); if(byId[h]){ state.view=byId[h].role; state.step[byId[h].role]=h; } else if(h==='all'||h==='bn'||h==='pt'||h==='bs'){ state.view=h; } render(); })();
+</script>
+
+</body>
+</html>
