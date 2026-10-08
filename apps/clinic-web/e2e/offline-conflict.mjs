@@ -271,6 +271,46 @@ try {
   await C.page.screenshot({ path: `${shots}43-sync-list-acknowledged.png` });
   ok(`ghi lý do rồi "Xác nhận và gửi lại": đúng 2 yêu cầu cùng clientUuid; máy chủ có đúng 1 lượt khám, đơn ${allergyCode} lưu kèm lý do; danh sách và huy hiệu về 0`);
 
+  // ================================================================================================== OFF-8: 401 đúng lúc ký
+  // Rủi ro còn lại 3 của OFF-8: phiên hết hạn (401) đúng lúc bác sĩ bấm "Ký & In" khi ứng dụng coi là có mạng. Trước OFF-8:
+  // về màn hình đăng nhập, không in. Nay: bộ máy chuyển sang ký khi mất mạng trong lúc giữ khóa và in từ máy (không im lặng).
+  const D = await newDevice('máy ký lúc 401');
+  const EXPIRE_NAME = `Zq Hết Phiên ${tag}`;
+  await login(D, BASE, 'noi-doctor');
+  await D.page.getByTestId('tab-reception').click();
+  await D.page.getByTestId('search').fill(EXPIRE_NAME);
+  await D.page.getByTestId('search-status').filter({ hasText: /\d+ kết quả/ }).waitFor().catch(() => {});
+  await D.page.getByTestId('new-patient').click();
+  await D.page.getByTestId('f-phone').fill(`09${digits(8)}`);
+  await D.page.getByTestId('f-submit').click();
+  await D.page.getByTestId('notice').filter({ hasText: /Đã tạo|đã tạo/ }).waitFor();
+  await D.page.getByTestId('check-in').click();
+  await D.page.getByTestId('tab-queue').click();
+  await D.page.getByTestId('waiting').getByTestId('queue-row').filter({ hasText: EXPIRE_NAME }).waitFor();
+  await D.page.getByTestId('queue-row').filter({ hasText: EXPIRE_NAME }).getByTestId('call').click();
+  await D.page.getByTestId('visit').waitFor();
+  await D.page.getByTestId('exam-symptoms').fill(SYMPTOMS);
+  await D.page.getByTestId('dx-search').fill('viem hong');
+  await D.page.getByTestId('dx-search-item').first().waitFor();
+  await D.page.getByTestId('dx-search').press('Enter');
+  await D.page.getByTestId('template').selectOption('viem-hong-cap');
+  await D.page.getByTestId('line').first().waitFor();
+  const dReasons = D.page.getByTestId('ack-reason');
+  for (let i = 0; i < (await dReasons.count()); i++) await dReasons.nth(i).fill('Đã hỏi bệnh nhân trực tiếp, không dị ứng thuốc');
+  await D.page.locator('[data-testid="draft-saved"][data-dirty="false"]').waitFor();
+  // Phiên hết hạn đúng lúc gửi yêu cầu hoàn tất.
+  D.expected = /status of 401|Failed to fetch/;
+  await D.page.route('**/api/visits/*/complete', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"unauthenticated"}' }));
+  await D.page.getByTestId('sign').click();
+  // OFF-8: không im lặng — in từ máy (kết quả ký khi mất mạng) thay vì chỉ về màn hình đăng nhập.
+  await D.page.locator('[data-testid="offline-sign-result"], [data-testid="session-expired"]').first().waitFor();
+  const printedAt401 = await D.page.locator('iframe[data-testid="print-frame"]').count();
+  assert.ok(printedAt401 >= 1 || (await D.page.getByTestId('offline-sign-result').count()) >= 1, 'OFF-8: 401 lúc ký phải in từ máy hoặc hiện kết quả ký, không im lặng bỏ qua');
+  if (await D.page.getByTestId('rx-code').count()) assert.ok((await lastPrintHtml(D.page)).includes('KÝ KHI MẤT MẠNG'), '401 lúc ký: in từ dữ liệu trên máy');
+  await D.page.unroute('**/api/visits/*/complete');
+  D.expected = undefined;
+  ok('401 đúng lúc ký (OFF-8, Rủi ro còn lại 3): bộ máy chuyển sang ký khi mất mạng và in từ máy, không im lặng bỏ qua');
+
   assert.deepEqual(problems, [], `lỗi trong console:\n${problems.join('\n')}`);
   ok('không có lỗi nào trong console của hai máy (ngoài lỗi tải do cố ý ngắt mạng và các phản hồi 409, 422, 401 được chờ đợi)');
   console.log(`\nĐạt ${step}/${step}. Ảnh chụp: ${shots}`);

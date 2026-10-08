@@ -223,11 +223,37 @@ try {
   assert.equal(added[0].prescription.code, lostCode, 'gửi lại cùng UUID: máy chủ trả đơn cũ, mã trùng mã đã in');
   ok(`mất phản hồi khi ký (máy chủ đã ghi): in từ máy, gửi lại cùng UUID, máy chủ vẫn chỉ có 1 lượt khám mới, mã ${lostCode} trùng`);
 
-  // Đo trước khi tải lại trang (bộ đếm nằm trong trang): hai lần in ở trên (ký khi mất mạng, mất phản hồi).
+  // ============================================================ OFF-8: máy chủ trả 503 cho yêu cầu hoàn tất lúc có mạng
+  // Ứng dụng coi là có mạng, nhưng máy chủ đang lỗi tạm (503). Trước OFF-8: báo "CHƯA in" và không in. Nay: chuyển sang ký khi
+  // mất mạng (cùng ngày — hàng rào ngày A-1 cho qua), in đúng một tờ từ máy; có mạng lại gửi lại cùng UUID, đúng một đơn, mã trùng.
+  const before503 = new Set((await anVisits()).map((v) => v.encounterId));
+  await page.getByTestId('queue-row').filter({ hasText: 'Nguyễn Văn An' }).filter({ has: page.getByTestId('call') }).getByTestId('call').click();
+  await page.getByTestId('visit').waitFor();
+  assert.equal(await page.getByTestId('opened-offline').count(), 0, 'mở có mạng');
+  let busy = 0;
+  await page.route('**/api/visits/*/complete', async (route) => {
+    busy++;
+    // Giờ máy chủ cùng ngày với giờ ký của máy khách: hàng rào ngày A-1 cho phép chuyển và in.
+    await route.fulfill({ status: 503, headers: { 'content-type': 'application/json', date: new Date().toUTCString() }, body: JSON.stringify({ error: 'incomplete', retry: true, message: 'Lưu chưa trọn vẹn' }) });
+  });
+  await signWithTemplate();
+  await page.getByTestId('offline-sign-result').waitFor();
+  await page.unroute('**/api/visits/*/complete');
+  const busyCode = await page.getByTestId('rx-code').innerText();
+  assert.equal(busy, 1, 'yêu cầu hoàn tất tới máy chủ đúng một lần (503)');
+  assert.ok((await lastPrintHtml(page)).includes('KÝ KHI MẤT MẠNG'), '503 lúc ký: in từ dữ liệu trên máy');
+  await syncedAll();
+  await page.locator('[data-testid="offline-sync-state"][data-status="done"]').waitFor();
+  const added503 = (await anVisits()).filter((v) => !before503.has(v.encounterId));
+  assert.equal(added503.length, 1, `503 lúc ký rồi tự gửi lại: đúng 1 lượt khám mới, thực tế ${added503.length}`);
+  assert.equal(added503[0].prescription.code, busyCode, 'gửi lại cùng UUID: mã đơn trên máy chủ trùng mã đã in');
+  ok(`503 lúc ký (OFF-8): in một tờ A5 từ máy, không im lặng; tự gửi lại, máy chủ có đúng 1 lượt khám mới, mã ${busyCode} trùng`);
+
+  // Đo trước khi tải lại trang (bộ đếm nằm trong trang): ba lần in ở trên (ký khi mất mạng, mất phản hồi, 503 lúc ký).
   const atPrint = await page.evaluate(() => window.__idb.atPrint);
-  assert.equal(atPrint.length, 2, `đo được đúng hai lần in, thực tế ${JSON.stringify(atPrint)}`);
-  assert.deepEqual(atPrint, [0, 0], `mọi lần in phải không còn yêu cầu IndexedDB đang dở, thực tế ${JSON.stringify(atPrint)}`);
-  ok('hai lần in đều gọi print() khi không còn yêu cầu IndexedDB nào đang dở (hàng rào in)');
+  assert.equal(atPrint.length, 3, `đo được đúng ba lần in, thực tế ${JSON.stringify(atPrint)}`);
+  assert.deepEqual(atPrint, [0, 0, 0], `mọi lần in phải không còn yêu cầu IndexedDB đang dở, thực tế ${JSON.stringify(atPrint)}`);
+  ok('ba lần in đều gọi print() khi không còn yêu cầu IndexedDB nào đang dở (hàng rào in)');
 
   // ============================================================ Đăng xuất khi còn mục chờ (OFF-6)
   await page.getByTestId('back-to-queue').click();

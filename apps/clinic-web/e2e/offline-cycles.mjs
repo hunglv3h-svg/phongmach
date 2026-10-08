@@ -381,6 +381,12 @@ try {
   // ============================================================ Đếm bằng tài khoản máy của phòng khám thử
   check(`cả ${CYCLES} chu kỳ chạy hết, và sau mỗi chu kỳ máy chủ có lượt khám hoàn tất trong ${SYNC_WAIT_MS / 1000} giây kể từ khi có mạng`, [...cycleFailures, ...(ran.length < CYCLES ? [`chỉ chạy được ${ran.length}/${CYCLES} chu kỳ`] : [])]);
 
+  // OFF-8: "Ký & In" lúc ứng dụng coi là có mạng mà máy chủ chưa nhận ngay phải in ngay (ký khi mất mạng) hoặc để C1 đẩy đi,
+  // KHÔNG còn báo chưa ký được rồi phải bấm lại. Đồng hồ máy khách và máy chủ cùng ngày nên hàng rào ngày A-1 không chặn ca nào.
+  const refusedCycles = ran.filter((c) => c.run.signRefused.length);
+  check('không chu kỳ nào bị "Ký & In" báo chưa in được rồi phải bấm lại (OFF-8)', refusedCycles.map((c) => `chu kỳ ${pad(c.index)}: bấm lại ${c.run.signRefused.length} lần — "${c.run.signRefused[0]}"`));
+  check(`mỗi chu kỳ in đúng một lần (tổng ${prints.length}/${CYCLES})`, prints.length === CYCLES ? [] : [`có ${prints.length} lần in, cần ${CYCLES}`]);
+
   const TYPES = ['Patient', 'Encounter', 'List', 'Task', 'Provenance', 'ClinicalImpression', 'MedicationRequest', 'Condition', 'Observation', 'AllergyIntolerance'];
   const all = Object.fromEntries(await Promise.all(TYPES.map(async (t) => [t, await server.all(t)])));
   const sum = (key) => plan.reduce((n, c) => n + c.expect[key], 0);

@@ -184,14 +184,19 @@ describe('ký khi mất mạng', () => {
   });
 });
 
-// Tái hiện phát hiện 3 của lát 5 (kế hoạch, mục 5.8, "OFF-8"). Các bài này ghi lại HÀNH VI HIỆN TẠI, tức là lỗi: "Ký & In" lúc ứng dụng
-// coi là có mạng, máy chủ chưa nhận ngay, mục hoàn tất nằm lại trong hàng đợi và tự gửi nhưng không có tờ đơn nào được in.
-// Chúng KHÔNG mô tả hành vi mong muốn: khi OFF-8 được duyệt và sửa mã, đổi kỳ vọng của từng bài theo OFF-8.
-describe('TÁI HIỆN (chưa sửa): ký lúc có mạng mà máy chủ chưa nhận ngay thì không in, mục vẫn tự gửi', () => {
+// OFF-8 (kế hoạch, mục 5.8, "Thiết kế OFF-8", phương án A + C1 + A-1). Bất biến K: khi complete() trả về, không có mục hoàn tất nào
+// vừa còn tự gửi được vừa chưa có tờ đơn và chưa có bản đơn in lại được trên máy. "Ký & In" lúc ứng dụng coi là CÓ mạng mà máy chủ
+// chưa nhận ngay phải kết thúc bằng một trong ba cách: online (máy chủ nhận), offline (ký khi mất mạng, lưu bền rồi in), hoặc failed
+// kèm "CHƯA in" (hàng rào ngày từ chối, bị giữ, hoặc lỗi lưu). Năm kết quả không-dứt-điểm cũ (waiting, offline-chưa-chuyển,
+// retrying, paused, held) đi qua đường ký khi mất mạng (promote trong lúc giữ khóa), trừ các ca "Rủi ro còn lại".
+describe('OFF-8: ký lúc có mạng mà máy chủ chưa nhận ngay vẫn phải in (hoặc báo rõ "CHƯA in")', () => {
   const SERVER_BUSY = { status: 503, body: { error: 'incomplete', retry: true, message: 'Lưu chưa trọn vẹn, hãy bấm lại: dữ liệu sẽ không bị trùng.' } };
   const completeOp = async (id: string) => (await engine.ops()).find((o) => o.id === id) as Op<'complete'> | undefined;
   const signedOnDevice = async () => (await store.list('signed')).length;
   const serverStatus = (item: QueueItem) => bff.visits.get(item.id)!.item.status;
+  /** Giờ của máy khách trong FakeClock bắt đầu ở 2026-10-20T03:00:00Z = ngày 20/10 giờ Việt Nam. */
+  const SAME_DAY_UTC = '2026-10-20T05:00:00.000Z'; // 12:00 ngày 20/10 giờ VN
+  const OTHER_DAY_UTC = '2026-10-19T05:00:00.000Z'; // ngày 19/10 giờ VN
 
   /** Mở hồ sơ lúc có mạng mà máy chủ lỗi tạm hai lần liền: mục mở hồ sơ ở trạng thái `retry`, còn 4 giây mới gửi lại. */
   async function openWithRetryingOpen(item: QueueItem) {
@@ -206,7 +211,28 @@ describe('TÁI HIỆN (chưa sửa): ký lúc có mạng mà máy chủ chưa nh
     return opened;
   }
 
-  it('`waiting`: mục mở hồ sơ đang `retry` chưa hết thời gian chờ → báo lỗi, KHÔNG in; không bấm lại thì máy chủ vẫn kết thúc lượt khám, không có tờ đơn', async () => {
+  /** Mọi điều phải đúng ngay sau khi đã chuyển một mục sang dạng ký khi mất mạng và in từ máy đúng một lần. */
+  async function expectSignedOffline(draft: Draft, opened: { openedAt: string }) {
+    const signedAt = new Date(clock.now()).toISOString();
+    // In đúng một lần, SAU khi mục hoàn tất và bản nháp đã vào/khỏi kho.
+    expect(printed).toHaveLength(1);
+    expect(printed[0]!.persisted).toEqual({ op: true, draftGone: true });
+    expect(printed[0]!.pendingSync).toBe(true);
+    const op = (await completeOp(draft.clientUuid))!;
+    // Cùng id, cùng clientUuid, giờ ký là giờ bấm; mục mang id tạm của đơn và có bản đơn + mục ghi nhận in.
+    expect(op.id).toBe(draft.clientUuid);
+    expect(op.body.payload.body.clientUuid).toBe(draft.clientUuid);
+    expect(op.body.payload.body.clientTimes).toEqual({ openedAt: opened.openedAt, signedAt });
+    expect(op.body.payload.rxTmpId).toBeDefined();
+    expect(await signedOnDevice()).toBe(1);
+    const print = (await engine.ops()).find((o) => o.meta.kind === 'printed') as Op<'printed'> | undefined;
+    expect(print).toBeDefined();
+    expect(print!.body.payload.prescriptionId).toBe(op.body.payload.rxTmpId);
+    expect(await store.getDraft(draft.clientUuid)).toBeUndefined();
+    return op;
+  }
+
+  it('`waiting`: mục mở hồ sơ đang `retry` → C1 đẩy mục trước ngay, máy chủ đã hồi thì ký đi đường có mạng, không cần bấm lại', async () => {
     const item = serverVisit();
     const opened = await openWithRetryingOpen(item);
     const draft = signedDraft({ ...newDraft(), openedAt: opened.openedAt, openedOffline: opened.offline });
@@ -214,48 +240,37 @@ describe('TÁI HIỆN (chưa sửa): ký lúc có mạng mà máy chủ chưa nh
     clock.advance(1000);
 
     const out = await client.complete({ visit: opened.context.visit, patient: opened.context.patient, draft, withRx: true, allergiesKnown: opened.allergiesKnown, acks: [] });
-    expect(out).toEqual({ kind: 'failed', message: 'Đang chờ thao tác trước đó của lượt khám này được máy chủ nhận. Đã giữ trên máy, máy sẽ tự gửi.' });
-    expect(printed).toEqual([]);
-    // Mục hoàn tất ĐÃ nằm trong hàng đợi, chưa gửi lần nào, nhưng thiếu mọi thứ của một lần ký khi mất mạng:
-    // không có id tạm của đơn, không có bản đơn để in lại, không có mục ghi nhận in, bản nháp chưa bị xóa.
-    const op = (await completeOp(draft.clientUuid))!;
-    expect(op.meta).toMatchObject({ status: 'pending', attempts: 0 });
-    // Hồ sơ này mở bằng dữ liệu trên máy (mục mở hồ sơ chưa xong) nên yêu cầu đã mang giờ máy khách của lần bấm này.
-    expect(opened.offline).toBe(true);
-    expect(op.body.payload.body.clientTimes).toEqual({ openedAt: opened.openedAt, signedAt: new Date(clock.now()).toISOString() });
-    expect(op.body.payload.rxTmpId).toBeUndefined();
-    expect(await signedOnDevice()).toBe(0);
-    expect((await engine.ops()).filter((o) => o.meta.kind === 'printed')).toEqual([]);
-    expect(await store.getDraft(item.id)).toEqual(draft);
-    expect(bff.sent(draft.clientUuid)).toBe(0);
-
-    // Bác sĩ không bấm lại. Hết thời gian chờ: máy tự gửi mở hồ sơ rồi hoàn tất.
-    clock.advance(4000);
-    await engine.idle();
+    // C1: dù mục mở hồ sơ còn 3 giây mới tới hạn gửi lại, nó được đẩy ngay trong lượt gửi này; máy chủ đã hồi nên hoàn tất nhận luôn.
+    expect(out.kind).toBe('online');
+    expect(printed).toEqual([]); // in qua máy chủ (đường có mạng), không in từ máy
     expect(serverStatus(item)).toBe('done');
     expect(bff.completions.size).toBe(1);
     expect(engine.state.pending).toBe(0);
-    // Lượt khám đã lưu và kết thúc trên máy chủ, bản nháp đã bị xóa, mà chưa từng có lần in nào.
-    expect(printed).toEqual([]);
-    expect(bff.printed).toEqual([]);
     expect(await store.getDraft(item.id)).toBeUndefined();
-    expect(await signedOnDevice()).toBe(0);
   });
 
-  it('`waiting` rồi bấm lại sau khi mục trước đã xong: lần này máy chủ nhận (đường "bấm lại thì in được")', async () => {
+  it('`waiting` mà mục trước lại lỗi tiếp: chuyển sang ký khi mất mạng, in đúng một lần; đồng bộ xong đúng một hoàn tất và một dòng in', async () => {
     const item = serverVisit();
     const opened = await openWithRetryingOpen(item);
     const draft = signedDraft({ ...newDraft(), openedAt: opened.openedAt, openedOffline: opened.offline });
-    const input = { visit: opened.context.visit, patient: opened.context.patient, draft, withRx: true, allergiesKnown: opened.allergiesKnown, acks: [] };
-    expect((await client.complete(input)).kind).toBe('failed');
-    clock.advance(4000);
-    await engine.idle();
-    const again = await client.complete(input);
-    expect(again).toMatchObject({ kind: 'online', response: { replayed: false } });
+    await store.putDraft(item.id, draft);
+    clock.advance(1000);
+    // C1 đẩy mục mở hồ sơ ngay nhưng máy chủ vẫn lỗi tạm: không về được đường có mạng, phải ký khi mất mạng.
+    bff.fault(/open$/, SERVER_BUSY);
+
+    const out = await client.complete({ visit: opened.context.visit, patient: opened.context.patient, draft, withRx: true, allergiesKnown: opened.allergiesKnown, acks: [] });
+    expect(out.kind).toBe('offline');
+    await expectSignedOffline(draft, opened);
+
+    // Có mạng lại: mở hồ sơ (giờ máy này) → hoàn tất → ghi nhận in, đúng một đơn trên máy chủ, đúng một dòng in.
+    await goOnline();
+    expect(serverStatus(item)).toBe('done');
     expect(bff.completions.size).toBe(1);
+    expect(bff.printed).toHaveLength(1);
+    expect(engine.state.pending).toBe(0);
   });
 
-  it('`offline` mà chưa chuyển sang dạng ngoại tuyến: mạng vừa có lại, lần gửi lại mục trước lỗi mạng đúng lúc ký → "Mất kết nối…", KHÔNG in, mục vẫn tự gửi', async () => {
+  it('`offline` mà chưa chuyển sang dạng ngoại tuyến: mạng vừa có lại, lần gửi lại mục trước lỗi mạng đúng lúc ký → chuyển sang ký khi mất mạng, in đúng một lần', async () => {
     const item = serverVisit();
     bff.fault(/open$/, 'network');
     const opened = await client.openVisit(item);
@@ -271,49 +286,86 @@ describe('TÁI HIỆN (chưa sửa): ký lúc có mạng mà máy chủ chưa nh
     engine.observe(true);
     await vi.waitFor(() => expect(bff.inFlight).toBe(1));
     expect(client.online).toBe(true);
+    // Mở hồ sơ vẫn chưa tới được máy chủ (C1 có thể đẩy nó trong lượt ký này, nhưng lần đó cũng lỗi mạng): mục hoàn tất phải đi
+    // đường ký khi mất mạng, không chờ máy chủ.
+    bff.fault(/open$/, 'network');
     const signing = client.complete({ visit: opened.context.visit, patient: opened.context.patient, draft, withRx: true, allergiesKnown: opened.allergiesKnown, acks: [] });
     await vi.waitFor(async () => expect(await completeOp(draft.clientUuid)).toBeDefined());
     bff.gate = undefined;
     release();
 
-    expect(await signing).toEqual({ kind: 'failed', message: 'Mất kết nối. Đã giữ trên máy và sẽ tự gửi khi có mạng; đơn sẽ không bị lưu trùng.' });
-    expect(printed).toEqual([]);
-    expect((await completeOp(draft.clientUuid))!.body.payload.rxTmpId).toBeUndefined();
-    expect(await signedOnDevice()).toBe(0);
+    expect((await signing).kind).toBe('offline');
+    await expectSignedOffline(draft, opened);
 
+    // Máy chủ hồi hẳn: mở hồ sơ gửi được, rồi hoàn tất (đã chuyển, cùng clientUuid) và ghi nhận in; đúng một đơn, một dòng in.
+    bff.faults.length = 0;
+    await goOnline();
     clock.advance(4000);
     await engine.idle();
     expect(serverStatus(item)).toBe('done');
-    expect(printed).toEqual([]);
-    expect(bff.printed).toEqual([]);
+    expect(bff.completions.size).toBe(1);
+    expect(bff.printed).toHaveLength(1);
   });
 
-  it('`retrying`: chính yêu cầu hoàn tất gặp 503 (máy chủ có thể đã ghi dở) → báo lỗi, KHÔNG in; 2 giây sau máy tự gửi lại và máy chủ kết thúc lượt khám', async () => {
+  it('`retrying`: yêu cầu hoàn tất gặp 503, server cùng ngày → chuyển sang ký khi mất mạng, in đúng một lần, giờ ký = giờ bấm, 2 yêu cầu cùng clientUuid', async () => {
     const item = serverVisit();
     const opened = await client.openVisit(item);
     const draft = signedDraft({ ...newDraft(), openedAt: opened.openedAt, openedOffline: false });
     await store.putDraft(item.id, draft);
-    bff.fault(/complete$/, SERVER_BUSY);
+    bff.fault(/complete$/, { ...SERVER_BUSY, date: SAME_DAY_UTC });
 
     const out = await client.complete({ visit: opened.context.visit, patient: opened.context.patient, draft, withRx: true, allergiesKnown: true, acks: [] });
-    expect(out).toMatchObject({ kind: 'failed', message: expect.stringContaining('Đã giữ trên máy, máy sẽ tự gửi lại') });
-    expect(printed).toEqual([]);
-    // Mục đã tới máy chủ một lần, ở dạng có mạng: không có giờ máy khách.
-    const op = (await completeOp(draft.clientUuid))!;
-    expect(op.meta).toMatchObject({ status: 'retry', attempts: 1 });
-    expect(op.body.payload.body.clientTimes).toBeUndefined();
-    expect(op.body.payload.rxTmpId).toBeUndefined();
+    expect(out.kind).toBe('offline');
+    const op = await expectSignedOffline(draft, { openedAt: draft.openedAt! });
+    expect(op.meta.attempts).toBe(1); // đã tới máy chủ đúng một lần (503)
 
-    clock.advance(2000);
-    await engine.idle();
+    // Có mạng lại: gửi lại cùng clientUuid; đúng một đơn trên máy chủ (idempotent), đúng một dòng in.
+    await goOnline();
     expect(bff.sent(draft.clientUuid)).toBe(2);
+    expect(bff.completions.size).toBe(1);
+    expect(bff.printed).toHaveLength(1);
     expect(serverStatus(item)).toBe('done');
-    expect(printed).toEqual([]);
-    expect(bff.printed).toEqual([]);
-    expect(await store.getDraft(item.id)).toBeUndefined();
   });
 
-  it('`paused`: phiên hết hạn (401) đúng lúc ký → báo lỗi, KHÔNG in; đăng nhập lại thì máy tự gửi và máy chủ kết thúc lượt khám', async () => {
+  it('`retrying` hàng rào ngày — server KHÁC ngày: KHÔNG chuyển, KHÔNG in, báo "CHƯA in"; mục giữ nguyên dạng có mạng và vẫn tự gửi', async () => {
+    const item = serverVisit();
+    const opened = await client.openVisit(item);
+    const draft = signedDraft({ ...newDraft(), openedAt: opened.openedAt, openedOffline: false });
+    await store.putDraft(item.id, draft);
+    bff.fault(/complete$/, { ...SERVER_BUSY, date: OTHER_DAY_UTC });
+
+    const out = await client.complete({ visit: opened.context.visit, patient: opened.context.patient, draft, withRx: true, allergiesKnown: true, acks: [] });
+    expect(out).toMatchObject({ kind: 'failed', message: expect.stringContaining('CHƯA in') });
+    expect(printed).toEqual([]);
+    const op = (await completeOp(draft.clientUuid))!;
+    expect(op.body.payload.rxTmpId).toBeUndefined();
+    expect(op.body.payload.body.clientTimes).toBeUndefined(); // vẫn dạng có mạng
+    expect(await signedOnDevice()).toBe(0);
+    expect((await engine.ops()).filter((o) => o.meta.kind === 'printed')).toEqual([]);
+    // Vẫn tự gửi lại (lượt khám không mất): sau khi hết chờ máy chủ nhận.
+    bff.faults.length = 0;
+    clock.advance(2000);
+    await engine.idle();
+    expect(serverStatus(item)).toBe('done');
+  });
+
+  it('`retrying` hàng rào ngày — phản hồi lỗi KHÔNG có Date: KHÔNG chuyển, KHÔNG in, báo "CHƯA in"; mục giữ nguyên dạng có mạng', async () => {
+    const item = serverVisit();
+    const opened = await client.openVisit(item);
+    const draft = signedDraft({ ...newDraft(), openedAt: opened.openedAt, openedOffline: false });
+    await store.putDraft(item.id, draft);
+    bff.fault(/complete$/, SERVER_BUSY); // không gắn `date`
+
+    const out = await client.complete({ visit: opened.context.visit, patient: opened.context.patient, draft, withRx: true, allergiesKnown: true, acks: [] });
+    expect(out).toMatchObject({ kind: 'failed', message: expect.stringContaining('CHƯA in') });
+    expect(printed).toEqual([]);
+    const op = (await completeOp(draft.clientUuid))!;
+    expect(op.body.payload.rxTmpId).toBeUndefined();
+    expect(op.body.payload.body.clientTimes).toBeUndefined();
+    expect(await signedOnDevice()).toBe(0);
+  });
+
+  it('`paused`: phiên hết hạn (401) đúng lúc ký → chuyển sang ký khi mất mạng (chưa tới máy chủ), in đúng một lần; đăng nhập lại thì máy tự gửi', async () => {
     const item = serverVisit();
     const opened = await client.openVisit(item);
     const draft = signedDraft({ ...newDraft(), openedAt: opened.openedAt, openedOffline: false });
@@ -321,21 +373,22 @@ describe('TÁI HIỆN (chưa sửa): ký lúc có mạng mà máy chủ chưa nh
     bff.tokens.delete('tok-doc');
 
     const out = await client.complete({ visit: opened.context.visit, patient: opened.context.patient, draft, withRx: true, allergiesKnown: true, acks: [] });
-    expect(out).toEqual({ kind: 'failed', message: 'Phiên đã hết hạn: đăng nhập lại để đồng bộ. Bản khám được giữ trên máy.' });
-    expect(printed).toEqual([]);
-    expect(engine.state).toMatchObject({ paused: 'unauthorized', pending: 1 });
+    expect(out.kind).toBe('offline');
+    await expectSignedOffline(draft, { openedAt: draft.openedAt! });
+    expect(engine.state.paused).toBe('unauthorized');
 
-    // Đăng nhập lại (token mới): bộ máy gửi tiếp ngay khi khởi động, trước khi bác sĩ kịp mở lại lượt khám.
+    // Đăng nhập lại (token mới): bộ máy gửi tiếp; đúng một đơn, đúng một dòng in.
     bff.tokens.set('tok-moi', { userId: 'doc', name: 'BS. Thử' });
     sessionToken = 'tok-moi';
     await engine.run();
+    await goOnline();
     expect(serverStatus(item)).toBe('done');
     expect(engine.state.pending).toBe(0);
-    expect(printed).toEqual([]);
-    expect(bff.printed).toEqual([]);
+    expect(bff.completions.size).toBe(1);
+    expect(bff.printed).toHaveLength(1);
   });
 
-  it('`held`: mục mở hồ sơ đã bị máy chủ từ chối (409, người khác đang khám) → báo lỗi, KHÔNG in; mục hoàn tất nằm lại, bấm lại vẫn vậy', async () => {
+  it('`held`: mục mở hồ sơ đã bị máy chủ từ chối (409) → chuyển sang ký khi mất mạng, in đúng một lần; đơn bị giữ in LẠI được từ danh sách chờ đồng bộ', async () => {
     const item = serverVisit();
     goOffline();
     const opened = await client.openVisit(item);
@@ -347,34 +400,39 @@ describe('TÁI HIỆN (chưa sửa): ký lúc có mạng mà máy chủ chưa nh
     expect((await engine.ops()).find((o) => o.meta.kind === 'open')!.meta.status).toBe('conflict');
 
     const input = { visit: opened.context.visit, patient: opened.context.patient, draft, withRx: true, allergiesKnown: opened.allergiesKnown, acks: [] };
-    for (let click = 0; click < 2; click++) {
-      const out = await client.complete(input);
-      expect(out).toEqual({ kind: 'failed', message: 'Chưa gửi được: một thao tác trước đó của lượt khám này đang cần xử lý (xung đột hoặc lỗi). Bản khám được giữ trên máy.' });
-    }
-    expect(printed).toEqual([]);
-    expect((await completeOp(draft.clientUuid))!.meta.status).toBe('pending');
-    expect(await signedOnDevice()).toBe(0);
-    expect(bff.sent(draft.clientUuid)).toBe(0);
-    expect(engine.state).toMatchObject({ pending: 2, attention: 2 });
+    const out = await client.complete(input);
+    expect(out.kind).toBe('offline');
+    const op = await expectSignedOffline(draft, opened);
+
+    // Mục hoàn tất bị giữ (open xung đột) nên không bao giờ gửi; đơn vẫn in lại được từ bản giữ trên máy.
+    expect((await client.op(op.id))!.meta.status).toBe('pending');
+    const rxTmpId = op.body.payload.rxTmpId!;
+    printed.length = 0;
+    await client.reprintSigned(rxTmpId);
+    expect(printed).toHaveLength(1);
+    expect(printed[0]!.detail.prescription.code).toBe(op.body.payload.display!.code);
   });
 
-  it('nhánh mất mạng đổi cả mục ĐÃ tới máy chủ: 503 rồi mất mạng, ký lại → mục cũ nhận giờ ký mới của máy khách (quy tắc "không đổi giờ ký sau 503" chưa được giữ ở đường này)', async () => {
+  it('nhánh mất mạng chịu CÙNG hàng rào ngày: 503 khác ngày rồi mất mạng, ký lại → KHÔNG chuyển, KHÔNG in, báo "CHƯA in" (không tự ý đổi giờ ký của mục đã tới máy chủ)', async () => {
     const item = serverVisit();
     const opened = await client.openVisit(item);
     const draft = signedDraft({ ...newDraft(), openedAt: opened.openedAt, openedOffline: false });
     await store.putDraft(item.id, draft);
-    bff.fault(/complete$/, SERVER_BUSY);
+    bff.fault(/complete$/, { ...SERVER_BUSY, date: OTHER_DAY_UTC });
     const input = { visit: opened.context.visit, patient: opened.context.patient, draft, withRx: true, allergiesKnown: true, acks: [] };
     expect((await client.complete(input)).kind).toBe('failed');
     expect(bff.sent(draft.clientUuid)).toBe(1);
 
     goOffline();
     clock.advance(1000);
-    expect((await client.complete(input)).kind).toBe('offline');
-    expect(printed).toHaveLength(1);
+    const out = await client.complete(input);
+    expect(out).toMatchObject({ kind: 'failed', message: expect.stringContaining('CHƯA in') });
+    expect(printed).toEqual([]);
     const op = (await completeOp(draft.clientUuid))!;
+    // Mục đã tới máy chủ (attempts 1), khác ngày: không được đổi sang giờ ký mới của máy khách.
     expect(op.meta.attempts).toBe(1);
-    expect(op.body.payload.body.clientTimes?.signedAt).toBe(new Date(clock.now()).toISOString());
+    expect(op.body.payload.body.clientTimes).toBeUndefined();
+    expect(op.body.payload.rxTmpId).toBeUndefined();
   });
 });
 
