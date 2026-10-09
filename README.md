@@ -65,6 +65,56 @@ infra/dev-up.sh --stop
 - Thư mục chưa có `services/bff/.demo-tenants.json` thì `dev-up.sh` nạp thêm một cặp phòng khám demo mới vào Medplum. Muốn dùng lại cặp đã có, chép tệp đó từ thư mục cũ sang trước khi chạy.
 - Tự gõ `pnpm` lần đầu mà Corepack hỏi xác nhận tải: `export COREPACK_ENABLE_DOWNLOAD_PROMPT=0` (`dev-up.sh` đã tự đặt).
 
+## Demo bằng Docker
+
+Dành cho buổi trình diễn với khách hàng: dựng giao diện và BFF trong Docker, **tái dùng** stack Medplum đang chạy sẵn trên máy (`phongmach-medplum`), **không** dựng lại backend. Cần Docker Desktop đang mở, Medplum đang chạy (`docker compose ls` thấy `phongmach-medplum running(3)`) và máy ra được Internet lúc seed (Medplum gọi `api.pwnedpasswords.com` và kiểm tra phiên bản). Một dòng:
+
+```bash
+docker compose -p phongmach-demo -f infra/demo/docker-compose.yml up -d --build
+```
+
+Lệnh này dựng hai thứ trong project **riêng** `phongmach-demo`:
+
+- `seed`: nạp dữ liệu demo rồi thoát (chạy một lần, `restart: no`, `SEED_PATIENTS=20`). Chạy lại được: tạo có điều kiện theo UUID xác định nên không trùng. Ghi `/demo/.demo-tenants.json` vào named volume dùng chung `demo-tenants`.
+- `web`: nginx phục vụ giao diện tĩnh **gộp** cả BFF (chạy trong cùng container, nghe `127.0.0.1:8110`), đọc `.demo-tenants.json` từ cùng volume. Web chỉ chạy sau khi `seed` xong (`depends_on … service_completed_successfully`).
+
+Giao diện ở **http://localhost:8081** (dùng cổng **8081** vì 8080 trên máy đang bận). Mở trang này để trình diễn; đi qua kịch bản ở mục ["Đi qua kịch bản trình diễn"](#đi-qua-kịch-bản-trình-diễn).
+
+Tài khoản/phòng khám demo (chọn phòng khám rồi chọn người dùng; chưa có mật khẩu vì `DEMO_AUTH=1`):
+
+| Phòng khám (tenant) | Người dùng |
+|---|---|
+| `noi-tong-quat` (Nội tổng quát) | `noi-owner` (chủ), `noi-doctor` (bác sĩ), `noi-assistant` (phụ tá) |
+| `nhi` (Nhi) | `nhi-owner` (chủ), `nhi-assistant` (phụ tá) |
+
+Ví dụ nhanh: đăng nhập `noi-tong-quat` / `noi-doctor`, tìm `nguyen van an` để thấy bệnh nhân demo.
+
+Xem log, dừng và dọn:
+
+```bash
+docker compose -p phongmach-demo -f infra/demo/docker-compose.yml logs -f          # theo dõi log (log seed có đường dẫn .demo-tenants.json + danh sách user demo)
+docker compose -p phongmach-demo -f infra/demo/docker-compose.yml down              # DỪNG CHỈ web + seed; Medplum KHÔNG bị đụng
+docker compose -p phongmach-demo -f infra/demo/docker-compose.yml down -v           # thêm xóa volume demo-tenants (lần sau seed lại)
+```
+
+> **Cảnh báo:** chỉ dùng `down`/`down -v` cho project `phongmach-demo`. **TUYỆT ĐỐI KHÔNG** chạy `down -v` (hay `down`) trên project `phongmach-medplum`: sẽ mất dữ liệu seed của backend đang chạy. Lệnh demo ở trên không recreate và không đụng tới các container Medplum.
+
+Dữ liệu demo (`.demo-tenants.json`, chứa bí mật tài khoản máy Medplum) do `seed` tự sinh vào volume `demo-tenants` tại `/demo/.demo-tenants.json`; không nằm trên máy chủ host và không commit. Idempotent với `SEED_PATIENTS=20`.
+
+**Nối Medplum.** Mặc định các container demo nối tới Medplum đang chạy qua `host.docker.internal:8103` (đã truyền `extra_hosts: host.docker.internal:host-gateway`). Đã kiểm chứng seed và BFF đăng nhập được qua địa chỉ này (dù Medplum đặt issuer/audience là `localhost`). Nếu trên máy khác việc đăng nhập qua `host.docker.internal` không chạy, phương án dự phòng: gắn compose demo vào network external của Medplum và trỏ `MEDPLUM_URL` tới tên service nội bộ — **chỉ** dùng network có sẵn, **không** định nghĩa lại service Medplum (để không recreate backend). Thêm vào `infra/demo/docker-compose.yml`:
+
+```yaml
+# ở từng service (seed, web): bỏ extra_hosts, thêm network của Medplum
+    networks: [medplum]
+    environment:
+      MEDPLUM_URL: http://medplum-server:8103   # tên service trong project phongmach-medplum
+# cuối file:
+networks:
+  medplum:
+    external: true
+    name: phongmach-medplum_default
+```
+
 ## Đi qua kịch bản trình diễn
 
 1. Đăng nhập **Phụ tá Nguyễn Thị Lan** (phòng khám Nội) → Tiếp đón → gõ `nguyen van an` → thấy dị ứng Penicillin → "Cấp số". Thêm "Trần Thị Bình" với ưu tiên "Đã hẹn": Bình được gọi trước. Mở "Màn hình chờ".
