@@ -20,7 +20,7 @@ import { buildPatient, type NewPatientInput, type PatientSummary, type SearchInt
 import { MemoryAuditSink, type AuditSink } from '../../src/audit.js';
 import { buildApp, type AppDeps } from '../../src/app.js';
 import { SessionService } from '../../src/session.js';
-import type { CheckInOptions, ClinicStore, CompleteCommand, CompleteResult, Doctor, FinishedVisit, OpenResult, OutboxJob, StoreFactory } from '../../src/store.js';
+import type { CheckInOptions, ClinicStore, CompleteCommand, CompleteResult, Doctor, FinishedVisit, OpenResult, OutboxJob, PatientSearchResult, StoreFactory } from '../../src/store.js';
 import { parseTenantsFile } from '../../src/tenants.js';
 
 export const tenantsFile = parseTenantsFile({
@@ -67,10 +67,10 @@ export class FakeStore implements ClinicStore {
 
   constructor(readonly tenant: string) {}
 
-  async searchPatients(intent: SearchIntent): Promise<PatientSummary[]> {
+  async searchPatients(intent: SearchIntent): Promise<PatientSearchResult> {
     this.searches.push(intent);
-    if (intent.kind === 'phone') return [...this.patients.values()].filter((p) => p.phone === intent.phone);
-    return [...this.patients.values()];
+    const results = intent.kind === 'phone' ? [...this.patients.values()].filter((p) => p.phone === intent.phone) : [...this.patients.values()];
+    return { results, hasMore: false };
   }
   async createPatient(input: NewPatientInput) {
     const existing = [...this.patients.values()].find((p) => p.clientUuid === input.clientUuid);

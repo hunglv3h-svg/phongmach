@@ -5,6 +5,7 @@ import {
   SEARCH_TAGS,
   SYSTEMS,
   buildPatient,
+  byId,
   classifyQuery,
   clientUuidQuery,
   foldName,
@@ -19,6 +20,7 @@ import {
   phoneSuffixTagQuery,
   rankByNameWords,
   rankByPhoneSuffix,
+  stableById,
   stripDiacritics,
   toPatientSummary,
   withSearchKeys,
@@ -88,6 +90,27 @@ describe('phân loại ô tìm kiếm', () => {
     expect(classifyQuery('  ')).toEqual({ kind: 'empty' });
     expect(classifyQuery('12')).toEqual({ kind: 'empty' });
   });
+
+  describe('gõ lẫn tên và số trong một lần tìm (4 chữ số = đuôi điện thoại, không phải năm sinh)', () => {
+    it.each([
+      ['an 5678', { kind: 'name+number', tokens: ['an'], digits: '5678' }],
+      ['nguyen van an 1985', { kind: 'name+number', tokens: ['nguyen', 'van', 'an'], digits: '1985' }],
+      ['5678 an', { kind: 'name+number', tokens: ['an'], digits: '5678' }], // số đứng trước tên
+      ['an 56 78', { kind: 'name+number', tokens: ['an'], digits: '5678' }], // nối nhiều mảnh số theo thứ tự
+    ])('%s → tên AND đuôi số', (q, intent) => {
+      expect(classifyQuery(q)).toEqual(intent);
+    });
+    it('đoạn số quá ngắn (dưới 3) thì bỏ, chỉ tìm tên', () => {
+      expect(classifyQuery('an 12')).toEqual({ kind: 'name', tokens: ['an'] });
+    });
+    it('chữ dính liền số (không khoảng trắng) là một token của tên, không tách', () => {
+      expect(classifyQuery('an5678')).toEqual({ kind: 'name', tokens: ['an5678'] });
+    });
+    it('các chuỗi số thuần hoặc tên thuần không đổi', () => {
+      expect(classifyQuery('5678')).toEqual({ kind: 'phone-fragment', digits: '5678' });
+      expect(classifyQuery('0912 345 678')).toEqual({ kind: 'phone', phone: '0912345678' });
+    });
+  });
 });
 
 describe('dựng Patient', () => {
@@ -132,9 +155,23 @@ describe('dựng Patient', () => {
 });
 
 describe('xếp hạng theo 4 số cuối', () => {
-  it('số kết thúc bằng đoạn đó lên trước', () => {
-    const ranked = rankByPhoneSuffix([{ phone: '0956781234' }, { phone: '0912345678' }, { phone: '0907785678' }], '5678');
+  it('số kết thúc bằng đoạn đó lên trước; trong cùng nhóm xếp theo id (tất định)', () => {
+    const ranked = rankByPhoneSuffix(
+      [{ id: 'z', phone: '0956781234' }, { id: 'a', phone: '0912345678' }, { id: 'b', phone: '0907785678' }],
+      '5678'
+    );
+    // nhóm điểm 0 (kết thúc 5678): a, b theo id; nhóm điểm 1 (chỉ chứa): z
     expect(ranked.map((r) => r.phone)).toEqual(['0912345678', '0907785678', '0956781234']);
+  });
+});
+
+describe('tie-break tất định theo id', () => {
+  it('stableById xếp theo id tăng dần dù đầu vào xáo trộn', () => {
+    expect(stableById([{ id: 'c' }, { id: 'a' }, { id: 'b' }]).map((x) => x.id)).toEqual(['a', 'b', 'c']);
+    expect([{ id: 'y' }, { id: 'x' }].sort(byId).map((x) => x.id)).toEqual(['x', 'y']);
+  });
+  it('byId là 0 khi hai id bằng nhau', () => {
+    expect(byId({ id: 'a' }, { id: 'a' })).toBe(0);
   });
 });
 
@@ -218,11 +255,18 @@ describe('khóa tìm chính xác (meta.tag)', () => {
 });
 
 describe('xếp hạng theo từ của tên', () => {
-  const people = [{ fullName: 'Bùi Thị Anh' }, { fullName: 'Bùi Văn An' }, { fullName: 'Bùi Ánh Tuyết' }, { fullName: 'Bùi Thị Ân' }];
-  it('người có đủ từng từ đã gõ lên trước người chỉ khớp đầu từ, giữ thứ tự trong mỗi nhóm', () => {
+  // id ghim để tie-break tất định: a Bùi Văn An, b Bùi Thị Ân (khớp đúng cả "bui"+"an"); c Bùi Thị Anh, d Bùi Ánh Tuyết (chỉ đầu từ).
+  const people = [
+    { id: 'c', fullName: 'Bùi Thị Anh' },
+    { id: 'a', fullName: 'Bùi Văn An' },
+    { id: 'd', fullName: 'Bùi Ánh Tuyết' },
+    { id: 'b', fullName: 'Bùi Thị Ân' },
+  ];
+  it('người có đủ từng từ đã gõ lên trước người chỉ khớp đầu từ; trong mỗi nhóm xếp theo id', () => {
+    // nhóm khớp đúng: a, b theo id; nhóm chỉ đầu từ: c, d theo id
     expect(rankByNameWords(people, ['bui', 'an']).map((p) => p.fullName)).toEqual(['Bùi Văn An', 'Bùi Thị Ân', 'Bùi Thị Anh', 'Bùi Ánh Tuyết']);
   });
-  it('thiếu một từ thì không tính là khớp đúng', () => {
-    expect(rankByNameWords(people, ['bui', 'van', 'anh']).map((p) => p.fullName)).toEqual(people.map((p) => p.fullName));
+  it('thiếu một từ thì không ai khớp đúng: mọi người cùng điểm, xếp theo id tăng dần', () => {
+    expect(rankByNameWords(people, ['bui', 'van', 'anh']).map((p) => p.id)).toEqual(['a', 'b', 'c', 'd']);
   });
 });

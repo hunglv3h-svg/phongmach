@@ -16,6 +16,12 @@ import type {
 import type { NewPatientInput, PatientSummary, SearchIntent } from '@phongmach/fhir-vn-model';
 import type { GatewayPayload } from './gateway.js';
 
+/** Kết quả tìm bệnh nhân: danh sách đã xếp hạng/bỏ trùng/cắt ở limit, và cờ "còn người khớp-đúng ngoài limit". */
+export interface PatientSearchResult {
+  results: PatientSummary[];
+  hasMore: boolean;
+}
+
 export interface Doctor {
   /** id Practitioner (có với bác sĩ, không có với phụ tá). */
   practitionerId?: string | undefined;
@@ -110,7 +116,7 @@ export class BusyError extends Error {
 
 /** Truy cập dữ liệu của MỘT phòng khám. Mọi thứ khác trong BFF chỉ biết giao diện này, không biết Medplum. */
 export interface ClinicStore extends OutboxStore {
-  searchPatients(intent: SearchIntent, limit: number): Promise<PatientSummary[]>;
+  searchPatients(intent: SearchIntent, limit: number): Promise<PatientSearchResult>;
   /** `created` là false khi `clientUuid` đã được dùng: gửi lại không tạo bệnh nhân trùng. */
   createPatient(input: NewPatientInput): Promise<{ patient: PatientSummary; created: boolean }>;
   readPatient(id: string): Promise<PatientSummary | undefined>;

@@ -174,7 +174,7 @@ export const api = {
   demoUsers: () => request<{ demo: boolean; tenants: DemoTenant[] }>('GET', '/api/session/demo-users'),
   login: (tenant: string, userId: string) => request<AuthState>('POST', '/api/session', { body: { tenant, userId } }),
   search: (token: string, q: string, signal?: AbortSignal) =>
-    request<{ intent: string; results: PatientSummary[] }>('GET', `/api/patients/search?q=${encodeURIComponent(q)}`, { token, ...(signal ? { signal } : {}) }),
+    request<{ intent: string; results: PatientSummary[]; hasMore: boolean }>('GET', `/api/patients/search?q=${encodeURIComponent(q)}`, { token, ...(signal ? { signal } : {}) }),
   createPatient: (token: string, patient: NewPatient) => request<{ patient: PatientSummary; created: boolean }>('POST', '/api/patients', { token, body: patient }),
   readPatient: (token: string, id: string) => request<{ patient: PatientSummary }>('GET', `/api/patients/${id}`, { token }),
   audit: (token: string, limit = 50) => request<{ entries: AuditEntry[] }>('GET', `/api/audit?limit=${limit}`, { token }),

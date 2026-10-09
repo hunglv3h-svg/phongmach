@@ -139,9 +139,10 @@ export class OfflineClient {
   }
 
   /** Tìm trong bộ đệm (mất mạng). `total`: số hồ sơ trên máy, để ghi "chỉ tìm trong N hồ sơ trên máy này". */
-  async searchCache(query: string): Promise<{ results: PatientSummary[]; total: number }> {
+  async searchCache(query: string): Promise<{ results: PatientSummary[]; total: number; hasMore: boolean }> {
     const entries = (await this.store.list<'patients', CachedPatient>('patients')).map((r) => r.value);
-    return { results: searchLocal(query, entries), total: entries.length };
+    const { results, hasMore } = searchLocal(query, entries);
+    return { results, total: entries.length, hasMore };
   }
 
   // ------------------------------------------------------------------------------------------- hàng chờ

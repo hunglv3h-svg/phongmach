@@ -1,4 +1,4 @@
-import { classifyQuery, type PatientSummary } from '@phongmach/fhir-vn-model';
+import { classifyQuery, digitsOnly, type PatientSummary, type SearchIntent } from '@phongmach/fhir-vn-model';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { ApiError, api } from '../api';
 import { INTENT_LABEL, ageText } from '../format';
@@ -10,7 +10,19 @@ import { PatientForm, type FormInitial } from './PatientForm';
  * `forQuery` là chuỗi tìm mà `results` trả lời; khác với ô nhập hiện tại nghĩa là kết quả đã cũ.
  * `local`: mất mạng, tìm trong `total` hồ sơ trên máy này (OFF-4).
  */
-type Search = { status: 'idle' | 'loading' | 'done' | 'error'; results: PatientSummary[]; forQuery?: string; error?: string; local?: { total: number } };
+type Search = {
+  status: 'idle' | 'loading' | 'done' | 'error';
+  results: PatientSummary[];
+  forQuery?: string;
+  error?: string;
+  local?: { total: number };
+  /** Còn người khớp-đúng ngoài 20 (do BFF quyết định; offline cũng trả nhưng không hiển thị). */
+  hasMore?: boolean;
+  /** Loại ý định đã tạo ra kết quả này, để quyết định có hiện câu nhắc "còn người trùng tên" hay không. */
+  kind?: SearchIntent['kind'];
+};
+
+const MORE_HINT = 'còn người trùng tên, gõ thêm năm sinh hoặc 4 số cuối';
 type Panel = { kind: 'none' } | { kind: 'detail'; patient: PatientSummary } | { kind: 'new'; initial: FormInitial; key: number };
 
 /** Mô tả cách ô tìm kiếm hiểu những gì đang gõ (4 số cuối khác với đoạn số khác). */
@@ -49,13 +61,13 @@ export function Reception({ token }: { token: string }) {
       const searchLocal = async () => {
         const r = await client.searchCache(query);
         if (abort.signal.aborted) return;
-        setSearch({ status: 'done', results: r.results, forQuery: query, local: { total: r.total } });
+        setSearch({ status: 'done', results: r.results, forQuery: query, local: { total: r.total }, hasMore: r.hasMore, kind: classifyQuery(query).kind });
         setActive(0);
       };
       try {
         if (!online) return await searchLocal();
         const r = await client.call(() => api.search(token, query, abort.signal));
-        setSearch({ status: 'done', results: r.results, forQuery: query });
+        setSearch({ status: 'done', results: r.results, forQuery: query, hasMore: r.hasMore, kind: r.intent as SearchIntent['kind'] });
         setActive(0);
       } catch (e) {
         if ((e as Error).name === 'AbortError') return;
@@ -76,8 +88,18 @@ export function Reception({ token }: { token: string }) {
 
   const startNew = () => {
     const intent = classifyQuery(query);
+    // Bỏ các mảnh toàn-số khỏi chuỗi, giữ nguyên các từ còn lại (giữ dấu/hoa-thường) — phần số là tiêu chí lọc, không phải tên.
+    const nameOnly = (s: string) => s.trim().split(/\s+/).filter((p) => digitsOnly(p) !== p).join(' ');
     const initial: FormInitial =
-      intent.kind === 'name' ? { fullName: query.trim() } : intent.kind === 'phone' ? { phone: intent.phone } : intent.kind === 'cccd' ? { cccd: intent.cccd } : {};
+      intent.kind === 'name'
+        ? { fullName: query.trim() }
+        : intent.kind === 'name+number'
+          ? { fullName: nameOnly(query) }
+          : intent.kind === 'phone'
+            ? { phone: intent.phone }
+            : intent.kind === 'cccd'
+              ? { cccd: intent.cccd }
+              : {};
     formKey.current += 1;
     setNotice(undefined);
     setPanel({ kind: 'new', initial, key: formKey.current });
@@ -107,6 +129,9 @@ export function Reception({ token }: { token: string }) {
 
   const hintText = hint(query);
   const empty = fresh && search.results.length === 0;
+  // Chỉ hiện câu nhắc "còn người trùng tên" khi: kết quả còn mới, BFF báo còn người, có mạng (không phải bộ đệm), và không phải
+  // ý định tên+số (người dùng đã cho số). Đọc từ state (search.kind/hasMore do phản hồi đặt), không phân loại lại ô nhập.
+  const showMoreHint = fresh && search.hasMore === true && !search.local && search.kind !== 'name+number';
 
   return (
     <main className="reception">
@@ -135,7 +160,7 @@ export function Reception({ token }: { token: string }) {
               : fresh
                 ? search.local
                   ? `Mất mạng: chỉ tìm trong ${search.local.total} hồ sơ trên máy này · ${search.results.length} kết quả`
-                  : `${search.results.length} kết quả`
+                  : `${search.results.length} kết quả${showMoreHint ? ` · ${MORE_HINT}` : ''}`
                 : 'Đang tìm…'}
           {hintText && <span className="chip">{hintText}</span>}
         </p>
