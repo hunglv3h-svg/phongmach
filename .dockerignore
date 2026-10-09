@@ -1,0 +1,14 @@
+# Giữ build context nhỏ và không rò bí mật/dữ liệu sinh ra khi chạy cục bộ.
+node_modules
+**/node_modules
+**/dist
+apps/*/dist
+services/bff/.data
+services/bff/.demo-tenants.json
+.worktrees
+.git
+coverage
+**/coverage
+*.log
+.DS_Store
+apps/clinic-web/e2e/screenshots

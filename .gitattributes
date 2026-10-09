@@ -1,0 +1,7 @@
+# Giữ LF cho script/cấu hình chạy trong container Linux (tránh CRLF làm hỏng
+# shebang của entrypoint.sh và cú pháp nginx khi checkout trên Windows).
+*.sh text eol=lf
+apps/clinic-web/docker/nginx.conf text eol=lf
+*Dockerfile text eol=lf
+Dockerfile text eol=lf
+.dockerignore text eol=lf
