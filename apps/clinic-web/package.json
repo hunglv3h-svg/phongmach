@@ -15,9 +15,11 @@
     "e2e:offline": "node e2e/offline-sign.mjs",
     "e2e:conflict": "node e2e/offline-conflict.mjs",
     "e2e:cycles": "node e2e/offline-cycles.mjs",
-    "e2e:trial": "node e2e/trial-rehearsal.mjs"
+    "e2e:trial": "node e2e/trial-rehearsal.mjs",
+    "e2e:a11y": "node e2e/a11y.mjs"
   },
   "dependencies": {
+    "@fontsource/be-vietnam-pro": "^5.3.0",
     "@phongmach/catalogs": "workspace:*",
     "@phongmach/clinical": "workspace:*",
     "@phongmach/fhir-vn-model": "workspace:*",
@@ -28,6 +30,7 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@phongmach/trial": "workspace:*",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
