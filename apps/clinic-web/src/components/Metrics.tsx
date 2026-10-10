@@ -32,7 +32,7 @@ export function Metrics({ auth }: { auth: AuthState }) {
       {m.error && online && <p className="error" role="alert">{m.error}</p>}
       {data && (
         <>
-          <div className="table-wrap">
+          <div className="table-wrap" tabIndex={0} role="region" aria-label="Bảng dữ liệu, cuộn ngang bằng phím mũi tên">
             <table data-testid="metrics-table">
               <thead><tr><th>Bác sĩ</th><th>Số lượt</th><th>Trung vị (p50)</th><th>p90</th><th>Phiên bị loại</th><th>Đo ở máy khám</th><th>Giờ không hợp lý</th></tr></thead>
               <tbody>

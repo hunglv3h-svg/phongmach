@@ -110,6 +110,7 @@ export function Reception({ token }: { token: string }) {
 
   return (
     <main className="reception">
+      <h1 className="sr-only">Tiếp đón</h1>
       <section className="search-pane" aria-label="Tìm bệnh nhân">
         <label htmlFor="q" className="sr-only">Tìm bệnh nhân</label>
         <input
