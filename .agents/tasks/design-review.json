@@ -1,0 +1,90 @@
+{
+  "verdict": "CHANGES_REQUESTED",
+  "findings": [
+    {
+      "id": 1,
+      "severity": "HIGH",
+      "where": "design.md muc 7.5 (bang quy tac respiratoryRate/spo2 + danh sach idx ap dung), lien quan muc 12.1",
+      "problem": "Quy tac 'soat hai chieu' (thieu la loi, thua cung la loi) duoc ap cho toan bo CLINICS, nhung danh sach idx bo sot 3 luot da co san trong seed hien tai: noi-tong-quat idx 0 (J06.9) va idx 2 (J30.4) khong co spo2, nhi idx 0 (J06.9) co spo2 nhung khong co respiratoryRate. Ban hien thuc dung thiet ke se khien validateScenario tra loi va process.exit(1) truoc khi ghi gi, web khong khoi dong duoc.",
+      "fix": "Bo sung spo2: 98 vao vitals cua noi-tong-quat visits[0] va visits[2], respiratoryRate: 28 vao nhi visits[0] (sua noi dung muc da seed khong co tac dung tren tenant cu nen an toan), va doi hai danh sach idx cua muc 7.5 thanh: Noi 0, 2, 3, 6, 7, 14, 17, 20, 28; Nhi 0, 2, 5, 6, 7, 8, 11, 12, 13, 15, 18. Phuong an thay the: gioi han quy tac vao cac muc moi (Noi index >= 3, Nhi index >= 1) va noi ro trong 12.1."
+    },
+    {
+      "id": 2,
+      "severity": "MEDIUM",
+      "where": "design.md muc 4.1 (doan giai thich reason cua today) va cot reason cua bang 8.1/8.2",
+      "problem": "planCompletion (packages/clinical/src/visit.ts) thay Encounter.reasonCode bang exam.reason; toQueueItem va toVisitSummary doc dung truong do. Voi 4 luot state 'done', cau reason khai bao tay khong bao gio hien ra - hang cho se hien cau cua NARRATIVE. Ly do ma muc 4.1 dua ra de giu reason la truong khai bao khong dung cho nhanh done.",
+      "fix": "Chon A: giu reason o TodayBase nhung chot quy tac 'voi nhanh done, reason khai bao phai bang dung narrative(specialty, exam.dx, index).reason', validateScenario soat dang thuc do, va sua lai cot reason cua 4 dong done trong bang 8.1/8.2. Chon B: chuyen reason xuong hai nhanh waiting va in-exam cua union; nhanh done khong co reason va dung thang narrative(...).reason cho ca checkIn lan exam."
+    },
+    {
+      "id": 3,
+      "severity": "MEDIUM",
+      "where": "design.md muc 3 (thang lui ve), muc 4.5, muc 16",
+      "problem": "Quy trinh 'do lan chay nguoi, > 8 phut thi ap bac 1/2/3' khong kiem chung duoc: moi tai nguyen cua lan chay nguoi da duoc ghi va tao-co-dieu-kien khong ghi lai, nen bac 2 (cat 13/10 luot cuoi) khong xoa gi va khong tiet kiem gi tren tenant nay, bac 3 cung vay (thiet ke da noi _total khong giam nhung khong noi lai voi thang lui), va moi lan do lai deu ra con so cua lan chay lai.",
+      "fix": "Viet thanh quy trinh chot: (1) ap bac 1 (hai phong kham song song) ngay tu lan chay nguoi dau tien vi no khong lam ngheo du lieu; (2) quyet dinh bac 2/3 bang moc thoi gian tung giai doan ma seed in ra (nguong cu the: giai doan 'luot kham cu' cua mot phong vuot 4 phut, hoac tong vuot 8 phut) chu khong bang mot lan do tong thu hai; (3) ghi vao trial1-verification.md rang bac lui chi co tac dung tren tenant trang, tren tenant demo hien tai du lieu da ghi va khong bi bot di; (4) muon co con so cho tenant trang thi phai dung slug moi - ngoai pham vi lan nay."
+    },
+    {
+      "id": 4,
+      "severity": "MEDIUM",
+      "where": "design.md bang 8.2 (exam.seconds 78 va 120), muc 9 (so cua phong Nhi), nguong p50/p90 o muc 15",
+      "problem": "Hai luot done cua phong Nhi co seconds 78 va 120, deu nam TREN trung vi lich su (56-59 giay). Khung 'Hom nay' cua Nhi vi vay p50 = 78 > TARGET_P50_SECONDS = 60 (nhan khong xanh) ngay tu ngay dau; va moi ngay seed chay lai them 2 luot done vao khung 14 ngay, nen ngay thu hai day Nhi thanh 15 gia tri va p50 = 63 > 60, lam nguong 'p50Seconds <= 60' cua muc 15 bao do.",
+      "fix": "Doi exam.seconds cua bang 8.2: idx 0 tu 78 xuong 52, idx 1 tu 120 xuong 88. Kiem lai: khung 14 ngay ngay 1 p50 = 56 / p90 = 90; ngay 2 va ngay 3 p50 van 56; khung Hom nay p50 = 52 / p90 = 88 (ca hai xanh). Sau khi doi phai cap nhat toan bo con so phong Nhi o muc 9 (day da sap, p50/p90 cua nhi-owner, dong 'Chon Hom nay') va hang nguong tuong ung o muc 15."
+    },
+    {
+      "id": 5,
+      "severity": "NIT",
+      "where": "design.md muc 7.4, cau 'sau luot cua benh nhan idx 10 (24, 25, 26, 29, 30, 32)'",
+      "problem": "Bang 7.1 idx 16 cung la benh nhan 10 voi dx[0] = I10, nen la bay luot lich su chu khong phai sau. Bang bien the 0, 1, 0, 1, 2, 2, 0, 2 cho idx 9, 16, 24, 25, 26, 29, 30, 32 thi dung.",
+      "fix": "Sua thanh 'bay luot lich su cua benh nhan idx 10 (16, 24, 25, 26, 29, 30, 32) nhan 1, 0, 1, 2, 2, 0, 2' - cong 1 luot done hom nay thi khop con so 8 luot ma muc 15 dung lam nguong."
+    },
+    {
+      "id": 6,
+      "severity": "NIT",
+      "where": "design.md muc 12.1, hang 'nhat quan di ung <-> don', thong diep loi mau",
+      "problem": "Vi du 'nhi/visit 16 dong 1: AMOXICILLIN-250-MG-GOI xung dot di ung amoxicillin cua benh nhan 2' mo ta mot xung dot khong ton tai: benh nhan nhi 2 di ung ibuprofen, nguoi di ung amoxicillin la benh nhan 8 va hai luot cua benh nhan 8 khong co amoxicillin. Da soat ca 58 luot: du lieu sach, chi vi du la sai.",
+      "fix": "Doi thanh thong diep trung tinh: 'nhi/visit N dong 1: <MA> xung dot di ung <gia tri> cua benh nhan <i>', de nguoi sau khong di tim mot loi khong co."
+    },
+    {
+      "id": 7,
+      "severity": "NIT",
+      "where": "design.md muc 7.4 (ham narrative + bien the I10 #2), ap vao bang 7.1 idx 29",
+      "problem": "Hau to ', xin cap lai don' cong vao reason cua bien the I10 #2 ra cau lap: 'Het thuoc huyet ap, xin kham lai, xin cap lai don'.",
+      "fix": "Doi reason cua bien the I10 #2 thanh 'Het thuoc huyet ap', hoac cho narrative() bo hau to khi reason da chua chu 'thuoc'/'don' - va viet quy tac do ra, dung de nguoi code tu doan."
+    },
+    {
+      "id": 8,
+      "severity": "NIT",
+      "where": "design.md muc 4.4 (kep moc 00:05) va muc 4.2 (openedAt cua nhanh in-exam)",
+      "problem": "Neu seed chay trong khoang 00:00-00:05 gio VN thi floor > now nen at nam o tuong lai (hang cho hien 'cho -3 phut'). Dong thoi openedAt cua nhanh in-exam chi bi kep <= now, khong kep >= floor, nen co the roi sang ngay VN hom truoc trong khi checkIn da danh vao hom nay.",
+      "fix": "Kep ca hai dau: const at = new Date(Math.min(Math.max(now.getTime() - minutesAgo * 60000, floor), now.getTime())); va const openedAt = new Date(Math.min(Math.max(now.getTime() - openedMin * 60000, at.getTime()), now.getTime()));"
+    },
+    {
+      "id": 9,
+      "severity": "NIT",
+      "where": "design.md muc 4.3, doan 'Hai thu tich tu lai theo ngay'; muc 16",
+      "problem": "Thieu thu tich tu thu ba: moi ngay seed chay de lai 2 luot done moi phong, chung co status=finished nen DI VAO finishedVisits (so do Metrics khung 14/30 ngay) va patientVisits (lich su kham cua 4 benh nhan trinh dien dai them 1 luot moi ngay). Day chinh la nguon cua finding 4.",
+      "fix": "Doi tieu de thanh 'Ba thu tich tu lai theo ngay' va them muc thu ba kem he qua len muc 9 va muc 15; them mot hang vao bang rui ro muc 16."
+    },
+    {
+      "id": 10,
+      "severity": "NIT",
+      "where": "design.md muc 15, buoc 5 (docker compose up -d de chung minh tinh chay-lai-duoc)",
+      "problem": "Khi cau hinh khong doi va container seed da exit 0, 'up -d' co the coi service_completed_successfully la da thoa va khong chay lai seed, khi do bang chung ve tinh chay-lai-duoc khong co gi.",
+      "fix": "Them duong chac chan vao muc 15: Measure-Command { docker compose -p phongmach-demo -f \"$W\\infra\\demo\\docker-compose.yml\" run --rm seed } va docker compose ... logs --timestamps seed | Select-Object -Last 15; ghi ro da dung duong nao va moc thoi gian dong log de chung minh seed that su chay lan hai."
+    },
+    {
+      "id": 11,
+      "severity": "NIT",
+      "where": "design.md muc 3, bang 'Giai doan / Chi phi / Uoc luong'",
+      "problem": "Dem trung 4 luot done cua hom nay: hang 'Luot kham lich su' ghi 54, hang 'Cho han muc' ghi 34 + 24 = 58 (da gop 4 luot done), roi hang 'San khau hom nay' dem 12 luot gom chinh 4 luot do lan nua. Tong 6,5-9 phut vi vay khong nhat quan ve cach dem - ma day la con so quyet dinh co lui ve hay khong.",
+      "fix": "Chot mot cach dem: '58 luot di het duong (54 lich su + 4 done hom nay) + 8 luot chi cap so / chi mo ho so' roi tinh lai cac o cua bang."
+    },
+    {
+      "id": 12,
+      "severity": "NIT",
+      "where": "design.md muc 7.5 (sinh hieu) doi chieu voi muc 7.1/7.2/8.1/8.2",
+      "problem": "Thiet ke viet ra day du bang NARRATIVE (50 bien the) va tung dong thuoc, nhung vitals chi co khoang + quy tac hien/khong hien, giao lai khoang 400 con so cho nguoi code; va khong co rang buoc nao giu weightKg cua cung mot benh nhan on dinh giua cac luot gan nhau (48 kg hom nay, 82 kg tuan truoc van qua pre-flight).",
+      "fix": "Hoac them mot cot vitals rut gon vao bang 7.1/7.2/8.1/8.2 (dang '36,8 / 78 / 128-82 / 68'), hoac them mot cau trong 7.5: gia tri cu the do nguoi hien thuc chon trong khoang, phai la hang viet thang trong mang, va mot benh nhan phai giu weightKg lech khong qua 10 phan tram giua cac luot trong 30 ngay (them hang tuong ung vao validateScenario)."
+    }
+  ],
+  "reviewDoc": "d:\\My Documents D\\UNIGIS\\PM\\phongmach\\.worktrees\\trial1-seed-data\\.agents\\tasks\\design-review.md"
+}

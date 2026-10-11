@@ -18,7 +18,9 @@ services:
     environment:
       MEDPLUM_URL: http://host.docker.internal:8103
       TENANTS_FILE: /demo/.demo-tenants.json
-      SEED_PATIENTS: "20"
+      # Số bệnh nhân mỗi phòng khám. 300 cho bản demo dày; đổi bằng biến môi trường cùng tên khi cần
+      # (ví dụ SEED_PATIENTS=50 docker compose ... up -d để dựng nhanh).
+      SEED_PATIENTS: "${SEED_PATIENTS:-300}"
       MEDPLUM_ADMIN_EMAIL: admin@example.com
       MEDPLUM_ADMIN_PASSWORD: medplum_admin
     extra_hosts:
@@ -41,6 +43,11 @@ services:
       PORT: "8110"
       MEDPLUM_URL: http://host.docker.internal:8103
       TENANTS_FILE: /demo/.demo-tenants.json
+      # Nhật ký truy cập ra volume dùng chung (/demo = volume demo-tenants): nếu để trong lớp ghi của
+      # container thì mỗi lần `up --build` là mất, mà các Task đã gửi xong không gửi lại nên màn
+      # "Nhật ký truy cập" sẽ trắng. Nhật ký không chứa dữ liệu bệnh nhân (chỉ loại truy vấn, số kết
+      # quả, id tài nguyên) và vẫn chỉ nằm trong volume Docker, không vào repo.
+      AUDIT_FILE: /demo/audit.ndjson
       # Bí mật phiên CỐ ĐỊNH chỉ cho demo (>=32 ký tự) để không mất phiên đăng nhập
       # khi container restart. KHÔNG dùng ngoài demo.
       SESSION_SECRET: phongmach-demo-session-secret-0123456789
