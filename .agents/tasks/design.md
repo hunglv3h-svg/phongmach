@@ -80,7 +80,7 @@ cấp độ tin của con số suy ra):
 | Bệnh nhân (2 phòng × 300, gửi theo `batch` 100) + ghi bổ sung khóa tìm | ~600 ghi | 80–120 giây |
 | Dị ứng + tiền sử (15 dị ứng + 17 tiền sử mới) | ~32 ghi | 15–25 giây |
 | Lượt khám lịch sử (32 nội + 22 nhi) | 54 × ≈ 2.500 điểm | 4,5–5,5 phút |
-| **Chờ hạn mức bắt buộc** của giai đoạn lượt khám (34 lượt phòng Nội, 24 phòng Nhi, mỗi phòng một tài khoản máy riêng nên hai hạn mức tách biệt) | 1–2 lần chờ 15 giây mỗi phòng | 30–90 giây |
+| **Chờ hạn mức bắt buộc** của giai đoạn lượt khám (34 lượt phòng Nội, 24 phòng Nhi, mỗi phòng một tài khoản máy riêng nên hai hạn mức FHIR tách biệt — nhưng **chung một PostgreSQL**, xem thang lùi bậc 1) | 1–2 lần chờ 15 giây mỗi phòng | 30–90 giây |
 | Sân khấu hôm nay (12 lượt: 4 hoàn tất, 2 đang khám, 6 chỉ cấp số) | ~110 ghi | 30–40 giây |
 | **Tổng (lần chạy nguội)** | — | **≈ 6,5 – 9 phút** |
 
@@ -97,7 +97,7 @@ Hai lưu ý cho người triển khai:
 | Bậc | Việc làm | Tiết kiệm | Giá phải trả |
 |---|---|---|---|
 | **0** | **Đã cân nhắc và BỎ:** nâng hạn mức FHIR của tenant demo — `Project.systemSetting` tên `userFhirQuota` lên 500.000 điểm/phút, đúng cách đã dùng thật ở phiên thử M0-1 (`docs/ke-hoach-trien-khai.md`, mục chuẩn bị M0-1, điểm 3) | gần như xóa sạch thời gian chờ hạn mức (30–90 giây) và mọi lần 429 | **hai lý do bỏ:** (a) phải `PUT` vào `Project` của tenant demo qua API quản trị ⇒ thêm mã ngoài hai tệp được phép sửa, hoặc một lệnh tay không nằm trong compose ⇒ vỡ bất biến phạm vi; (b) số đo thời gian seed khi đó **không còn phản ánh môi trường mặc định**, mà đó mới là con số chủ dự án cần để biết demo dựng lại mất bao lâu trên máy khác. Nếu chủ dự án muốn, đây là việc của T-QUOTA, không phải của trục này |
-| 1 | Chạy **hai phòng khám song song** ở giai đoạn lâm sàng (`Promise.all` trên hai `ClinicSpec`): hai tenant là hai `ClientApplication` khác nhau nên **hai hạn mức tách biệt**, không tranh nhau | ~40 % tổng thời gian (giai đoạn lượt khám chạy chồng thay vì nối tiếp) | log của hai phòng xen nhau ⇒ phải gom dòng theo phòng rồi in một lần khi phòng đó xong; bù lại **giữ nguyên dữ liệu demo** |
+| 1 | ~~Chạy **hai phòng khám song song** ở giai đoạn lâm sàng (`Promise.all` trên hai `ClinicSpec`)~~ — **ĐÃ THỬ VÀ ĐÃ BỎ, xem ô bên phải** | — | **Lý lẽ "hai `ClientApplication` ⇒ hai hạn mức tách biệt" đúng về HẠN MỨC nhưng sai về TRANH CHẤP CƠ SỞ DỮ LIỆU:** hai tenant dùng **chung một PostgreSQL**, nên hai luồng tạo-có-điều-kiện song song đụng cùng bảng ở mức `serializable` và sinh xung đột 40001 thường trực (F13). Bản `Promise.all` làm seed **chết ở giây thứ 7,66** (`trial1-verification.md` mục 10.4) ⇒ chưa từng có con số thời gian nào để biện minh cho nó. Đã đổi về **tuần tự** và đo thật: **2 phút 38 giây** lần chạy nguội — dư xa ngưỡng 8 phút, nên bậc 1 **không cần thiết** |
 | 2 | Cắt lượt khám **từ CUỐI** mảng `visits` của mỗi phòng — tuyệt đối không xóa/chèn giữa mảng vì khóa tính theo chỉ số (mục 4.3) | ~5–6 giây mỗi lượt bỏ đi | xem đoạn "giá thật của bậc 2" ngay dưới bảng |
 | 3 | `SEED_PATIENTS=200`, vẫn > 8 phút thì `SEED_PATIENTS=150` | ~27–55 giây | dân số mỏng hơn; trên tenant đã seed thì `_total` **không** giảm |
 
@@ -114,8 +114,11 @@ sâu lịch sử, **không** bỏ dữ liệu của khoảng kiểm chứng:
   4.3) nên thứ tự "tăng dần theo `daysAgo`" sẽ bị phá ngay lần thêm sau. Vì vậy trước khi áp bậc 2,
   **đọc `daysAgo` của các mục cuối** để biết mình đang bỏ cái gì, đừng tin vào thứ tự.
 
-Bậc 1 được xếp trước vì nó không làm nghèo dữ liệu — đúng mục tiêu của nhiệm vụ; bậc 2 và 3 chỉ dùng
-khi bậc 1 vẫn chưa đủ. Ghi con số đo được và bậc đã dùng vào `trial1-verification.md`.
+**KẾT QUẢ THỰC TẾ — không dùng bậc nào.** Seed chạy **tuần tự** (`for (const spec of CLINICS) await …`)
+đo được **2 phút 38 giây** lần nguội và **39 giây** lần chạy lại, với `SEED_PATIENTS=300` nguyên vẹn
+(`trial1-verification.md` mục 11). Thang lùi 1/2/3 ở trên **chỉ là phương án dự phòng chưa dùng**; bậc 1
+còn bị gạch vì chính nó là nguồn xung đột giao dịch. Ai muốn mở lại đường song song thì phải **đo trước**
+và phải giữ đường thử lại 40001 trong `runBatch`.
 
 ## 4. Quyết định 2 — mô hình dữ liệu trong `seed-demo.ts`
 
@@ -1158,8 +1161,9 @@ chứng, nên mọi đại lượng đếm đều có nguồn nhiễu hợp lệ
 
 | Rủi ro | Mức | Cách xử |
 |---|---|---|
-| Seed lâu hơn 8–10 phút | **cao** (ước lượng 6,5–9 phút đã sát ngưỡng) | đo thật rồi áp thang lùi theo đúng thứ tự ở mục 3: (bậc 0 nâng `userFhirQuota` **đã cân nhắc và bỏ** — vượt phạm vi 2 tệp và làm số đo không còn phản ánh môi trường mặc định), (1) chạy hai phòng khám song song, (2) cắt lượt khám từ **cuối** mảng `visits` — mảng xếp `daysAgo` tăng dần nên cuối mảng là lượt cũ nhất, **tối đa 13 mục (Nội) / 10 mục (Nhi)** rồi phải chuyển bậc 3, (3) hạ `SEED_PATIENTS` 300 → 200 → 150 |
-| 429 giữa chừng làm seed chết | **cao** (≈ 20 lượt/phút, seed tạo 34 + 24 lượt) | `withQuotaRetry` cho mọi phép ghi lẻ **và** `completeWithQuotaRetry` cho `kind: 'incomplete'` — 429 nằm trong gói không được `writeAll` thử lại (mục 12.2) |
+| Seed lâu hơn 8–10 phút | **đã loại trừ bằng số đo** (2 phút 38 giây tuần tự, mục 3) | không dùng bậc nào của thang lùi; thang lùi giữ lại làm dự phòng nếu ai nâng khối lượng dữ liệu lên nữa. Bậc 1 (song song) **đã bị gạch** — nó là nguồn xung đột giao dịch |
+| 429 giữa chừng làm seed chết | **cao** (≈ 20 lượt/phút, seed tạo 34 + 24 lượt) | `withQuotaRetry` cho mọi phép ghi lẻ **và** `completeWithQuotaRetry` cho `kind: 'incomplete'` — 429 nằm trong gói không được `writeAll` thử lại (mục 12.2). **Đã chạy thật:** 4 lần chờ 15 giây ở `noi-tong-quat/visit 14` và 4 lần ở `nhi/visit 8`, seed vẫn exit 0 |
+| **Xung đột giao dịch 40001 trong gói `batch` làm seed chết** (F13) | **đã xảy ra thật, đã sửa** | `runBatch` coi mục `409` mang mã `40001` là gửi lại được, chờ ngẫu nhiên tăng dần bằng đúng `backoff` + `isConflictEntry` của `services/bff/src/conflict.ts` (6 lần, gốc 200 ms), **vẫn soát từng mục** của phản hồi (F11). Cộng với việc chạy hai phòng **tuần tự** để không tự tạo tranh chấp |
 | Số liệu kiểm chứng đo trên tenant demo **dùng lại** | trung bình | mọi ngưỡng ở mục 15 là **ngưỡng dưới** kèm danh sách phải có mặt, không phải đẳng thức; ghi rõ điều này trong `trial1-verification.md` |
 | Có người đang bấm demo lúc seed chạy lại | thấp | `openVisit` trả `taken` → seed `throw` với thông điệp rõ; chạy lại sau khi người đó đóng lượt. (`closed` thì **không** phải lỗi, xem mục 4.3) |
 | Seed chạy trong khoảng 00:00–01:00 giờ VN | thấp | kẹp mốc đến về `00:05` cùng ngày VN (mục 4.4), hàng chờ vẫn đúng ngày |

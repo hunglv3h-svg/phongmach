@@ -15,8 +15,9 @@ import { fileURLToPath } from 'node:url';
 import { MedplumClient, OperationOutcomeError } from '@medplum/core';
 import type { Bundle, BundleEntry, Patient, Practitioner } from '@medplum/fhirtypes';
 import { ALLERGY_CLASSES, INGREDIENTS, getDrug, getIcd10, resolveLine, type LineInput } from '@phongmach/catalogs';
-import { PRIORITIES, cleanVitals, makePrescriptionCode, vnDay, type QueuePriority, type SignedLine, type Specialty, type VitalsInput } from '@phongmach/clinical';
+import { PRIORITIES, cleanVitals, failedEntries, makePrescriptionCode, vnDay, type QueuePriority, type SignedLine, type Specialty, type VitalsInput } from '@phongmach/clinical';
 import { DomainError, buildPatient, clientUuidQuery, normalizePhone, parseFullName, type NewPatientInput } from '@phongmach/fhir-vn-model';
+import { DEFAULT_CONFLICT_RETRY, backoff, isConflictEntry, type ConflictRetry } from '../src/conflict.js';
 import { MedplumClinicStore } from '../src/medplum.js';
 import { BusyError, type CompleteCommand, type Doctor } from '../src/store.js';
 import { parseTenantsFile, type DemoUser, type Tenant, type TenantsFile } from '../src/tenants.js';
@@ -30,6 +31,13 @@ const DRY_RUN = process.env['SEED_DRY_RUN'] === '1';
 const BATCH = 100;
 const MAX_ATTEMPTS = 8;
 const BACKOFF_MS = 15_000;
+/**
+ * Thử lại mục bị xung đột giao dịch (409 + mã PostgreSQL 40001, F13) trong gói `batch` của giai đoạn
+ * bệnh nhân. Rộng hơn `DEFAULT_CONFLICT_RETRY` của tuyến API (3 lần, gốc 50 ms) vì một gói seed mang
+ * tới `BATCH` mục nên tranh chấp dày hơn một lời ghi lẻ của người dùng, và seed chết giữa buổi nạp tốn
+ * hơn nhiều so với chờ thêm vài giây: 6 lần, chờ ngẫu nhiên trong [0, 200 · 2^k) ms (tổng trần ~12,6 giây).
+ */
+const BATCH_CONFLICT_RETRY: ConflictRetry = { ...DEFAULT_CONFLICT_RETRY, retries: 6, baseMs: 200 };
 /**
  * Trần lời dặn do SEED tự đặt cho gọn tờ đơn. CHẶT HƠN trần của tuyến API: `completeBody.prescription.advice`
  * trong services/bff/src/routes/clinical.ts là z.string().max(1000). Trần 300 ở tuyến API là của `exam.reason`
@@ -1571,22 +1579,51 @@ async function createTenants(): Promise<TenantsFile> {
   return { tenants, users };
 }
 
+/** Mục bị từ chối vì hết hạn mức FHIR: gửi lại được sau khi chờ hết cửa sổ hạn mức. */
+const isQuotaEntry = (failed: { status: string }): boolean => Number.parseInt(failed.status, 10) === 429;
+
+/**
+ * Gửi một gói `batch` rồi soát TỪNG mục của phản hồi — bất biến F11: gói của Medplum 5.2.0 KHÔNG nguyên
+ * tử, một mục lỗi vẫn trả HTTP 200 và các mục khác vẫn được ghi, nên không được tin vào mã HTTP của cả gói.
+ *
+ * Hai loại lỗi gửi lại được, hai nhịp chờ khác nhau:
+ *  - **429** (hết hạn mức FHIR): chờ CỨNG `BACKOFF_MS` — hạn mức tính theo cửa sổ phút, chờ giật ngẫu
+ *    nhiên vài trăm mili giây không giải quyết được gì.
+ *  - **409 mang mã 40001** (xung đột giao dịch `serializable` của PostgreSQL, F13): chờ NGẪU NHIÊN tăng
+ *    dần bằng đúng `backoff` + `isConflictEntry` của services/bff/src/conflict.ts mà
+ *    `MedplumClinicStore.writeAll` đang dùng — một cơ chế, một chỗ định nghĩa. Giao dịch bị hủy thì
+ *    KHÔNG ghi gì, và mọi mục ở đây đều tạo có điều kiện theo `clientUuid`, nên gửi lại đúng mục đó an
+ *    toàn: không trùng bản ghi.
+ *
+ * Mã khác — kể cả một 409 KHÔNG mang 40001 — thì ném ngay, không đoán. Hết lượt thử cũng ném.
+ */
 async function runBatch(medplum: MedplumClient, say: Say, entries: BundleEntry[]): Promise<void> {
   let pending = entries;
-  for (let attempt = 1; pending.length; attempt++) {
+  let quotaWaits = 0;
+  let conflictRetries = 0;
+  while (pending.length) {
     const result = (await medplum.executeBatch({ resourceType: 'Bundle', type: 'batch', entry: pending } satisfies Bundle)) as Bundle;
-    const failed: BundleEntry[] = [];
-    (result.entry ?? []).forEach((e, i) => {
-      const status = String(e.response?.status ?? '');
-      if (status.startsWith('2')) return;
-      if (!status.startsWith('429')) throw new Error(`Phần tử batch lỗi: ${status}`);
-      failed.push(pending[i]!);
-    });
+    const failed = failedEntries(result);
     if (!failed.length) return;
-    if (attempt >= MAX_ATTEMPTS) throw new Error(`Vẫn còn ${failed.length} phần tử bị giới hạn tốc độ sau ${MAX_ATTEMPTS} lần thử`);
-    say(`  hạn mức FHIR: chờ ${BACKOFF_MS / 1000}s rồi gửi lại ${failed.length} phần tử`);
-    await sleep(BACKOFF_MS);
-    pending = failed;
+    const other = failed.find((f) => !isQuotaEntry(f) && !isConflictEntry(f));
+    if (other) throw new Error(`Phần tử batch lỗi: ${other.status}${other.message ? ` — ${other.message}` : ''}`);
+    // Chỉ gửi lại đúng các mục bị từ chối: mục đã 2xx không được gửi lại (vô hại vì tạo có điều kiện, nhưng tốn hạn mức).
+    pending = failed.map((f) => pending[f.index]!);
+    if (failed.some(isQuotaEntry)) {
+      // Có cả hai loại trong một gói thì nhánh hạn mức thắng: chờ 15 giây cũng đã đủ cho xung đột giao dịch.
+      if (quotaWaits >= MAX_ATTEMPTS) throw new Error(`Vẫn còn ${pending.length} phần tử bị giới hạn tốc độ sau ${MAX_ATTEMPTS} lần thử`);
+      quotaWaits += 1;
+      say(`  hạn mức FHIR: chờ ${BACKOFF_MS / 1000}s rồi gửi lại ${pending.length} phần tử`);
+      await sleep(BACKOFF_MS);
+      continue;
+    }
+    if (conflictRetries >= BATCH_CONFLICT_RETRY.retries) {
+      throw new Error(`Vẫn còn ${pending.length} phần tử bị xung đột giao dịch (40001) sau ${BATCH_CONFLICT_RETRY.retries} lần gửi lại`);
+    }
+    // Mỗi lần thử lại ghi một dòng: xung đột giao dịch không được chạy âm thầm (cùng tinh thần `onRetry` ở server.ts).
+    say(`  xung đột giao dịch (40001): gửi lại ${pending.length} phần tử (lần ${conflictRetries + 1}/${BATCH_CONFLICT_RETRY.retries})`);
+    await backoff('seed-batch', conflictRetries, BATCH_CONFLICT_RETRY);
+    conflictRetries += 1;
   }
 }
 
@@ -1742,7 +1779,7 @@ async function seedOneClinic(file: TenantsFile, spec: ClinicSpec): Promise<void>
   const total = await seedPatients(medplum, spec, say);
   const parts = [`${total} bệnh nhân (${since(started)} giây)`];
   parts.push(...(await seedClinical(file, spec, store, medplum, now, say)));
-  // Gom thành MỘT dòng in khi phòng khám xong: hai phòng chạy song song nên log rời sẽ xen nhau.
+  // Gom thành MỘT dòng tổng kết khi phòng khám xong, có số giây từng giai đoạn: dùng để biết chỗ nào chậm.
   process.stdout.write(`${spec.slug}: ${parts.join(', ')}\n`);
 }
 
@@ -1766,14 +1803,18 @@ async function main() {
   writeFileSync(OUT, JSON.stringify(file, null, 2), { mode: 0o600 });
   chmodSync(OUT, 0o600);
 
-  // Hai phòng khám = hai Project + hai tài khoản máy ⇒ HAI HẠN MỨC TÁCH BIỆT, nên chạy song song rút
-  // gần một nửa thời gian seed (bậc 1 của thang lùi trong thiết kế) mà không làm nghèo dữ liệu.
+  // TUẦN TỰ, có lý do — đừng đổi lại `Promise.all` mà không đo trước.
+  // Hai phòng khám là hai Project + hai tài khoản máy ⇒ đúng là hai HẠN MỨC FHIR tách biệt. Nhưng chúng
+  // dùng CHUNG một PostgreSQL: hai luồng tạo-có-điều-kiện song song đụng cùng bảng ở mức `serializable`
+  // và sinh xung đột 40001 thường trực (F13). Bản `Promise.all` trước đó làm seed chết ở giây thứ 7,66 —
+  // tức chưa có con số thời gian nào để biện minh cho việc chạy song song. Đo tuần tự trước; chỉ tối ưu
+  // nếu số đo thật vượt 8–10 phút (xem thang lùi trong .agents/tasks/design.md).
   //
   // CÁCH ĐẾM DUY NHẤT của khối lượng ghi (dùng cho mọi ước lượng, đừng đếm kiểu khác):
   //   58 lượt đi hết đường  = 54 lượt lịch sử MỚI (32 Nội + 22 Nhi) + 4 lượt `done` của hôm nay
   // + 8 lượt chỉ cấp số / chỉ mở hồ sơ (6 `waiting` + 2 `in-exam`)
   // + 4 lượt lịch sử CŨ (3 Nội + 1 Nhi, đã có từ lần seed trước) — chạy lại không ghi gì.
-  await Promise.all(CLINICS.map((spec) => seedOneClinic(file, spec)));
+  for (const spec of CLINICS) await seedOneClinic(file, spec);
 
   const seconds = Math.round((Date.now() - startedAll) / 1000);
   console.log(`Tổng thời gian seed: ${Math.floor(seconds / 60)} phút ${seconds % 60} giây`);
