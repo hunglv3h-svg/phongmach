@@ -52,6 +52,7 @@ export function PatientSide({
 
   return (
     <div className="side" data-testid="patient-side">
+      <h2 className="sr-only">Thông tin bệnh nhân</h2>
       <Allergies token={token} patientId={patientId} allergies={context.allergies} onChange={(allergies) => onContext({ ...context, allergies })} {...(locked ? { locked } : {})} {...(allergiesKnown ? {} : { unknown: true })} />
 
       <section aria-label="Tiền sử" data-testid="history">

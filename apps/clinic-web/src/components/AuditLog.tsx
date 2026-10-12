@@ -52,7 +52,7 @@ export function AuditLog({ token }: { token: string }) {
       {error && <p className="error" role="alert">{error}</p>}
       {!entries && !error && online && <p className="muted">Đang tải…</p>}
       {entries && (
-        <div className="table-wrap">
+        <div className="table-wrap" tabIndex={0} role="region" aria-label="Bảng dữ liệu, cuộn ngang bằng phím mũi tên">
           <table data-testid="audit-table">
             <thead>
               <tr><th>Thời gian</th><th>Người dùng</th><th>Hành động</th><th>Chi tiết</th><th>Kết quả</th></tr>

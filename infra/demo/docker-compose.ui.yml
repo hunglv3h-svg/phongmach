@@ -1,0 +1,13 @@
+# Override NHỎ cho Trục 2 (UI v0.2): CHỈ đổi cổng của service 'web' sang 8082
+# để kiểm chứng bằng project RIÊNG 'phongmach-demo-ui' mà KHÔNG giẫm lên Trục 1
+# (project 'phongmach-demo', cổng 8081). KHÔNG sửa docker-compose.yml (Trục 1 sở hữu).
+#
+#   docker compose -p phongmach-demo-ui \
+#     -f infra/demo/docker-compose.yml \
+#     -f infra/demo/docker-compose.ui.yml up -d --build
+services:
+  web:
+    # !override THAY THẾ (không nối) danh sách ports của base để web CHỈ bind 8082,
+    # tránh đụng cổng 8081 mà Trục 1 (project 'phongmach-demo') đang chiếm.
+    ports: !override
+      - "8082:80"
