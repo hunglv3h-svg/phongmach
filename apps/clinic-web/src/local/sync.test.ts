@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CompleteRequest, NewPatient } from '../api';
 import { FakeBff, FakeClock } from './fakeBff';
 import { newTmpId, type NewOp, type Payloads } from './ops';
-import { dbName, openEncryptedStore, type LocalStore, type Owner } from './store';
+import { dbName, openEncryptedStore, type Change, type LocalStore, type Owner } from './store';
 import { SyncEngine, inTabLocks, type Locks, type Promote, type Session, type SyncOptions } from './sync';
 
 const owner: Owner = { tenant: 'noi', userId: 'doc' };
@@ -467,6 +467,40 @@ describe('OFF-8: chuyển mục chưa dứt điểm trong lúc giữ khóa, C1 �
     expect(out).toEqual({ kind: 'offline' });
     const saved = (await e.ops()).find((o) => o.id === op.id)!;
     expect((saved.body.payload as { rxTmpId?: string }).rxTmpId).toBeDefined();
+  });
+
+  it('401 đúng lúc ký làm giao diện ĐÓNG kho ngay sau khi chuyển: vẫn trả offline để in từ máy, mục đã chuyển còn nguyên trong kho', async () => {
+    // Ở ứng dụng thật, phản hồi 401 gọi `setUnauthorizedHandler` → App đăng xuất → `useLocalStore` đóng kho, ngay trong lúc lần ký
+    // còn đang chạy. Mục đã được chuyển và lưu bền xong (ghi trong lúc giữ khóa) thì lần đọc kho sau đó mới lỗi; bác sĩ vẫn phải
+    // nhận tờ đơn in từ máy, không được im lặng về màn hình đăng nhập (OFF-8, bất biến K).
+    const real = await openStore();
+    const armed = { on: false };
+    // Kho đóng lại ngay sau lần ghi kế tiếp (lần ghi của bước chuyển sang dạng ngoại tuyến).
+    const store: LocalStore = Object.assign(Object.create(real) as LocalStore, {
+      async commit(changes: Change[]): Promise<void> {
+        await real.commit(changes);
+        if (armed.on) {
+          armed.on = false;
+          real.close();
+        }
+      },
+    });
+    const e = engine(store);
+    const { op, promote } = completeOp();
+    const visitId = (op.payload as { visitId: string }).visitId;
+    bff.patients.set('p', { id: 'p', fullName: 'A' });
+    bff.visits.set(visitId, { item: { id: visitId, number: 1, code: 'c', status: 'in-exam', priority: 'normal', specialty: 'noi', patientId: 'p', patientName: 'A', arrivedAt: 'x', doctorUserId: 'doc' } as never, clientUuid: 'cu' });
+    bff.fault(/complete$/, { status: 401, body: { error: 'unauthenticated' } });
+    await e.enqueue([op]);
+    armed.on = true;
+    const out = await e.submit(op.id, promote);
+    expect(out).toEqual({ kind: 'offline' });
+    // Mở lại kho của chính người đó (như khi đăng nhập lại): bản đã chuyển còn nguyên để gửi lại và in lại.
+    const reopened = engine(await openStore());
+    const saved = (await reopened.ops()).find((o) => o.id === op.id)!;
+    expect(saved.meta.status).toBe('pending');
+    expect((saved.body.payload as { rxTmpId?: string }).rxTmpId).toBeDefined();
+    expect((saved.body.payload as { body: CompleteRequest }).body.clientTimes).toBeDefined();
   });
 
   it('hai tab cùng mở: mục gửi ngay lỗi tạm (503) được chuyển trong lúc giữ khóa, tab kia không gửi bản cũ', async () => {

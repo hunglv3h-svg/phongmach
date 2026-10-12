@@ -498,7 +498,17 @@ export class SyncEngine {
   private async outcome(id: string): Promise<Outcome> {
     const promoted = this.promoted.delete(id);
     this.focus.delete(id);
-    const ops = await this.ops();
+    let ops: AnyOp[];
+    try {
+      ops = await this.ops();
+    } catch (err) {
+      // OFF-8 (bất biến K): kho trên máy vừa bị ĐÓNG ngay sau khi mục đã được chuyển sang dạng ngoại tuyến trong lúc giữ khóa.
+      // Xảy ra thật khi máy chủ trả 401 đúng lúc ký: giao diện đăng xuất ngay (OFF-6) và đóng kho trong lúc lần ký còn đang chạy.
+      // Mục và tờ đơn ĐÃ lưu bền trước đó, nên vẫn trả 'offline' để in từ máy thay vì ném lỗi (im lặng, bác sĩ không có tờ nào).
+      // Chưa chuyển được thì không có gì để in: ném lỗi như trước.
+      if (!promoted) throw err;
+      return { kind: 'offline' };
+    }
     const op = ops.find((o) => o.id === id) as Op | undefined;
     if (!op) return { kind: 'rejected', status: 'error', error: { status: -1, code: 'missing', message: 'Mục không còn trong hàng đợi' } };
     if (op.meta.status === 'done') return { kind: 'done', result: op.body.result };

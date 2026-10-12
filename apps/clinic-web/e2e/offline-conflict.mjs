@@ -303,9 +303,14 @@ try {
   await D.page.route('**/api/visits/*/complete', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"unauthenticated"}' }));
   await D.page.getByTestId('sign').click();
   // OFF-8: không im lặng — in từ máy (kết quả ký khi mất mạng) thay vì chỉ về màn hình đăng nhập.
+  // 401 làm giao diện đăng xuất ngay (OFF-6) nên màn hình đăng nhập hiện TRƯỚC khi tờ đơn kịp dựng (HTML + QR là việc bất đồng bộ):
+  // chờ ĐÚNG điều kiện cần kiểm (đã in từ máy, hoặc còn ở màn hình kết quả ký), không ngủ cố định, không nới phép kiểm.
   await D.page.locator('[data-testid="offline-sign-result"], [data-testid="session-expired"]').first().waitFor();
-  const printedAt401 = await D.page.locator('iframe[data-testid="print-frame"]').count();
-  assert.ok(printedAt401 >= 1 || (await D.page.getByTestId('offline-sign-result').count()) >= 1, 'OFF-8: 401 lúc ký phải in từ máy hoặc hiện kết quả ký, không im lặng bỏ qua');
+  const signedLocally = async () => (await printFrames(D.page)) >= 1 || (await D.page.getByTestId('offline-sign-result').count()) >= 1;
+  await eventually(signedLocally, 'OFF-8: 401 lúc ký phải in từ máy hoặc hiện kết quả ký, không im lặng bỏ qua');
+  const printedAt401 = await printFrames(D.page);
+  assert.ok(await signedLocally(), 'OFF-8: 401 lúc ký phải in từ máy hoặc hiện kết quả ký, không im lặng bỏ qua');
+  if (printedAt401 >= 1) assert.ok((await lastPrintHtml(D.page)).includes('KÝ KHI MẤT MẠNG'), '401 lúc ký: in từ dữ liệu trên máy');
   if (await D.page.getByTestId('rx-code').count()) assert.ok((await lastPrintHtml(D.page)).includes('KÝ KHI MẤT MẠNG'), '401 lúc ký: in từ dữ liệu trên máy');
   await D.page.unroute('**/api/visits/*/complete');
   D.expected = undefined;
