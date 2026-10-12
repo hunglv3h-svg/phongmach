@@ -274,6 +274,18 @@ describe('quy tắc kê đơn được kiểm tra lại ở server', () => {
     expect(second.statusCode).toBe(422);
     expect(second.json().blocking[0].rule).toBe('max-days');
   });
+  it('CCCD: máy chủ luôn tự đọc bản ghi, xác nhận "cccd-unknown" của client không cứu được bệnh nhân thật sự chưa có CCCD', async () => {
+    // Máy khách mở hồ sơ bằng bản dự phòng chỉ đòi xác nhận 'cccd-unknown' (nó KHÔNG BIẾT), còn máy chủ thì biết: chốt chặn thật ở đây.
+    const c = makeApp();
+    const { visitId, doctor } = await opened(c, { fullName: 'Lê Văn Cường', birthDate: '1956-05-10' });
+    const acked = await sign(c, visitId, doctor, { lines: [AMOX], acknowledgements: [{ key: 'cccd-unknown', reason: 'Đã đối chiếu CCCD trên giấy tờ bệnh nhân mang theo' }] });
+    expect([acked.statusCode, acked.json().error]).toEqual([422, 'rules-not-satisfied']);
+    expect(acked.json().blocking.map((f: { rule: string }) => f.rule)).toEqual(['no-cccd']);
+    expect(c.stores.get('a')!.completions).toHaveLength(0);
+    // Cùng đơn, bệnh nhân có CCCD: ký được (chứng minh phép thử ở trên chặn vì CCCD, không vì cớ khác).
+    const ok = await opened(c, { fullName: 'Trần Thị Dung', birthDate: '1956-05-10', cccd: '000123456788' }, 2);
+    expect((await sign(c, ok.visitId, ok.doctor, { lines: [AMOX], acknowledgements: [] })).statusCode).toBe(201);
+  });
   it('bệnh mạn tính được tới 90 ngày', async () => {
     const c = makeApp();
     const { visitId, doctor } = await opened(c);

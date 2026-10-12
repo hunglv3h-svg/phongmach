@@ -16,6 +16,7 @@ export type RuleId =
   | 'duplicate-ingredient'
   | 'allergy'
   | 'no-cccd'
+  | 'cccd-unknown'
   | 'no-birthdate'
   | 'no-weight'
   | 'paediatric-form'
@@ -51,6 +52,13 @@ export interface RuleContext {
    * "không dị ứng": bác sĩ phải hỏi bệnh nhân và xác nhận kèm lý do. Mặc định true.
    */
   allergiesKnown?: boolean;
+  /**
+   * false: máy không có dữ liệu CCCD của bệnh nhân (mở hồ sơ khi mất mạng bằng bản dự phòng, không phải "bệnh nhân chưa có
+   * CCCD"). Cùng nguyên tắc với `allergiesKnown`: không được coi "không biết" là "không có" — bác sĩ đối chiếu giấy tờ rồi
+   * xác nhận kèm lý do, thay vì bị chặn cứng và không có cách chữa khi mất mạng. Mặc định true.
+   * Máy chủ luôn đọc được bản ghi bệnh nhân nên luôn để mặc định: `no-cccd` ở BFF vẫn là chốt chặn thật.
+   */
+  cccdKnown?: boolean;
   /** Mã ICD-10 đã chọn. */
   diagnoses: string[];
 }

@@ -26,7 +26,7 @@ export class FakeBff {
   readonly requests: RecordedRequest[] = [];
   /** token → người dùng; token không có ở đây trả 401. */
   readonly tokens = new Map<string, { userId: string; name: string }>();
-  readonly patients = new Map<string, { id: string; fullName: string; phone?: string }>();
+  readonly patients = new Map<string, { id: string; fullName: string; phone?: string; cccdMasked?: string }>();
   readonly visits = new Map<string, Visit>();
   readonly completions = new Map<string, Record<string, unknown>>();
   readonly printed: Array<{ id: string; printedAt?: string }> = [];
@@ -84,7 +84,9 @@ export class FakeBff {
       const uuid = String(body!['clientUuid']);
       const existing = this.patients.get(uuid);
       if (existing) return json(200, { patient: existing, created: false });
-      const patient = { id: crypto.randomUUID(), fullName: String(body!['fullName']), ...(body!['phone'] ? { phone: String(body!['phone']) } : {}) };
+      // Như BFF thật: máy chủ chỉ trả CCCD đã che (xem `toPatientSummary`).
+      const cccd = body!['cccd'] ? String(body!['cccd']) : undefined;
+      const patient = { id: crypto.randomUUID(), fullName: String(body!['fullName']), ...(body!['phone'] ? { phone: String(body!['phone']) } : {}), ...(cccd ? { cccdMasked: `${'•'.repeat(8)}${cccd.slice(-4)}` } : {}) };
       this.patients.set(uuid, patient);
       return json(201, { patient, created: true });
     }
@@ -143,6 +145,13 @@ export class FakeBff {
       const response = { visit: { encounterId: v.item.id, date: new Date().toISOString(), specialty: 'noi', vitals: {}, diagnoses: [] }, ...(prescription ? { prescription } : {}) };
       this.completions.set(uuid, response);
       return json(201, { ...response, replayed: false });
+    }
+
+    if (method === 'GET' && path.startsWith('/api/patients/search')) {
+      // Chỉ cần đủ cho kiểm thử: khớp theo chuỗi con của tên hoặc số điện thoại, không bỏ dấu như BFF thật.
+      const q = (new URL(path, 'http://x').searchParams.get('q') ?? '').trim().toLowerCase();
+      const results = q ? [...this.patients.values()].filter((p) => p.fullName.toLowerCase().includes(q) || p.phone?.includes(q)) : [];
+      return json(200, { intent: 'name', results, hasMore: false });
     }
 
     if (method === 'GET' && path === '/api/queue') {

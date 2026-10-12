@@ -32,6 +32,11 @@ export interface Opened {
   allergiesKnown: boolean;
   /** false: tiền sử và lịch sử khám chưa có trên máy ("chưa tải"). */
   historyLoaded: boolean;
+  /**
+   * false: máy không có bản tóm tắt bệnh nhân (mở hồ sơ bằng bản dựng từ dòng hàng chờ), nên KHÔNG biết bệnh nhân có CCCD hay
+   * không. Quy tắc phải đòi xác nhận `cccd-unknown` chứ không được kết luận "bệnh nhân chưa có CCCD".
+   */
+  cccdKnown: boolean;
 }
 
 export type SignOutcome =
@@ -143,6 +148,28 @@ export class OfflineClient {
     const entries = (await this.store.list<'patients', CachedPatient>('patients')).map((r) => r.value);
     const { results, hasMore } = searchLocal(query, entries);
     return { results, total: entries.length, hasMore };
+  }
+
+  /**
+   * Tìm bệnh nhân lúc có mạng: kết quả của máy chủ, NỐI THÊM hồ sơ máy này đã tạo mà máy chủ chưa nhận (còn id tạm).
+   * Thiếu phần nối thêm thì người vừa được tiếp đón lúc mất mạng biến mất khỏi ô tìm ngay khi có mạng lại — hồ sơ vẫn nằm
+   * trên máy nhưng không ai thấy để cấp số (N3: không âm thầm). Danh sách "chưa gửi" đọc TRƯỚC khi gọi máy chủ để mục vừa
+   * gửi xong đúng lúc đó không rơi vào khe hở giữa hai lần đọc; lọc trùng sau đó theo id máy chủ của chính mục ấy.
+   */
+  async searchOnline(query: string, token: string, signal?: AbortSignal): Promise<{ results: PatientSummary[]; pending: string[]; hasMore: boolean; intent: string }> {
+    const unsent = await this.unsyncedMatches(query);
+    const r = await this.call(() => api.search(token, query, signal));
+    const ids = await this.store.ids();
+    const seen = new Set(r.results.map((p) => p.id));
+    const extra = unsent.filter((p) => !seen.has(p.id) && !seen.has(ids.get(p.id) ?? ''));
+    return { results: [...r.results, ...extra], pending: extra.map((p) => p.id), hasMore: r.hasMore, intent: r.intent };
+  }
+
+  /** Hồ sơ trong bộ đệm khớp ô tìm mà mục "tạo bệnh nhân" của nó chưa được máy chủ nhận. */
+  private async unsyncedMatches(query: string): Promise<PatientSummary[]> {
+    const unsent = new Set((await this.engine.ops()).filter((o) => o.meta.kind === 'patient' && o.meta.status !== 'done').map((o) => (o as Op<'patient'>).body.payload.tmpId));
+    if (unsent.size === 0) return [];
+    return (await this.searchCache(query)).results.filter((p) => unsent.has(p.id));
   }
 
   // ------------------------------------------------------------------------------------------- hàng chờ
@@ -337,7 +364,7 @@ export class OfflineClient {
       const out: Outcome = await this.engine.submit(op.id, (p) => ({ payload: { ...(p as Payloads['open']), openedAt: clickAt } }));
       if (out.kind === 'done') {
         // Mở có mạng: mốc mở lấy lúc nhận phản hồi (OFF-3), máy chủ đo bằng giờ của nó.
-        return { context: out.result as VisitContext, openedAt: iso(this.now()), offline: false, allergiesKnown: true, historyLoaded: true };
+        return { context: out.result as VisitContext, openedAt: iso(this.now()), offline: false, allergiesKnown: true, historyLoaded: true, cccdKnown: true };
       }
       if (out.kind === 'rejected') {
         await this.engine.discard(op.id);
@@ -355,8 +382,11 @@ export class OfflineClient {
 
   private async offlineOpen(item: LocalQueueItem, openedAt: string): Promise<Opened> {
     const cached = await this.cachedPatient(item.patientId);
+    // Lớp dự phòng thứ hai (OFF-4): bộ đệm tra theo id trượt thì dựng lại từ mục "tạo bệnh nhân" còn trong hàng đợi trên máy.
+    const queued = cached?.patient ? undefined : await this.queuedPatient(item.patientId);
+    const known = cached?.patient ?? queued;
     const { user } = this.auth();
-    const patient: PatientSummary = cached?.patient ?? { id: item.patientId, fullName: item.patientName, ...(item.birthDate ? { birthDate: item.birthDate } : {}) };
+    const patient: PatientSummary = known ?? { id: item.patientId, fullName: item.patientName, ...(item.birthDate ? { birthDate: item.birthDate } : {}) };
     const context: VisitContext = {
       visit: { ...item, status: 'in-exam', doctorUserId: user.id, doctorName: user.name, calledAt: item.calledAt ?? openedAt },
       patient,
@@ -364,7 +394,19 @@ export class OfflineClient {
       history: cached?.history ?? [],
       previous: cached?.previous ?? [],
     };
-    return { context, openedAt, offline: true, allergiesKnown: cached?.allergies !== undefined, historyLoaded: cached?.history !== undefined };
+    return { context, openedAt, offline: true, allergiesKnown: cached?.allergies !== undefined, historyLoaded: cached?.history !== undefined, cccdKnown: !!known };
+  }
+
+  /**
+   * Bản tóm tắt dựng lại từ mục "tạo bệnh nhân" còn trong hàng đợi trên máy: bệnh nhân do chính máy này tiếp đón thì những gì
+   * nhân viên đã nhập (CCCD, ngày sinh, giới) vẫn nằm trong hàng đợi, kể cả khi lần tra bộ đệm theo id trượt (tải lại trang
+   * giữa lúc id tạm đang được đổi sang id máy chủ). Chỉ đọc kho trên máy; không bao giờ đoán dữ liệu không có.
+   */
+  private async queuedPatient(patientId: string): Promise<PatientSummary | undefined> {
+    const aliases = new Set(await this.aliases(patientId));
+    const op = (await this.engine.ops()).find((o) => o.meta.kind === 'patient' && aliases.has((o as Op<'patient'>).body.payload.tmpId)) as Op<'patient'> | undefined;
+    if (!op) return undefined;
+    return { ...toPatientSummary(buildPatient(op.body.payload.input)), id: patientId };
   }
 
   /** Bản nháp mới nhất của lượt khám (có thể nằm dưới id tạm nếu mở lúc mất mạng rồi đã đồng bộ). */

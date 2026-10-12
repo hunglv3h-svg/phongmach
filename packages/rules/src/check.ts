@@ -100,7 +100,19 @@ export function checkPrescription(lines: LineInput[], ctx: RuleContext, config: 
     findings.push({ key: 'no-birthdate', rule: 'no-birthdate', severity: 'ack', lines: [], message: 'Chưa có ngày sinh: không kiểm tra được các quy tắc theo tuổi (trẻ em, CCCD).' });
   }
   if (cfg.requireCccd !== 'off' && !ctx.patient.hasCccd && age !== undefined && age >= cfg.cccdMinAgeYears) {
-    findings.push({ key: 'no-cccd', rule: 'no-cccd', severity: cfg.requireCccd, lines: [], message: 'Bệnh nhân chưa có số CCCD (bắt buộc trên đơn thuốc liên thông).' });
+    // "Máy không biết CCCD" khác "bệnh nhân chưa có CCCD" (xem `cccdKnown`): chặn cứng ca thứ nhất thì bác sĩ không có cách
+    // chữa khi mất mạng, nên ca đó chỉ đòi xác nhận kèm lý do như `allergy-unknown`.
+    findings.push(
+      ctx.cccdKnown === false
+        ? {
+            key: 'cccd-unknown',
+            rule: 'cccd-unknown',
+            severity: 'ack',
+            lines: [],
+            message: 'Máy chưa có dữ liệu CCCD của bệnh nhân này (mở hồ sơ khi mất mạng): đối chiếu CCCD trên giấy tờ của bệnh nhân trước khi ký.',
+          }
+        : { key: 'no-cccd', rule: 'no-cccd', severity: cfg.requireCccd, lines: [], message: 'Bệnh nhân chưa có số CCCD (bắt buộc trên đơn thuốc liên thông).' }
+    );
   }
   if (age !== undefined && age < cfg.weightRequiredUnderYears && !ctx.patient.weightKg) {
     findings.push({ key: 'no-weight', rule: 'no-weight', severity: 'ack', lines: [], message: 'Trẻ chưa được ghi cân nặng: liều thuốc trẻ em phải tính theo cân nặng.' });

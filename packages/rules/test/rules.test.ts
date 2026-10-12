@@ -49,6 +49,21 @@ describe('trường bắt buộc', () => {
     expect(checkPrescription([AMOX], noCccd, { requireCccd: 'off' })).toEqual([]);
     expect(checkPrescription([AMOX], noCccd, { requireCccd: 'ack' })[0]!.severity).toBe('ack');
   });
+  it('"máy không biết CCCD" không được coi là "bệnh nhân chưa có CCCD": xác nhận kèm lý do là ký được', () => {
+    const unknown = ctx({ patient: { ageYears: 70, hasCccd: false }, cccdKnown: false });
+    const f = checkPrescription([AMOX], unknown);
+    expect(f).toEqual([expect.objectContaining({ key: 'cccd-unknown', rule: 'cccd-unknown', severity: 'ack' })]);
+    expect(f[0]!.message).toContain('mất mạng');
+    // Phải có lý do mới ký được (không phải cảnh báo suông), và không còn phát hiện nào mức chặn.
+    expect(judge(f, []).canSign).toBe(false);
+    expect(judge(f, []).blocking).toEqual([]);
+    expect(judge(f, [{ key: 'cccd-unknown', reason: 'Đã đối chiếu CCCD trên giấy tờ bệnh nhân mang theo' }]).canSign).toBe(true);
+    // Máy biết (mặc định) thì hành vi cũ không đổi: chặn cứng.
+    expect(checkPrescription([AMOX], ctx({ patient: { ageYears: 70, hasCccd: false } }))).toEqual([expect.objectContaining({ rule: 'no-cccd', severity: 'block' })]);
+    // Máy chưa có dữ liệu nhưng bản ghi có CCCD, hoặc tuổi dưới ngưỡng: không hỏi gì.
+    expect(checkPrescription([AMOX], ctx({ cccdKnown: false }))).toEqual([]);
+    expect(checkPrescription([AMOX], ctx({ patient: { ageYears: 10, hasCccd: false, weightKg: 30 }, cccdKnown: false }))).toEqual([]);
+  });
 });
 
 describe('số ngày tối đa', () => {
