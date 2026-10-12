@@ -152,9 +152,14 @@ p50 Nhi vẫn **56**, p50 Nội vẫn **58** ⇒ cả hai dưới `TARGET_P50_SE
 | 11 | Một cách đếm duy nhất, dùng ở mọi chỗ: **58 lượt đi hết đường** = 54 lượt lịch sử **mới** (32 Nội + 22 Nhi) + 4 lượt `done` hôm nay; **cộng 8 lượt chỉ cấp số / chỉ mở hồ sơ** (6 `waiting` + 2 `in-exam`); **cộng 4 lượt lịch sử cũ** chạy lại không ghi gì (3 Nội + 1 Nhi đã có từ lần seed trước) |
 | 12 | `weightKg` khai trong hai bảng hằng `WEIGHT_NOI` / `WEIGHT_NHI` (khóa = chỉ số `story`) nên ràng buộc "lệch ≤ 10 % trong 30 ngày" thỏa **theo cấu trúc**; các trường sinh hiệu khác là hằng viết thẳng trong mảng; `validateScenario` vẫn soát cả ba: khoảng giá trị, hai chiều `respiratoryRate`/`spo2`, và lệch cân ≤ 10 % |
 
-## 6. Phần tích hợp Docker — **CHƯA CHẠY** (bước riêng)
+## 6. Phần tích hợp Docker — **ĐÃ CHẠY THẬT, KẾT QUẢ: THẤT BẠI** (xem mục 10)
 
-Lý do: vòng này chỉ hiện thực + cổng chất lượng không cần Docker; việc dựng demo thật và đo thời gian
+> **Cập nhật:** bước này **đã chạy thật trên Docker** và **KHÔNG ĐẠT**. `seed` thoát **exit 1** vì
+> `runBatch` không thử lại mục bị **409 + PostgreSQL 40001** (xung đột giao dịch `serializable`).
+> Nhật ký nguyên văn, nguyên nhân gốc và trạng thái từng phần ở **mục 10**. Bảng ngưỡng ở mục 6 dưới
+> đây giữ nguyên làm kế hoạch; **đa số ngưỡng chưa kiểm được** vì seed chết trước giai đoạn lâm sàng.
+
+Lý do (ghi lúc chưa chạy): vòng này chỉ hiện thực + cổng chất lượng không cần Docker; việc dựng demo thật và đo thời gian
 seed là một bước kiểm chứng riêng sau khi mã được review. **Chưa có** con số thời gian seed thật, chưa
 có kết quả truy vấn qua cổng 8081, chưa có bằng chứng Medplum không recreate. Không được coi mục này là
 đã đạt.
@@ -256,3 +261,320 @@ sĩ ký đơn mới trong lúc demo.
   ("làm mới dữ liệu demo") và quy tắc CCCD sẽ chặn kê đơn. Ghi nhận, làm mới dữ liệu trước mốc đó.
 - Rủi ro rất nhỏ: một trong các hồ sơ sinh ngẫu nhiên của lần seed trước trùng số điện thoại với một ca
   kịch bản mới (`validateScenario` chỉ soát trùng trong phạm vi `story`). Ghi nhận, không xử.
+
+---
+
+# 10. KIỂM CHỨNG DOCKER THẬT — KẾT LUẬN: **THẤT BẠI (fail-closed)**
+
+Chạy ngày **12/10/2026** (giờ container UTC trong log, tức trưa 12/10 giờ VN). Môi trường: Windows +
+Docker Desktop + PowerShell. `$W` = `d:\My Documents D\UNIGIS\PM\phongmach\.worktrees\trial1-seed-data`.
+
+**Một câu:** `pnpm typecheck` xanh và `validateScenario` chạy đúng (0 lỗi, không `exit(1)`), nhưng
+container `seed` **thoát exit 1** sau **7,7 giây** vì `runBatch` **ném lỗi khi gặp mục batch bị HTTP 409
+kèm mã PostgreSQL 40001** (xung đột giao dịch `serializable`). Giai đoạn lâm sàng (dị ứng, tiền sử, lượt
+khám cũ, sân khấu hàng chờ hôm nay) **chưa bao giờ chạy**. Vì vậy **không đo được thời gian seed**,
+**không có sân khấu hàng chờ**, **Metrics rỗng**, và **không có bằng chứng chạy-lại-được**.
+
+## 10.1 Bảng kết quả từng điều kiện fail-closed
+
+| # | Điều kiện | Kết quả |
+|---|---|---|
+| 1 | `docker ps` TRƯỚC: ghi container id Medplum | ✅ **ĐẠT** (mục 10.2) |
+| 2 | `pnpm -C $W typecheck` xanh | ✅ **ĐẠT** — 8/8 gói `Done`, `EXITCODE=0` |
+| 3a | `validateScenario` **không** `exit(1)` | ✅ **ĐẠT** — in đúng hai dòng thống kê mới, 0 lỗi |
+| 3b | `seed` thoát **exit 0** | ❌ **KHÔNG ĐẠT** — `Exited (1)`, lỗi `Phần tử batch lỗi: 409` |
+| 3c | `web` healthy | ⚠️ **ĐẠT nhưng KHÔNG hợp lệ** — chỉ healthy sau khi tôi khởi động riêng bằng `--no-deps`; qua đường `depends_on` bình thường thì `web` **không bao giờ khởi động** |
+| 4a | Thời gian seed thực tế | ❌ **KHÔNG ĐO ĐƯỢC** — seed chết ở giai đoạn bệnh nhân |
+| 4b | Bằng chứng chạy lần hai không tạo trùng | ❌ **KHÔNG CÓ** — không có lần chạy nào thành công để so |
+| 5a | `/api/session/demo-users` trả 2 tenant | ✅ **ĐẠT** (mục 10.5) |
+| 5b | Tìm `nguyen van` ra nhiều kết quả phân biệt được | ✅ **ĐẠT** — 9 kết quả (mục 10.5) |
+| 5c | Tìm theo 4 số cuối điện thoại | ✅ **ĐẠT** — `q=1234` → 8 kết quả, `intent=phone-fragment` |
+| 5d | BN story có lịch sử khám + đơn + dị ứng | ⚠️ **ĐẠT bằng DỮ LIỆU CŨ** — chỉ 2 lượt của lần seed trước, **không** phải 8 lượt của bản mới |
+| 5e | Hàng chờ hôm nay có ca ở **cả 2** tenant | ❌ **KHÔNG ĐẠT** — `items: []` ở cả hai phòng |
+| 5f | Metrics có p50/p90 khác rỗng | ❌ **KHÔNG ĐẠT** — `all.visits: 0`, `doctors: []` |
+| 5g | Nhật ký truy cập có dòng | ✅ **ĐẠT** — 12 dòng (phần lớn do chính các lệnh kiểm chứng này sinh ra) |
+| 6 | Medplum **giữ nguyên** container id, vẫn running | ✅ **ĐẠT** (mục 10.2) |
+| 7 | Không `down`, không `down -v`, không đụng volume Medplum | ✅ **ĐẠT** |
+
+`SEED_PATIENTS` cuối cùng: **giữ 300**, không hạ. Lý do: seed chết sau 7,7 giây vì lỗi xung đột giao
+dịch, **không** vì chậm — hạ số bệnh nhân không chữa được lỗi này (thậm chí còn che mất nó vì ít batch
+hơn thì ít khả năng đụng xung đột). Thang lùi 150/200 trong thiết kế dành cho trường hợp **quá chậm**,
+không phải trường hợp này.
+
+## 10.2 BẤT BIẾN MEDPLUM — ĐẠT, container id giữ nguyên
+
+Ba container `phongmach-medplum` **trước đó đã Exited (0) suốt 32 giờ** (thoát sạch, không crash) và
+được **chủ dự án khởi động lại bằng `docker start`** ngay trước lượt kiểm chứng này — **không** phải
+chúng chạy liên tục từ trước. Tôi **chỉ đọc** trạng thái bằng `docker ps`, không chạy lệnh nào tác động
+lên project `phongmach-medplum`.
+
+```
+TRƯỚC (docker ps -a --filter "name=phongmach")
+6bdd98a57bb8  phongmach-medplum-medplum-server-1  medplum/medplum-server:5.2.0  Up About a minute
+396bce70e6ed  phongmach-medplum-postgres-1        postgres:16                   Up About a minute (healthy)
+75c24bc8cbaf  phongmach-medplum-redis-1           redis:7                       Up About a minute (healthy)
+
+SAU (docker ps --filter "name=phongmach-medplum")
+6bdd98a57bb8  phongmach-medplum-medplum-server-1  Up 8 minutes
+396bce70e6ed  phongmach-medplum-postgres-1        Up 8 minutes (healthy)
+75c24bc8cbaf  phongmach-medplum-redis-1           Up 8 minutes (healthy)
+```
+
+⇒ **Đúng ba container id**, không recreate, vẫn `Up`, không `Restarting`. Healthcheck trước và sau đều:
+
+```
+{"ok":true,"version":"5.2.0-8b7e513","platform":"linux","runtime":"v24.18.1",
+ "postgres":true,"redis":true,"redisInstances":{"default":true}}
+```
+
+## 10.3 Lệnh đã chạy nguyên văn + output then chốt
+
+### Bước 2 — typecheck: XANH
+
+```
+> pnpm -C "$W" typecheck
+packages/fhir-vn-model typecheck: Done     packages/catalogs typecheck: Done
+packages/rules typecheck: Done             packages/clinical typecheck: Done
+packages/print typecheck: Done             packages/trial typecheck: Done
+services/bff typecheck: Done               apps/clinic-web typecheck: Done
+EXITCODE=0
+```
+
+### Bước 3 — dựng demo: seed THẤT BẠI
+
+```
+> Measure-Command { docker compose -p phongmach-demo -f "$W\infra\demo\docker-compose.yml" up -d --build }
+ Image phongmach-demo-seed Built
+ Image phongmach-demo-web Built
+ Container phongmach-demo-seed-1 Recreated
+ Container phongmach-demo-web-1 Recreated
+ Container phongmach-demo-seed-1 Started
+ Container phongmach-demo-seed-1 Waiting
+ Container phongmach-demo-seed-1 Error service "seed" didn't complete successfully: exit 1
+service "seed" didn't complete successfully: exit 1
+=== TONG THOI GIAN up -d --build: 82.6 giay ===
+```
+
+```
+> docker compose -p phongmach-demo -f "$W\infra\demo\docker-compose.yml" ps -a
+phongmach-demo-seed-1  Exited (1) 5 minutes ago  exit=1
+phongmach-demo-web-1   Up 2 minutes (healthy)    exit=0
+```
+
+### Nhật ký seed có mốc thời gian — **bằng chứng image ĐÃ build lại**
+
+```
+> docker compose -p phongmach-demo -f "$W\infra\demo\docker-compose.yml" logs --timestamps seed
+seed-1 | 2026-10-12T02:50:38.232Z $ tsx scripts/seed-demo.ts
+seed-1 | 2026-10-12T02:50:40.016Z noi-tong-quat: 15 bệnh nhân kịch bản, 35 lượt khám cũ, 6 lượt hôm nay, 11 dị ứng, 12 tiền sử
+seed-1 | 2026-10-12T02:50:40.017Z nhi: 11 bệnh nhân kịch bản, 23 lượt khám cũ, 6 lượt hôm nay, 7 dị ứng, 8 tiền sử
+seed-1 | 2026-10-12T02:50:40.190Z Dùng lại các phòng khám demo đã có.
+seed-1 | 2026-10-12T02:50:45.891Z Phần tử batch lỗi: 409
+seed-1 | 2026-10-12T02:50:45.918Z [ELIFECYCLE] Command failed with exit code 1.
+seed-1 | 2026-10-12T02:50:45.920Z Error: ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL
+seed-1 | 2026-10-12T02:50:45.920Z   × "pnpm recursive run" failed in /app/services/bff
+```
+
+Hai dòng thống kê in ra **`15 / 35 / 6 / 11 / 12` và `11 / 23 / 6 / 7 / 8`** — đúng bộ số của bản mới
+(bản cũ ra `3 / 3 / 0 / 2 / 2`) ⇒ **image đã build lại đúng mã của nhánh `feat/demo-rich-seed`**, và
+`validateScenario` đã chạy thật với **0 lỗi**, **không** `process.exit(1)`. Điều kiện 3a đạt.
+
+**Thời gian tới lúc chết: 02:50:38,23 → 02:50:45,89 = 7,66 giây.** Trong đó khoảng 1,8 giây là
+`validateScenario` + nạp mã, 0,17 giây đăng nhập lại hai tenant, **5,7 giây** ở giai đoạn ghi bệnh nhân
+trước khi gặp 409.
+
+## 10.4 NGUYÊN NHÂN GỐC — 409 là xung đột giao dịch 40001, `runBatch` không thử lại
+
+Nhật ký của **chính Medplum** (`docker logs 6bdd98a57bb8`) nói thẳng, cùng mốc giây với lúc seed chết:
+
+```
+{"level":"WARN","timestamp":"2026-10-12T02:50:45.872Z","msg":"Error processing batch",
+ "bundleType":"batch",
+ "errors":["could not serialize access due to read/write dependencies among transactions",
+           "could not serialize access due to read/write dependencies among transactions",
+           "could not serialize access due to read/write dependencies among transactions"],
+ "totalErrors":3,"projectId":"8c1cff34-a76d-4798-b70c-1cbfe55eed4c", ...}
+```
+
+và trước đó hàng loạt dòng Medplum tự thử lại rồi bỏ:
+
+```
+{"msg":"Retrying transaction","attempt":0,"transactionAttempts":3,"serializable":true,"delayMs":47,...}
+{"msg":"Retrying transaction","attempt":1,"transactionAttempts":3,"serializable":true,"delayMs":90,...}
+{"msg":"Transaction failed final attempt","attempt":2,"transactionAttempts":3,"serializable":true,...}
+```
+
+`could not serialize access due to read/write dependencies among transactions` **chính là
+`serialization_failure` mã `40001`** của PostgreSQL. Medplum tự thử 3 lần (gốc 50 ms) rồi trả **409
+`conflict`** cho **từng mục** trong gói.
+
+Đây **đúng y** tình huống F13 mà repo đã có sẵn công cụ xử lý — `services/bff/src/conflict.ts`:
+
+```ts
+/** Mục của một gói bị từ chối vì xung đột giao dịch (409 mang mã 40001): mục đó không được ghi,
+ *  gửi lại là an toàn. Trong gói, Medplum báo xung đột riêng từng mục (HTTP 200) và vẫn chạy
+ *  các mục sau (F11, F13). */
+export const isConflictEntry = (failed) =>
+  Number.parseInt(failed.status, 10) === 409 && failed.code === SERIALIZATION_FAILURE;
+```
+
+Nhưng `runBatch` trong `services/bff/scripts/seed-demo.ts` (dòng ~1574) **chỉ** thử lại 429 và **ném**
+với mọi mã khác, kể cả 409/40001:
+
+```ts
+const status = String(e.response?.status ?? '');
+if (status.startsWith('2')) return;
+if (!status.startsWith('429')) throw new Error(`Phần tử batch lỗi: ${status}`);   // ← 409 chết ở đây
+failed.push(pending[i]!);
+```
+
+**Vì sao lỗi này chỉ lộ ra bây giờ, không lộ ở lần seed 20 bệnh nhân:** bản mới chạy **hai phòng khám
+song song** (`Promise.all(CLINICS.map(seedOneClinic))` — "bậc 1" của finding 3) và mỗi phòng ghi
+**300** bệnh nhân theo lô `BATCH = 100`. Hai luồng ghi đồng thời vào cùng một PostgreSQL ở mức
+`serializable`, cộng các bảng tra cứu dùng chung, nên 40001 là **chuyện thường trực** chứ không phải
+ngoại lệ — đúng như chú thích của chính tác giả đã viết về 429. Với 20 bệnh nhân / một lô / tuần tự thì
+gần như không bao giờ đụng.
+
+Mâu thuẫn nội tại trong cùng tệp: `completeWithQuotaRetry` có chú thích nhắc đúng `conflict.ts` và
+"HTTP 409 + mã PostgreSQL 40001", tức tác giả **biết** cơ chế này, nhưng đường ghi bệnh nhân theo lô
+lại không áp dụng.
+
+### Hướng sửa đề nghị (chưa làm — ngoài phạm vi bước kiểm chứng)
+
+1. Trong `runBatch`, coi mục `409` + mã `40001` là **thử lại được** như 429: dùng `isConflictEntry`
+   của `services/bff/src/conflict.ts` (đọc `e.response.outcome` để lấy mã), chờ giật ngẫu nhiên
+   (`backoff`) chứ không chờ cứng 15 giây như nhánh 429.
+2. Giữ `throw` cho mọi 409 **không** mang mã 40001 (đúng tinh thần `isTransactionConflict`: chỉ thử lại
+   xung đột giao dịch thật).
+3. Cân nhắc giảm tranh chấp: hạ `BATCH` ở giai đoạn bệnh nhân, hoặc **bỏ song song hai phòng** ở giai
+   đoạn ghi bệnh nhân (giữ song song ở giai đoạn sau). Lưu ý: đây chỉ là giảm xác suất, **không thay
+   thế** được mục 1 — phải có đường thử lại.
+4. Sau khi sửa: chạy lại trọn bộ mục 6, lúc đó mới đo được thời gian seed và chứng minh chạy-lại-được.
+
+## 10.5 Trạng thái dữ liệu THỰC TẾ sau lần chạy (số thật lấy từ API)
+
+Đăng nhập thật qua `POST /api/session` (`{"tenant":"noi-tong-quat","userId":"noi-owner"}`) rồi gọi API
+bằng `Authorization: Bearer <token>`.
+
+**`/api/session/demo-users` — ĐẠT, 2 tenant / 5 người dùng:**
+
+```json
+{"demo":true,"tenants":[
+ {"slug":"noi-tong-quat","name":"Phòng khám Nội tổng quát (demo)","users":[
+   {"id":"noi-owner","name":"BS. Trần Quốc Hưng (chủ phòng khám)","role":"owner"},
+   {"id":"noi-doctor","name":"BS. Lê Thị Thu Hà","role":"doctor"},
+   {"id":"noi-assistant","name":"Phụ tá Nguyễn Thị Lan","role":"assistant"}]},
+ {"slug":"nhi","name":"Phòng khám Nhi (demo)","users":[
+   {"id":"nhi-owner","name":"BS. Phạm Thanh Mai (chủ phòng khám)","role":"owner"},
+   {"id":"nhi-assistant","name":"Phụ tá Võ Thị Hạnh","role":"assistant"}]}]}
+```
+
+**Tìm bệnh nhân — ĐẠT, và đây là phần dữ liệu mới ĐÃ ghi được:**
+
+```
+q='nguyen van'  intent=name  soKetQua=9  hasMore=False
+    Nguyễn Văn Tuấn | 2005-07-13 | 0999686189
+    Nguyễn Văn Hùng | 1944-01-08 | 0927171364
+    Nguyễn Văn An   | 1985-03-15 | 0912345678
+    Nguyễn Văn Ánh  | 1996-02-29 | 0918881234
+    Nguyễn Văn Bình | 1991-10-06 | 0990523183
+    Nguyễn Văn Anh  | 1990-05-12 | 0938881234     ← "Vân Anh", khác "Văn Anh"
+
+q='van an'      intent=name  soKetQua=8  hasMore=False
+    Nguyễn Văn An   | 1985-03-15 | 0912345678
+    Phạm Văn An     | 1958-11-11 | 0944335678
+    Nguyen Van An   | 1979-07-04 | 0913451234     ← KHÔNG DẤU, phân biệt được
+    Trần Văn An     | 1983-04-18 | 0966661234
+    Nguyễn Văn Ân   | 1991-11-02 | 0903115678     ← dấu mũ
+    Nguyễn Văn Ánh  | 1996-02-29 | 0918881234
+
+q='1234'        intent=phone-fragment  soKetQua=8  hasMore=False
+    Nguyễn Văn Ánh | 0918881234    Nguyễn Thị An  | 0909991234
+    Nguyễn Văn Anh | 0938881234    Nguyen Van An  | 0913451234
+    Trần Văn An    | 0966661234    Nguyễn Văn Anh | 0977771234
+```
+
+⇒ Các ca trùng/gần trùng tên và 6 số điện thoại cùng đuôi `1234` của kịch bản **đã có trong Medplum**,
+**phân biệt được nhau** bằng ngày sinh + điện thoại. Ba điểm demo tìm kiếm (5b, 5c) **đạt**.
+
+**Hàng chờ hôm nay — KHÔNG ĐẠT, rỗng ở cả hai phòng:**
+
+```
+> GET /api/queue  (noi-tong-quat)   {"day":"2026-10-12","items":[]}
+> GET /api/queue  (nhi)             {"day":"2026-10-12","items":[]}
+```
+
+**Metrics — KHÔNG ĐẠT, rỗng:**
+
+```
+> GET /api/metrics/visits?days=14  (noi-tong-quat)
+{"from":"2026-09-29","to":"2026-10-12","targetP50Seconds":60,"targetP90Seconds":120,
+ "excludedLongerThanSeconds":1800,"truncated":false,"doctors":[],
+ "all":{"visits":0,"excluded":0,"clientMeasured":0,"invalidClock":0}}
+```
+
+**Bệnh nhân story — chỉ có DỮ LIỆU CŨ (2 lượt, không phải 8):** `Nguyễn Văn An / 1985-03-15 /
+0912345678`, id `29542098-…`:
+
+```
+visits: 2 lượt — 2026-09-04 (I10, đơn 1 dòng AMLODIPIN-5-MG, advice, followUpDays 30)
+                 2026-08-25 (J06.9, đơn 2 dòng PARACETAMOL-500-MG + CETIRIZIN-10-MG, advice)
+allergies: 1 — class 'penicillin', recordedAt 2026-10-09
+history:   1 — "Tăng huyết áp 3 năm, đang dùng amlodipin", recordedAt 2026-10-09
+```
+
+`recordedAt 2026-10-09` và cả hai lượt nằm **ngoài** khung 14 ngày ⇒ đúng là dữ liệu của **lần seed
+trước** (2 ngày trước, thời `SEED_PATIENTS=20`), **không** phải của bản mới. Vì vậy điều kiện 5d chỉ
+"đạt" trên dữ liệu cũ, **không chứng minh được** phần làm dày.
+
+**Nhật ký truy cập:** `GET /api/audit?limit=50` → **12 dòng**. Phần lớn do chính các lệnh kiểm chứng
+này sinh (`login`, `search`, `read`, `history-read`, `note-read`), **không** phải 20+ dòng từ dữ liệu
+seed như ngưỡng đòi.
+
+**Số thật, nói thẳng:** không đếm được tổng `Patient` vì tuyến API không có endpoint đếm và seed — chỗ
+duy nhất in `Patient._total` — chết trước khi tới dòng đó. Chỉ khẳng định được: **các bệnh nhân story
+của bản mới đã được ghi**, còn **0 lượt khám mới, 0 dị ứng mới, 0 tiền sử mới, 0 ca hàng chờ**.
+
+## 10.6 Tác động phụ đã gây ra và đã khắc phục
+
+`up -d --build` **recreate** cả `phongmach-demo-seed-1` và `phongmach-demo-web-1`. Vì `seed` thoát 1,
+ràng buộc `depends_on: service_completed_successfully` làm `web` **không được khởi động** ⇒ demo ở
+`http://localhost:8081` **chết** (`curl` trả `EXIT=7` connection refused), trong khi trước lúc kiểm
+chứng nó đang `Up 2 days (healthy)`.
+
+Đã khôi phục bằng một lệnh **không phá hủy**, và đây cũng là cách duy nhất gọi được API để lấy số thật:
+
+```
+> docker compose -p phongmach-demo -f "$W\infra\demo\docker-compose.yml" up -d --no-deps web
+ Container phongmach-demo-web-1 Started
+> ... ps   →   phongmach-demo-web-1  Up 25 seconds (healthy)
+```
+
+Cổng 8081 hiện **đang chạy** trên dữ liệu **lai**: bệnh nhân mới (đã ghi) + lâm sàng cũ. Volume
+`demo-tenants` (chứa `.demo-tenants.json` và `audit.ndjson`) **không bị xóa**; **không** chạy `down`,
+**không** `down -v`. Không đụng gì tới project `phongmach-medplum`.
+
+## 10.7 Hạn chế / chưa kiểm chứng được — ghi trung thực
+
+1. **Thời gian seed thực tế: KHÔNG CÓ.** Seed chết sau 7,66 giây ở giai đoạn ghi bệnh nhân. Con số
+   82,6 giây là thời gian `up -d --build` (chủ yếu là build image), **không phải** thời gian seed. Vì
+   vậy cũng **không quyết được** nên giữ 300 hay hạ 150/200 — thang lùi của finding 3 chưa có dữ liệu
+   để kích hoạt.
+2. **Bằng chứng chạy-lại-được (finding 10): KHÔNG CÓ.** Chưa chạy `run --rm seed` lần hai vì lần một
+   đã thất bại — chạy lại chỉ lặp lại cùng lỗi, không chứng minh được "không tạo trùng". Tính
+   idempotent vẫn **chỉ** được xác nhận bằng đọc mã ở mục 3/5 của tệp này, **chưa** bằng Docker thật.
+3. **Sân khấu hàng chờ, Metrics p50/p90, lịch sử 8 lượt của BN I10, `/api/display`,
+   `/api/prescriptions/pending`: chưa kiểm chứng được** — toàn bộ phụ thuộc giai đoạn `seedClinical`
+   chưa chạy.
+4. **Hạn mức 429 và `withQuotaRetry` / `completeWithQuotaRetry`: chưa kiểm chứng được.** Medplum có
+   ghi `High rate limit consumption` (`used: 18260 / limit: 50000`) nhưng **chưa** 429 thật, nên đường
+   chờ-rồi-gửi-lại chưa được chạy qua.
+5. **Mạng ra Internet: không phải nguyên nhân thất bại.** Lần seed này **dùng lại** tenant đã có
+   (`Dùng lại các phòng khám demo đã có.`) nên **không tạo user mới** ⇒ **không gọi**
+   `api.pwnedpasswords.com`. Vì vậy **chưa kiểm chứng được** đường tạo tenant mới có bị chặn mạng hay
+   không. Lỗi 409 là lỗi cơ sở dữ liệu nội bộ, hoàn toàn không liên quan mạng ngoài.
+6. **`web` healthy không tính là đạt theo đường bình thường.** Nó chỉ healthy nhờ `--no-deps`; luồng
+   `up -d --build` chuẩn vẫn để `web` không khởi động.
+7. **Trạng thái Medplum trước lượt này không liên tục**: ba container đã Exited (0) 32 giờ và được
+   `docker start` lại ngay trước khi kiểm chứng. Dữ liệu còn nguyên, nhưng không được đọc mục 10.2 như
+   thể chúng chạy suốt.
