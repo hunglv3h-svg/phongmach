@@ -226,13 +226,34 @@ try {
   // ============================================================ OFF-8: máy chủ trả 503 cho yêu cầu hoàn tất lúc có mạng
   // Ứng dụng coi là có mạng, nhưng máy chủ đang lỗi tạm (503). Trước OFF-8: báo "CHƯA in" và không in. Nay: chuyển sang ký khi
   // mất mạng (cùng ngày — hàng rào ngày A-1 cho qua), in đúng một tờ từ máy; có mạng lại gửi lại cùng UUID, đúng một đơn, mã trùng.
-  const before503 = new Set((await anVisits()).map((v) => v.encounterId));
-  await page.getByTestId('queue-row').filter({ hasText: 'Nguyễn Văn An' }).filter({ has: page.getByTestId('call') }).getByTestId('call').click();
+  //
+  // KHÔNG tái dùng "Nguyễn Văn An" ở đây: khối "mất phản hồi" vừa MỞ rồi HOÀN TẤT lượt khám của An ngay trong trang này, nên kho
+  // thao tác trên máy còn giữ ánh xạ (open/complete) tới lượt CŨ (đã 'done') của An. Khi gộp lại hàng chờ, dòng của An dễ trỏ nhầm
+  // lượt cũ (mở ra 409 "đã kết thúc") hoặc không hiện đúng trạng thái 'waiting' — tùy đua giữa lúc đồng bộ đánh dấu 'done' và lúc
+  // thăm dò hàng chờ. Dùng MỘT bệnh nhân MỚI, tạo lúc có mạng, chưa từng khám trong trang này: kho thao tác không có gì gây nhiễu
+  // nên "Gọi vào khám" luôn mở đúng lượt mới. (Lỗi tái dùng An có sẵn trên main; đây là sửa chính bài e2e, không đụng giao diện.)
+  const BUSY_NAME = `Zq Lỗi Tạm ${tag}`;
+  await page.getByTestId('tab-reception').click();
+  await search(BUSY_NAME);
+  await page.getByTestId('new-patient').click();
+  await page.getByTestId('f-submit').click();
+  await page.getByTestId('patient-detail').filter({ hasText: BUSY_NAME }).waitFor();
+  await page.getByTestId('check-in').click();
+  const busyNumber = Number(/số (\d+)/.exec(await page.getByTestId('notice').filter({ hasText: /Đã cấp số/ }).innerText())[1]);
+  const busyId = (await doctor('GET', '/api/queue')).items.find((i) => i.number === busyNumber && i.status === 'waiting').patientId;
+  const busyVisits = async () => (await doctor('GET', `/api/patients/${busyId}/visits?limit=50`)).visits;
+  const before503 = new Set((await busyVisits()).map((v) => v.encounterId));
+  await page.getByTestId('tab-queue').click();
+  const busyRow = page.locator(`[data-testid="queue-row"][data-number="${busyNumber}"][data-status="waiting"]`);
+  await busyRow.getByTestId('call').waitFor();
+  await busyRow.getByTestId('call').click();
   await page.getByTestId('visit').waitFor();
   assert.equal(await page.getByTestId('opened-offline').count(), 0, 'mở có mạng');
   let busy = 0;
   await page.route('**/api/visits/*/complete', async (route) => {
     busy++;
+    // 503 làm trình duyệt ghi lỗi tải tài nguyên vào console: đó là điều được chờ đợi ở bước này (như khối "mất phản hồi").
+    d.expected = OFFLINE_ERRORS;
     // Giờ máy chủ cùng ngày với giờ ký của máy khách: hàng rào ngày A-1 cho phép chuyển và in.
     await route.fulfill({ status: 503, headers: { 'content-type': 'application/json', date: new Date().toUTCString() }, body: JSON.stringify({ error: 'incomplete', retry: true, message: 'Lưu chưa trọn vẹn' }) });
   });
@@ -243,8 +264,9 @@ try {
   assert.equal(busy, 1, 'yêu cầu hoàn tất tới máy chủ đúng một lần (503)');
   assert.ok((await lastPrintHtml(page)).includes('KÝ KHI MẤT MẠNG'), '503 lúc ký: in từ dữ liệu trên máy');
   await syncedAll();
+  d.expected = undefined;
   await page.locator('[data-testid="offline-sync-state"][data-status="done"]').waitFor();
-  const added503 = (await anVisits()).filter((v) => !before503.has(v.encounterId));
+  const added503 = (await busyVisits()).filter((v) => !before503.has(v.encounterId));
   assert.equal(added503.length, 1, `503 lúc ký rồi tự gửi lại: đúng 1 lượt khám mới, thực tế ${added503.length}`);
   assert.equal(added503[0].prescription.code, busyCode, 'gửi lại cùng UUID: mã đơn trên máy chủ trùng mã đã in');
   ok(`503 lúc ký (OFF-8): in một tờ A5 từ máy, không im lặng; tự gửi lại, máy chủ có đúng 1 lượt khám mới, mã ${busyCode} trùng`);
