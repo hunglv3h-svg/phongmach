@@ -2,7 +2,7 @@ import type { HumanName, Patient } from '@medplum/fhirtypes';
 import { normalizeCccd, maskCccd } from './cccd.js';
 import { EXTENSIONS, SYSTEMS } from './identifiers.js';
 import { normalizePhone } from './phone.js';
-import { withSearchKeys } from './searchKeys.js';
+import { byId, withSearchKeys } from './searchKeys.js';
 import { parseFullName, stripDiacritics } from './text.js';
 
 export type Gender = 'male' | 'female' | 'other' | 'unknown';
@@ -122,10 +122,13 @@ export function toPatientSummary(patient: Patient): PatientSummary {
   };
 }
 
-/** Xếp kết quả tìm theo đoạn số: số kết thúc bằng đoạn đó lên trước (4 số cuối), số chỉ chứa ở giữa xuống sau. */
-export function rankByPhoneSuffix<T extends { phone?: string }>(items: T[], digits: string): T[] {
+/**
+ * Xếp kết quả tìm theo đoạn số: số kết thúc bằng đoạn đó lên trước (4 số cuối), số chỉ chứa ở giữa xuống sau.
+ * Trong mỗi nhóm điểm, xếp theo id (tất định giữa hai lần chạy).
+ */
+export function rankByPhoneSuffix<T extends { id: string; phone?: string }>(items: T[], digits: string): T[] {
   const score = (p?: string) => (p?.endsWith(digits) ? 0 : 1);
-  return [...items].sort((a, b) => score(a.phone) - score(b.phone));
+  return [...items].sort((a, b) => score(a.phone) - score(b.phone) || byId(a, b));
 }
 
 

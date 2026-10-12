@@ -155,10 +155,10 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       const { q, limit } = searchQuery.parse(req.query);
       const intent = classifyQuery(q);
       const store = await deps.stores(req.session!.tenant);
-      const results = await store.searchPatients(intent, limit);
+      const { results, hasMore } = await store.searchPatients(intent, limit);
       // Ghi nhật ký trước khi trả dữ liệu: nếu ghi lỗi thì yêu cầu lỗi và không có dữ liệu nào rời khỏi BFF.
       await record(req, 'search', { queryKind: intent.kind, resultCount: results.length, resourceIds: results.map((r) => r.id) });
-      return { intent: intent.kind, results };
+      return { intent: intent.kind, results, hasMore };
     });
 
     api.post('/api/patients', async (req, reply) => {

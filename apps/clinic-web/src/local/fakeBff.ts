@@ -3,7 +3,7 @@
 // 422 khi quy tắc kê đơn chặn, 401 khi token hết hạn. Chèn được lỗi: mất mạng, mất phản hồi (máy chủ đã ghi), mã HTTP bất kỳ.
 import type { QueueItem } from '@phongmach/clinical';
 
-export type Fault = 'network' | 'lost' | { status: number; body?: unknown };
+export type Fault = 'network' | 'lost' | { status: number; body?: unknown; date?: string };
 
 export interface RecordedRequest {
   method: string;
@@ -19,7 +19,8 @@ interface Visit {
   prescriptionId?: string;
 }
 
-const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+const json = (status: number, body: unknown, date?: string) =>
+  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...(date ? { date } : {}) } });
 
 export class FakeBff {
   readonly requests: RecordedRequest[] = [];
@@ -64,7 +65,7 @@ export class FakeBff {
       const i = this.faults.findIndex((f) => f.match.test(`${method} ${path}`));
       const fault = i >= 0 ? this.faults.splice(i, 1)[0]!.fault : undefined;
       if (fault === 'network') throw new TypeError('Failed to fetch');
-      if (fault && fault !== 'lost') return json(fault.status, fault.body ?? { error: 'error', message: `Lỗi ${fault.status}` });
+      if (fault && fault !== 'lost') return json(fault.status, fault.body ?? { error: 'error', message: `Lỗi ${fault.status}` }, fault.date);
       const res = this.handle(method, path, token, body);
       // Mất phản hồi: máy chủ đã ghi xong nhưng trình duyệt chỉ thấy lỗi mạng.
       if (fault === 'lost') throw new TypeError('Failed to fetch');

@@ -3,9 +3,9 @@ import Dexie from 'dexie';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CompleteRequest, NewPatient } from '../api';
 import { FakeBff, FakeClock } from './fakeBff';
-import { newTmpId, type NewOp } from './ops';
-import { dbName, openEncryptedStore, type LocalStore, type Owner } from './store';
-import { SyncEngine, inTabLocks, type Locks, type Session, type SyncOptions } from './sync';
+import { newTmpId, type NewOp, type Payloads } from './ops';
+import { dbName, openEncryptedStore, type Change, type LocalStore, type Owner } from './store';
+import { SyncEngine, inTabLocks, type Locks, type Promote, type Session, type SyncOptions } from './sync';
 
 const owner: Owner = { tenant: 'noi', userId: 'doc' };
 const docSession: Session = { token: 'tok-doc', tenant: 'noi', userId: 'doc' };
@@ -417,6 +417,190 @@ describe('gửi ngay khi có mạng', () => {
     await e.run();
     await expect(e.discard(waiting.id)).rejects.toThrow();
     expect(await store.pendingCount()).toBe(1);
+  });
+});
+
+describe('OFF-8: chuyển mục chưa dứt điểm trong lúc giữ khóa, C1 đẩy mục trước, hàng rào ngày', () => {
+  /** Mục `complete` gửi ngay lúc có mạng, có `promote` chuyển sang dạng ngoại tuyến (thêm giờ ký + rxTmpId). */
+  function completeOp(deps: string[] = []): { op: NewOp; promote: Promote } {
+    const rxTmpId = newTmpId();
+    const body: CompleteRequest = {
+      clientUuid: crypto.randomUUID(),
+      exam: { symptoms: 'Đau họng', vitals: {} },
+      diagnoses: ['J02.9'],
+      prescription: { lines: [{ drug: 'X' }], acknowledgements: [] },
+    };
+    const visitId = `srv-${crypto.randomUUID()}`; // id máy chủ (không phải tmp): mục gửi được ngay, không chờ ánh xạ id
+    const op: NewOp = { id: body.clientUuid, kind: 'complete', deps, payload: { visitId, body } };
+    const promote: Promote = (p) => {
+      const c = p as Payloads['complete'];
+      return { payload: { ...c, rxTmpId, body: { ...c.body, clientTimes: { openedAt: '2026-10-20T03:01:00.000Z', signedAt: '2026-10-20T03:02:00.000Z' } } } };
+    };
+    return { op, promote };
+  }
+
+  it('phiên không phải chủ kho (paused:owner): mục gửi ngay vẫn được chuyển sang dạng ngoại tuyến trong lúc giữ khóa', async () => {
+    const store = await openStore();
+    let session: Session | undefined = docSession;
+    const e = engine(store, { session: () => session });
+    const { op, promote } = completeOp();
+    session = { token: 'tok-assistant', tenant: 'noi', userId: 'assistant' };
+    await e.enqueue([op]);
+    const out = await e.submit(op.id, promote);
+    expect(out).toEqual({ kind: 'offline' });
+    expect(e.state.paused).toBe('owner');
+    const saved = (await e.ops()).find((o) => o.id === op.id)!;
+    expect((saved.body.payload as { rxTmpId?: string }).rxTmpId).toBeDefined();
+    expect((saved.body.payload as { body: CompleteRequest }).body.clientTimes).toBeDefined();
+  });
+
+  it('phiên hết hạn (401) đúng lúc gửi ngay: mục được chuyển sang dạng ngoại tuyến (kết quả offline), không chờ đăng nhập lại mới có đơn', async () => {
+    const store = await openStore();
+    const e = engine(store);
+    const { op, promote } = completeOp();
+    const visitId = (op.payload as { visitId: string }).visitId;
+    bff.patients.set('p', { id: 'p', fullName: 'A' });
+    bff.visits.set(visitId, { item: { id: visitId, number: 1, code: 'c', status: 'in-exam', priority: 'normal', specialty: 'noi', patientId: 'p', patientName: 'A', arrivedAt: 'x', doctorUserId: 'doc' } as never, clientUuid: 'cu' });
+    bff.fault(/complete$/, { status: 401, body: { error: 'unauthenticated' } });
+    await e.enqueue([op]);
+    const out = await e.submit(op.id, promote);
+    expect(out).toEqual({ kind: 'offline' });
+    const saved = (await e.ops()).find((o) => o.id === op.id)!;
+    expect((saved.body.payload as { rxTmpId?: string }).rxTmpId).toBeDefined();
+  });
+
+  it('401 đúng lúc ký làm giao diện ĐÓNG kho ngay sau khi chuyển: vẫn trả offline để in từ máy, mục đã chuyển còn nguyên trong kho', async () => {
+    // Ở ứng dụng thật, phản hồi 401 gọi `setUnauthorizedHandler` → App đăng xuất → `useLocalStore` đóng kho, ngay trong lúc lần ký
+    // còn đang chạy. Mục đã được chuyển và lưu bền xong (ghi trong lúc giữ khóa) thì lần đọc kho sau đó mới lỗi; bác sĩ vẫn phải
+    // nhận tờ đơn in từ máy, không được im lặng về màn hình đăng nhập (OFF-8, bất biến K).
+    const real = await openStore();
+    const armed = { on: false };
+    // Kho đóng lại ngay sau lần ghi kế tiếp (lần ghi của bước chuyển sang dạng ngoại tuyến).
+    const store: LocalStore = Object.assign(Object.create(real) as LocalStore, {
+      async commit(changes: Change[]): Promise<void> {
+        await real.commit(changes);
+        if (armed.on) {
+          armed.on = false;
+          real.close();
+        }
+      },
+    });
+    const e = engine(store);
+    const { op, promote } = completeOp();
+    const visitId = (op.payload as { visitId: string }).visitId;
+    bff.patients.set('p', { id: 'p', fullName: 'A' });
+    bff.visits.set(visitId, { item: { id: visitId, number: 1, code: 'c', status: 'in-exam', priority: 'normal', specialty: 'noi', patientId: 'p', patientName: 'A', arrivedAt: 'x', doctorUserId: 'doc' } as never, clientUuid: 'cu' });
+    bff.fault(/complete$/, { status: 401, body: { error: 'unauthenticated' } });
+    await e.enqueue([op]);
+    armed.on = true;
+    const out = await e.submit(op.id, promote);
+    expect(out).toEqual({ kind: 'offline' });
+    // Mở lại kho của chính người đó (như khi đăng nhập lại): bản đã chuyển còn nguyên để gửi lại và in lại.
+    const reopened = engine(await openStore());
+    const saved = (await reopened.ops()).find((o) => o.id === op.id)!;
+    expect(saved.meta.status).toBe('pending');
+    expect((saved.body.payload as { rxTmpId?: string }).rxTmpId).toBeDefined();
+    expect((saved.body.payload as { body: CompleteRequest }).body.clientTimes).toBeDefined();
+  });
+
+  it('hai tab cùng mở: mục gửi ngay lỗi tạm (503) được chuyển trong lúc giữ khóa, tab kia không gửi bản cũ', async () => {
+    const a = await openStore();
+    const b = await openStore();
+    const ea = engine(a);
+    const eb = engine(b);
+    const { op, promote } = completeOp();
+    const visitId = (op.payload as { visitId: string }).visitId;
+    bff.patients.set('p', { id: 'p', fullName: 'A' });
+    bff.visits.set(visitId, { item: { id: visitId, number: 1, code: 'c', status: 'in-exam', priority: 'normal', specialty: 'noi', patientId: 'p', patientName: 'A', arrivedAt: 'x', doctorUserId: 'doc' } as never, clientUuid: 'cu' });
+    bff.fault(/complete$/, { status: 503, body: { error: 'incomplete', retry: true }, date: '2026-10-20T05:00:00.000Z' });
+    await ea.enqueue([op]);
+    const out = await ea.submit(op.id, promote);
+    // Cùng ngày: được chuyển sang dạng ngoại tuyến ngay, tab A giữ khóa suốt lúc chuyển.
+    expect(out).toEqual({ kind: 'offline' });
+    const saved = (await ea.ops()).find((o) => o.id === op.id)!;
+    expect((saved.body.payload as { rxTmpId?: string }).rxTmpId).toBeDefined();
+    void eb;
+  });
+
+  it('C1: mục trước (qua mọi bậc) của mục đang chờ kết quả bỏ qua nextAt trong lượt gửi đó, nhưng không đẩy mục của lượt khám khác', async () => {
+    const store = await openStore();
+    const e = engine(store);
+    // Chuỗi A: patient → checkin → complete(focus). Chuỗi B: một patient riêng, cũng đang retry.
+    const chain = offlineChain('Nguyễn Văn An');
+    const other = patientOp('Trần Thị Bình');
+    // Để patient của chuỗi A và other cùng rơi vào retry (503) rồi còn thời gian chờ.
+    bff.fault(/POST \/api\/patients/, { status: 503, body: { error: 'incomplete', retry: true } });
+    bff.fault(/POST \/api\/patients/, { status: 503, body: { error: 'incomplete', retry: true } });
+    await e.enqueue([...chain.all, other]);
+    await e.run();
+    const after = await statuses(e);
+    expect(after[chain.patient.id]).toBe('retry');
+    expect(after[other.id]).toBe('retry');
+    const requestsBefore = bff.requests.length;
+
+    // Bác sĩ "chờ kết quả" của mục complete (focus): C1 đẩy mục trước của NÓ (patient chuỗi A, qua checkin) dù chưa tới hạn,
+    // nhưng KHÔNG đẩy `other` (lượt khác). Dùng clock chưa tới hạn gửi lại để chứng minh C1 bỏ qua nextAt.
+    bff.faults.length = 0; // máy chủ đã hồi
+    const out = await e.submit(chain.complete.id);
+    // Mục trước của focus đã được đẩy và gửi; cả chuỗi A xong, complete nhận online.
+    expect(out.kind).toBe('done');
+    // `other` không được đẩy: vẫn retry, không có yêu cầu mới cho nó trong lượt này.
+    expect((await statuses(e))[other.id]).toBe('retry');
+    const otherSent = bff.requests.slice(requestsBefore).filter((r) => r.body?.['clientUuid'] === other.id);
+    expect(otherSent).toHaveLength(0);
+  });
+
+  it('mục tự nó đã bị máy chủ từ chối (409) không bao giờ bị promote; mục bị GIỮ vì mục trước đó thì vẫn chuyển sang ký khi mất mạng (offline)', async () => {
+    const store = await openStore();
+    const e = engine(store);
+    const open: NewOp = { id: crypto.randomUUID(), kind: 'open', payload: { visitId: 'srv-visit' } };
+    const { op: complete, promote } = completeOp([open.id]);
+    bff.patients.set('p', { id: 'p', fullName: 'A' });
+    bff.visits.set('srv-visit', { item: { id: 'srv-visit', number: 1, code: 'c', status: 'in-exam', priority: 'normal', specialty: 'noi', patientId: 'p', patientName: 'A', arrivedAt: 'x', doctorUserId: 'khac', doctorName: 'BS. Khác' } as never, clientUuid: 'cu' });
+    const openPayloadBefore = JSON.stringify(open.payload);
+    await e.enqueue([open, complete]);
+    await e.run(); // open → 409 conflict
+    expect((await statuses(e))[open.id]).toBe('conflict');
+
+    const out = await e.submit(complete.id, promote);
+    // Mục hoàn tất bị GIỮ (open xung đột): vẫn được chuyển sang dạng ngoại tuyến để in và in lại được.
+    expect(out).toEqual({ kind: 'offline' });
+    const savedComplete = (await e.ops()).find((o) => o.id === complete.id)!;
+    expect((savedComplete.body.payload as { rxTmpId?: string }).rxTmpId).toBeDefined();
+    expect((savedComplete.body.payload as { body: CompleteRequest }).body.clientTimes).toBeDefined();
+    // Mục `open` tự nó đã bị từ chối (ATTENTION): KHÔNG bao giờ bị chuyển, payload giữ nguyên.
+    expect(JSON.stringify((await e.ops()).find((o) => o.id === open.id)!.body.payload)).toBe(openPayloadBefore);
+  });
+
+  it('hàng rào ngày: mục đã tới máy chủ (503) chỉ promote khi serverDate cùng ngày VN với giờ ký; khác ngày thì không promote', async () => {
+    const store = await openStore();
+    // Cùng ngày (20/10 VN): promote.
+    {
+      const e = engine(store);
+      const { op, promote } = completeOp();
+      const visitId = (op.payload as { visitId: string }).visitId;
+      bff.patients.set('p1', { id: 'p1', fullName: 'A' });
+      bff.visits.set(visitId, { item: { id: visitId, number: 1, code: 'c', status: 'in-exam', priority: 'normal', specialty: 'noi', patientId: 'p1', patientName: 'A', arrivedAt: 'x', doctorUserId: 'doc' } as never, clientUuid: 'cu1' });
+      bff.fault(/complete$/, { status: 503, body: { error: 'incomplete', retry: true }, date: '2026-10-20T05:00:00.000Z' });
+      await e.enqueue([op]);
+      expect(await e.submit(op.id, promote)).toEqual({ kind: 'offline' });
+      expect(((await e.ops()).find((o) => o.id === op.id)!.body.payload as { rxTmpId?: string }).rxTmpId).toBeDefined();
+    }
+    // Khác ngày (19/10 VN): không promote, trả retrying.
+    {
+      const store2 = await openStore({ tenant: 'noi', userId: 'doc2' });
+      const e2 = new SyncEngine({ store: store2, owner: { tenant: 'noi', userId: 'doc2' }, session: () => ({ token: 'tok-doc', tenant: 'noi', userId: 'doc2' }), clock, isOnline: () => online, baseMs: 1000, capMs: 8000 });
+      engines.push(e2);
+      bff.tokens.set('tok-doc', { userId: 'doc2', name: 'BS. Thử' });
+      const { op, promote } = completeOp();
+      const visitId = (op.payload as { visitId: string }).visitId;
+      bff.visits.set(visitId, { item: { id: visitId, number: 2, code: 'c', status: 'in-exam', priority: 'normal', specialty: 'noi', patientId: 'p1', patientName: 'A', arrivedAt: 'x', doctorUserId: 'doc2' } as never, clientUuid: 'cu2' });
+      bff.fault(/complete$/, { status: 503, body: { error: 'incomplete', retry: true }, date: '2026-10-19T05:00:00.000Z' });
+      await e2.enqueue([op]);
+      const out = await e2.submit(op.id, promote);
+      expect(out.kind).toBe('retrying');
+      expect(((await e2.ops()).find((o) => o.id === op.id)!.body.payload as { rxTmpId?: string }).rxTmpId).toBeUndefined();
+    }
   });
 });
 

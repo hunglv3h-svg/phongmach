@@ -1,7 +1,7 @@
 // Bộ đệm cho lúc mất mạng (kế hoạch, OFF-2 và OFF-4) và các hàm thuần dùng nó: tìm bệnh nhân trên máy, gộp hàng chờ của máy chủ
 // với các thao tác chưa đồng bộ, cấp số tạm. Mọi bản ghi bộ đệm nằm trong kho mã hóa (`store.ts`), dạng rõ chỉ có id và ngày.
 import { sortQueue, type AllergyView, type HistoryItem, type PrescriptionDetail, type QueueItem, type VisitSummary } from '@phongmach/clinical';
-import { classifyQuery, digitsOnly, foldName, normalizePhone, rankByPhoneSuffix, type PatientSummary } from '@phongmach/fhir-vn-model';
+import { byId, classifyQuery, digitsOnly, foldName, normalizePhone, rankByPhoneSuffix, type PatientSummary } from '@phongmach/fhir-vn-model';
 import { ATTENTION } from './deps';
 import type { AnyOp, Op } from './ops';
 
@@ -36,12 +36,12 @@ export interface SignedOffline {
  * Tìm trong bộ đệm khi mất mạng, cùng cách hiểu ô tìm của máy chủ (`classifyQuery`): tên không dấu theo tiền tố từng từ,
  * số điện thoại, đoạn số (4 số cuối xếp trước). CCCD chỉ tìm được với người tạo trên máy này (bộ đệm khác chỉ có CCCD đã che).
  */
-export function searchLocal(query: string, entries: CachedPatient[], limit = 20): PatientSummary[] {
+export function searchLocal(query: string, entries: CachedPatient[], limit = 20): { results: PatientSummary[]; hasMore: boolean } {
   const intent = classifyQuery(query);
   let found: PatientSummary[];
   switch (intent.kind) {
     case 'empty':
-      return [];
+      return { results: [], hasMore: false };
     case 'name':
       found = entries
         .filter((e) => {
@@ -49,7 +49,8 @@ export function searchLocal(query: string, entries: CachedPatient[], limit = 20)
           return intent.tokens.every((t) => words.some((w) => w.startsWith(t)));
         })
         .map((e) => e.patient)
-        .sort((a, b) => a.fullName.localeCompare(b.fullName, 'vi'));
+        // Nối byId sau localeCompare: hai người cùng tên không đổi chỗ giữa hai lần chạy.
+        .sort((a, b) => a.fullName.localeCompare(b.fullName, 'vi') || byId(a, b));
       break;
     case 'phone':
       found = entries.filter((e) => e.patient.phone && normalizePhone(e.patient.phone) === intent.phone).map((e) => e.patient);
@@ -60,11 +61,30 @@ export function searchLocal(query: string, entries: CachedPatient[], limit = 20)
         intent.digits
       );
       break;
+    case 'name+number':
+      // AND tên (theo đầu-từ) VÀ đuôi số, rồi xếp đuôi khớp lên trước (byId tie-break trong rankByPhoneSuffix).
+      // hasMore ở nhánh này tính theo prefix (found.length), KHÁC với BFF (đếm tập khớp-đúng _tag AND); nhưng không bao giờ
+      // hiển thị: guard câu nhắc tắt cho cả kết quả `local` lẫn kind `name+number`, nên lệch online/offline là cố ý và vô hại.
+      found = rankByPhoneSuffix(
+        entries
+          .filter((e) => {
+            const words = foldName(e.patient.fullName).split(' ');
+            const nameOk = intent.tokens.every((t) => words.some((w) => w.startsWith(t)));
+            return nameOk && digitsOnly(e.patient.phone ?? '').endsWith(intent.digits);
+          })
+          .map((e) => e.patient),
+        intent.digits
+      );
+      break;
     case 'cccd':
       found = entries.filter((e) => e.cccd === intent.cccd).map((e) => e.patient);
       break;
+    default: {
+      const _never: never = intent;
+      return _never;
+    }
   }
-  return found.slice(0, limit);
+  return { results: found.slice(0, limit), hasMore: found.length > limit };
 }
 
 /** Dòng hàng chờ trên máy: của máy chủ, hoặc dựng từ thao tác chưa đồng bộ. */

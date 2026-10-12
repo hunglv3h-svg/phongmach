@@ -1,7 +1,7 @@
 // Kiểm thử tích hợp: BFF + Medplum thật. Cần stack đang chạy (infra/medplum/README.md).
 // Tự tạo hai phòng khám riêng cho mỗi lần chạy, không đụng dữ liệu demo.
 import { randomInt, randomUUID } from 'node:crypto';
-import { SEARCH_TAGS } from '@phongmach/fhir-vn-model';
+import { SEARCH_TAGS, nameWordTag, phoneSuffixTagQuery } from '@phongmach/fhir-vn-model';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MemoryAuditSink } from '../../src/audit.js';
 import { buildApp } from '../../src/app.js';
@@ -24,7 +24,7 @@ let tenantA: Tenant;
 
 const call = (method: 'GET' | 'POST', url: string, who: string, payload?: object) =>
   app.inject({ method, url, headers: { authorization: `Bearer ${tokens[who]}` }, ...(payload ? { payload } : {}) });
-const search = async (who: string, q: string) => (await call('GET', `/api/patients/search?q=${encodeURIComponent(q)}`, who)).json() as { intent: string; results: Array<{ id: string; fullName: string; phone?: string }> };
+const search = async (who: string, q: string) => (await call('GET', `/api/patients/search?q=${encodeURIComponent(q)}`, who)).json() as { intent: string; results: Array<{ id: string; fullName: string; phone?: string }>; hasMore: boolean };
 
 beforeAll(async () => {
   const admin = await adminClient();
@@ -220,6 +220,91 @@ describe('tìm đúng khi nhiều người cùng khớp (M0-3)', () => {
       expect({ ...after, meta: undefined }).toEqual({ ...before, meta: undefined });
       expect(await backfillSearchKeys(medplum)).toEqual({ scanned: first.scanned, updated: 0 });
     });
+  });
+});
+
+// Yêu cầu (1): cờ `hasMore` và câu nhắc "còn người trùng tên". `hasMore` do BFF đếm bằng `_summary=count` trên Medplum thật.
+// Cơ chế đếm này CHƯA đường mã nào trong repo dùng, nên phải ĐO TRƯỚC: seed dân số đã biết, assert `Bundle.total` chính xác
+// cho từng hình truy vấn thực dùng. Nếu một hình trả `total` sai (bị trần/ước lượng), nhánh đó phải chuyển sang phương án lùi
+// `_count = limit + 1` (xem thiết kế "phương án lùi"); hiện cả ba hình đều đo đúng nên không nhánh nào dùng phương án lùi.
+describe('điều kiện tiên quyết: _summary=count trả Bundle.total chính xác (yêu cầu 1)', () => {
+  const create = async (fullName: string, phone?: string) =>
+    (await call('POST', '/api/patients', 'a-assistant', { clientUuid: randomUUID(), fullName, ...(phone ? { phone } : {}) })).json().patient.id as string;
+  const family = `Zq${letters(5)}`;
+  const q = family.toLowerCase();
+  // 25 người cùng một 4-số-cuối; đồng thời cùng một từ tên ("van"): một seed phục vụ cả ba hình truy vấn đếm.
+  const suffix = `${randomInt(2, 10)}${randomInt(100, 1000)}`;
+  let medplum: Awaited<ReturnType<typeof tenantClient>>;
+  const SEEDED = 25;
+
+  beforeAll(async () => {
+    medplum = await tenantClient(MEDPLUM_URL, tenantA);
+    for (let i = 0; i < SEEDED; i++) await create(`${family} Van Nguoi`, `0370${randomInt(10, 100)}${suffix}`);
+  }, 60_000);
+
+  const count = async (params: Record<string, string> | URLSearchParams): Promise<number> => {
+    const p = new URLSearchParams(params as Record<string, string>);
+    p.set('_summary', 'count');
+    return (await medplum.search('Patient', p)).total ?? -1;
+  };
+
+  it('_tag AND khóa-từ-tên: total đúng bằng số đã seed', async () => {
+    const p = new URLSearchParams();
+    p.append('_tag', nameWordTag(q));
+    p.append('_tag', nameWordTag('van'));
+    p.append('_tag', nameWordTag('nguoi'));
+    expect(await count(p)).toBe(SEEDED);
+  });
+  it('phone:contains: total đúng bằng số đã seed', async () => {
+    expect(await count({ 'phone:contains': suffix })).toBe(SEEDED);
+  });
+  it('_tag AND tên + đuôi-số: total đúng bằng số đã seed', async () => {
+    const p = new URLSearchParams();
+    p.append('_tag', nameWordTag(q));
+    p.append('_tag', nameWordTag('van'));
+    p.append('_tag', nameWordTag('nguoi'));
+    p.append('_tag', phoneSuffixTagQuery(suffix));
+    expect(await count(p)).toBe(SEEDED);
+  });
+
+  it('hasMore: truy vấn tên khớp hơn 20 người → true; truy vấn khớp ≤ 20 → false', async () => {
+    const many = await search('a-assistant', `${q} van nguoi`);
+    expect(many.hasMore).toBe(true); // 25 người khớp đúng cả ba từ
+    const unique = `Zq${letters(6)}`;
+    await create(`${unique} Mot Nguoi`);
+    const few = await search('a-assistant', unique.toLowerCase()); // chỉ một người mang họ này
+    expect(few.hasMore).toBe(false);
+  });
+
+  it('name+number: lọc đúng người theo tên AND đuôi điện thoại', async () => {
+    const only = `0370${randomInt(10, 100)}${suffix}`;
+    const target = await create(`${family} Van Rieng`, only);
+    const found = await search('a-assistant', `${q} van rieng ${suffix}`);
+    expect(found.intent).toBe('name+number');
+    expect(found.results.map((r) => r.id)).toContain(target);
+    expect(found.results.every((r) => r.phone?.endsWith(suffix))).toBe(true);
+  });
+});
+
+// Decision 1: hồ sơ cũ chưa có khóa chỉ ra qua nhánh prefix (không vào `_tag` AND đếm). Nếu riêng nhánh prefix tràn 20,
+// câu nhắc không được tắt thầm dù `_tag` AND đếm 0.
+describe('câu nhắc không tắt thầm với hồ sơ cũ chưa có khóa (Decision 1)', () => {
+  const family = `Zq${letters(5)}`;
+  const q = family.toLowerCase();
+  let medplum: Awaited<ReturnType<typeof tenantClient>>;
+
+  beforeAll(async () => {
+    medplum = await tenantClient(MEDPLUM_URL, tenantA);
+    // 22 hồ sơ ghi thẳng (không meta.tag): chỉ ra qua tham số `name` (HumanName không dấu), không qua `_tag`.
+    for (let i = 0; i < 22; i++) {
+      await medplum.createResource({ resourceType: 'Patient', name: [{ use: 'official', family, given: ['Van', 'Cu'], text: `${family} Van Cu` }] });
+    }
+  }, 60_000);
+
+  it('hasMore=true dù _tag AND khớp-đúng đếm 0 (chỉ ra qua prefix)', async () => {
+    const found = await search('a-assistant', `${q} van cu`);
+    expect(found.results.length).toBe(20);
+    expect(found.hasMore).toBe(true);
   });
 });
 

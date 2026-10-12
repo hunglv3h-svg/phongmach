@@ -139,9 +139,10 @@ export class OfflineClient {
   }
 
   /** Tìm trong bộ đệm (mất mạng). `total`: số hồ sơ trên máy, để ghi "chỉ tìm trong N hồ sơ trên máy này". */
-  async searchCache(query: string): Promise<{ results: PatientSummary[]; total: number }> {
+  async searchCache(query: string): Promise<{ results: PatientSummary[]; total: number; hasMore: boolean }> {
     const entries = (await this.store.list<'patients', CachedPatient>('patients')).map((r) => r.value);
-    return { results: searchLocal(query, entries), total: entries.length };
+    const { results, hasMore } = searchLocal(query, entries);
+    return { results, total: entries.length, hasMore };
   }
 
   // ------------------------------------------------------------------------------------------- hàng chờ
@@ -315,10 +316,8 @@ export class OfflineClient {
       await this.engine.discard(sel.clientUuid);
       throw new RejectedError(out.error.message, out.error.status, out.error.code);
     }
-    if (out.kind !== 'offline') {
-      // Máy chủ lỗi tạm hoặc mục trước chưa xong: vẫn giữ trên máy, cấp số tạm như khi mất mạng (cùng UUID, máy chủ không cấp trùng).
-      await this.engine.enqueue([{ id: sel.clientUuid, kind: 'checkin', deps, payload: await offlinePayload() }]);
-    }
+    // Máy chủ chưa nhận ngay (mất mạng, lỗi tạm, mục trước chưa xong): bộ máy đã chuyển sang dạng ngoại tuyến (số tạm, giờ đến,
+    // cùng UUID) trong lúc giữ khóa (OFF-8). Không ghi lại ở đây: lần ghi lại cũ đặt nextAt=0, gửi lại sớm sai thời gian chờ.
     return tentative();
   }
 
@@ -344,7 +343,8 @@ export class OfflineClient {
         await this.engine.discard(op.id);
         throw new RejectedError(out.error.message, out.error.status, out.error.code);
       }
-      if (out.kind !== 'offline') await this.engine.enqueue([{ ...op, payload: { visitId: item.id, openedAt: clickAt, display } }]);
+      // Máy chủ chưa nhận ngay (mất mạng, lỗi tạm, chờ mục trước): bộ máy đã chuyển mục sang dạng ngoại tuyến trong lúc giữ khóa
+      // (OFF-8). Không ghi lại mục ở đây: lần ghi lại cũ đặt nextAt=0, làm mục vừa bị lỗi tạm gửi lại sớm sai thời gian chờ.
       return this.offlineOpen(item, clickAt);
     }
     if (pendingOpen) return this.offlineOpen(item, pendingOpen.body.payload.openedAt ?? clickAt);
@@ -427,7 +427,11 @@ export class OfflineClient {
     };
     const notSaved: SignOutcome = { kind: 'failed', message: 'Không lưu được trên máy (bộ nhớ trình duyệt đầy hoặc bị chặn): CHƯA in. Bản nháp vẫn còn; giải phóng bộ nhớ rồi ký lại.' };
 
+    const dateFenced: SignOutcome = { kind: 'failed', message: 'Máy chủ có thể đã ghi dở lượt khám này ở một ngày khác: CHƯA in để tránh đơn hai mã. Đã giữ trên máy, máy sẽ tự gửi lại; bấm lại khi máy chủ ổn.' };
+
     if (!this.online) {
+      // Nhánh mất mạng thuần chịu CÙNG hàng rào ngày (A-1): mục đã tới máy chủ ở một ngày khác thì không chuyển, không in.
+      if (await this.engine.dateFenceBlocks(opId, signedAt)) return dateFenced;
       const off = await offlinePart();
       try {
         await this.engine.enqueue([{ id: opId, kind: 'complete', deps, payload: off.payload }], off.changes);
@@ -454,21 +458,24 @@ export class OfflineClient {
         const detail = response.prescription ? { prescription: response.prescription, patient, diagnoses: response.visit.diagnoses, encounterId: visit.id } : undefined;
         return { kind: 'online', response, ...(detail ? { detail } : {}) };
       }
+      // Máy chủ chưa nhận ngay (mất mạng, mục trước đang chờ, 503/429, 401, bị giữ): bộ máy đã thử chuyển sang ký khi mất mạng
+      // trong lúc giữ khóa (OFF-8). Chuyển được (`offline`) thì in từ máy; không chuyển được thì KHÔNG in và báo rõ "CHƯA in".
       case 'offline':
-        if (promoted) return printOffline(promoted.detail);
-        return { kind: 'failed', message: 'Mất kết nối. Đã giữ trên máy và sẽ tự gửi khi có mạng; đơn sẽ không bị lưu trùng.' };
+        // `promoted` chắc chắn có khi bộ máy đã chuyển (nó gọi chính `offlinePart` ở trên để dựng payload và bản đơn).
+        return printOffline(promoted?.detail);
       case 'rejected':
         await this.engine.discard(opId);
         if (out.status === 'rules') return { kind: 'rules', rejected: out.error.body as RulesRejected };
         return { kind: 'failed', message: out.error.message };
       case 'retrying':
-        return { kind: 'failed', message: `${out.error.message} Đã giữ trên máy, máy sẽ tự gửi lại; đơn sẽ không bị lưu trùng.` };
+        // Hàng rào ngày A-1 từ chối chuyển (mục đã tới máy chủ, khác ngày hoặc không đọc được giờ máy chủ): giữ nguyên dạng có mạng, vẫn tự gửi lại.
+        return { kind: 'failed', message: 'Máy chủ đang lỗi và lượt khám này có thể đã ghi dở ở một ngày khác: CHƯA in để tránh đơn hai mã. Đã giữ trên máy, máy sẽ tự gửi lại; bấm lại khi máy chủ ổn.' };
       case 'held':
-        return { kind: 'failed', message: 'Chưa gửi được: một thao tác trước đó của lượt khám này đang cần xử lý (xung đột hoặc lỗi). Bản khám được giữ trên máy.' };
+        return { kind: 'failed', message: 'Một thao tác trước đó của lượt khám này đang cần xử lý (xung đột hoặc lỗi): CHƯA in. Bản khám được giữ trên máy.' };
       case 'paused':
-        return { kind: 'failed', message: 'Phiên đã hết hạn: đăng nhập lại để đồng bộ. Bản khám được giữ trên máy.' };
+        return { kind: 'failed', message: 'Phiên đã hết hạn, chưa lưu được bản ký trên máy: CHƯA in. Đăng nhập lại rồi ký lại. Bản khám được giữ trên máy.' };
       case 'waiting':
-        return { kind: 'failed', message: 'Đang chờ thao tác trước đó của lượt khám này được máy chủ nhận. Đã giữ trên máy, máy sẽ tự gửi.' };
+        return { kind: 'failed', message: 'Chưa lưu được bản ký trên máy: CHƯA in. Đã giữ trên máy, máy sẽ tự gửi; bấm lại để in.' };
     }
   }
 

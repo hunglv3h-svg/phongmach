@@ -42,10 +42,10 @@ import {
   type VisitContext,
   type VisitSummary,
 } from '@phongmach/clinical';
-import { EXTENSIONS, SYSTEMS, buildPatient, clientUuidQuery, nameWordTag, patchPatient, phoneSuffixTagQuery, rankByNameWords, rankByPhoneSuffix, toPatientSummary, type NewPatientInput, type PatientSummary, type SearchIntent } from '@phongmach/fhir-vn-model';
+import { EXTENSIONS, SYSTEMS, buildPatient, clientUuidQuery, digitsOnly, nameWordTag, patchPatient, phoneSuffixTagQuery, rankByNameWords, rankByPhoneSuffix, stableById, toPatientSummary, type NewPatientInput, type PatientSummary, type SearchIntent } from '@phongmach/fhir-vn-model';
 import { DEFAULT_CONFLICT_RETRY, backoff, isConflictEntry, retryOnConflict, type ConflictRetry } from './conflict.js';
 import type { GatewayPayload } from './gateway.js';
-import { BusyError, type CheckInOptions, type ClinicStore, type CompleteCommand, type CompleteResult, type Doctor, type FinishedVisit, type OpenResult, type OutboxJob, type StoreFactory } from './store.js';
+import { BusyError, type CheckInOptions, type ClinicStore, type CompleteCommand, type CompleteResult, type Doctor, type FinishedVisit, type OpenResult, type OutboxJob, type PatientSearchResult, type StoreFactory } from './store.js';
 import type { Tenant } from './tenants.js';
 
 /** Số kết quả "chứa đoạn số" lấy về để lấp chỗ sau những người có số KẾT THÚC bằng đoạn đó (tìm riêng, theo khóa). */
@@ -94,25 +94,31 @@ export class MedplumClinicStore implements ClinicStore {
 
   // ---------------------------------------------------------------------------------------------------- bệnh nhân
 
-  async searchPatients(intent: SearchIntent, limit: number): Promise<PatientSummary[]> {
+  async searchPatients(intent: SearchIntent, limit: number): Promise<PatientSearchResult> {
     switch (intent.kind) {
       case 'empty':
-        return [];
-      case 'cccd':
-        return this.search({ identifier: `${SYSTEMS.cccd}|${intent.cccd}`, _count: String(limit) });
-      case 'phone':
-        return this.search({ phone: intent.phone, _count: String(limit) });
+        return { results: [], hasMore: false };
+      case 'cccd': {
+        const results = (await this.search({ identifier: `${SYSTEMS.cccd}|${intent.cccd}`, _count: String(limit + 1) })).slice(0, limit);
+        return { results, hasMore: (await this.count({ identifier: `${SYSTEMS.cccd}|${intent.cccd}` })) > limit };
+      }
+      case 'phone': {
+        const results = (await this.search({ phone: intent.phone, _count: String(limit + 1) })).slice(0, limit);
+        return { results, hasMore: (await this.count({ phone: intent.phone })) > limit };
+      }
       case 'phone-fragment': {
         // Hai truy vấn song song. `phone:contains` của Medplum không sắp xếp và bị cắt ở _count: khi hơn FRAGMENT_FETCH số chứa đoạn đã gõ
         // (ví dụ "0975", trùng một đầu số), người có số KẾT THÚC bằng đoạn đó có thể nằm ngoài phần trả về [Đã đo, M0-3].
         // Vì vậy những người đó được tìm riêng, chính xác, theo khóa 4 số cuối; kết quả "chứa" chỉ lấp chỗ còn lại,
-        // và vẫn đưa ra được hồ sơ tạo trước khi có khóa tìm.
-        const [bySuffix, containing] = await Promise.all([
+        // và vẫn đưa ra được hồ sơ tạo trước khi có khóa tìm. `hasMore` đếm trên `phone:contains` (truy vấn bao hẹp nhất Medplum đếm được).
+        const [bySuffix, containing, total] = await Promise.all([
           this.search({ _tag: phoneSuffixTagQuery(intent.digits), _count: String(SUFFIX_FETCH) }),
           this.search({ 'phone:contains': intent.digits, _count: String(FRAGMENT_FETCH) }),
+          this.count({ 'phone:contains': intent.digits }),
         ]);
-        const ending = bySuffix.filter((p) => p.phone?.endsWith(intent.digits));
-        return uniqueById([...ending, ...rankByPhoneSuffix(containing, intent.digits)]).slice(0, limit);
+        const ending = stableById(bySuffix.filter((p) => p.phone?.endsWith(intent.digits)));
+        const results = uniqueById([...ending, ...rankByPhoneSuffix(containing, intent.digits)]).slice(0, limit);
+        return { results, hasMore: total > limit };
       }
       case 'name': {
         // Hai truy vấn song song, mỗi từ là một điều kiện AND. Tham số `name` của Medplum khớp theo ĐẦU TỪ ("an" ra cả "Anh"),
@@ -124,12 +130,47 @@ export class MedplumClinicStore implements ClinicStore {
           exact.append('_tag', nameWordTag(token));
           prefix.append('name', token);
         }
-        exact.set('_count', String(limit));
-        prefix.set('_count', String(limit));
-        const [byWords, byPrefix] = await Promise.all([this.search(exact), this.search(prefix)]);
-        return uniqueById([...byWords, ...rankByNameWords(byPrefix, intent.tokens)]).slice(0, limit);
+        exact.set('_count', String(limit + 1));
+        prefix.set('_count', String(limit + 1));
+        const [byWords, byPrefix, totalExact] = await Promise.all([this.search(exact), this.search(prefix), this.count(exact)]);
+        const results = uniqueById([...stableById(byWords), ...rankByNameWords(byPrefix, intent.tokens)]).slice(0, limit);
+        // `hasMore` đếm trên tập khớp-đúng (_tag AND), đúng ngữ nghĩa câu nhắc "còn người trùng tên". Nhưng hồ sơ cũ chưa có khóa
+        // chỉ ra qua nhánh prefix (không vào `_tag` AND), nên nếu riêng nhánh prefix đã tràn limit thì cũng còn người: OR hai điều kiện.
+        return { results, hasMore: totalExact > limit || byPrefix.length > limit };
+      }
+      case 'name+number': {
+        // AND tên (khóa từng từ) VÀ đuôi số (khóa 4 số cuối) trong một truy vấn _tag; cộng nhánh prefix lấp hồ sơ cũ chưa có khóa.
+        const digits = intent.digits;
+        const exact = new URLSearchParams();
+        const prefix = new URLSearchParams();
+        for (const token of intent.tokens) {
+          exact.append('_tag', nameWordTag(token));
+          prefix.append('name', token);
+        }
+        exact.append('_tag', phoneSuffixTagQuery(digits)); // 4+ số: 1 giá trị; 3 số: OR 10 (dấu phẩy)
+        exact.set('_count', String(limit + 1));
+        prefix.set('_count', String(limit + 1));
+        const [byKeys, byPrefix, totalExact] = await Promise.all([this.search(exact), this.search(prefix), this.count(exact)]);
+        const endsWithDigits = (p: PatientSummary) => digitsOnly(p.phone ?? '').endsWith(digits); // đoạn >4: lọc lại đuôi thật
+        const keysEnding = stableById(byKeys.filter(endsWithDigits));
+        const prefixEnding = stableById(byPrefix.filter(endsWithDigits));
+        const results = uniqueById([...keysEnding, ...prefixEnding]).slice(0, limit);
+        // `hasMore` lấy từ truy vấn đếm tập khớp-đúng (tên + đuôi). UI không hiện câu nhắc cho `name+number` (đã có số); tính để nhất quán kiểu.
+        return { results, hasMore: totalExact > limit };
+      }
+      default: {
+        const _never: never = intent;
+        return _never;
       }
     }
+  }
+
+  /** Đếm chính xác dân số khớp một truy vấn (không kéo tài nguyên). Trả 0 nếu Medplum không điền total. */
+  private async count(query: URLSearchParams | Record<string, string>): Promise<number> {
+    const params = new URLSearchParams(query as Record<string, string>);
+    params.set('_summary', 'count');
+    const bundle = await this.medplum.search('Patient', params);
+    return bundle.total ?? 0;
   }
 
   async createPatient(input: NewPatientInput): Promise<{ patient: PatientSummary; created: boolean }> {

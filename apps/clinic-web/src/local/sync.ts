@@ -115,13 +115,27 @@ export function classify(err: unknown): { verdict: 'network' | 'retry' | 'paused
   if (!(err instanceof ApiError)) {
     return { verdict: 'error', error: { status: -1, code: 'client', message: err instanceof Error ? err.message : String(err) } };
   }
-  const error: OpError = { status: err.status, code: err.code, message: err.message, ...(err.body !== undefined ? { body: err.body } : {}) };
+  const error: OpError = { status: err.status, code: err.code, message: err.message, ...(err.body !== undefined ? { body: err.body } : {}), ...(err.serverDate !== undefined ? { serverDate: err.serverDate } : {}) };
   if (err.status === 0) return { verdict: 'network', error };
   if (err.status === 401) return { verdict: 'paused', error };
   if (err.status === 409) return { verdict: 'conflict', error };
   if (err.status === 422 && err.code === 'rules-not-satisfied') return { verdict: 'rules', error };
   if (err.status === 429 || err.status >= 500) return { verdict: 'retry', error };
   return { verdict: 'error', error };
+}
+
+/**
+ * Hàng rào ngày A-1 (OFF-8). Cho phép chuyển một mục sang dạng ký khi mất mạng khi: mục chưa tới máy chủ (không có lỗi hoặc lỗi
+ * mạng status 0), hoặc mục không mang giờ ký (open/checkin — không có mã đơn theo ngày để lệch). Mục đã tới máy chủ (status ≠ 0)
+ * và mang giờ ký thì chỉ cho khi đọc được `Date` của phản hồi lỗi và ngày giờ Việt Nam trùng với giờ ký của máy khách.
+ */
+export function dateFenceAllows(error: OpError | undefined, clientSignedAt: string | undefined): boolean {
+  if (!error || error.status === 0) return true;
+  if (!clientSignedAt) return true;
+  if (!error.serverDate) return false;
+  const serverAt = Date.parse(error.serverDate);
+  if (Number.isNaN(serverAt)) return false;
+  return vnDay(new Date(clientSignedAt)) === vnDay(new Date(serverAt));
 }
 
 export class SyncEngine {
@@ -230,7 +244,9 @@ export class SyncEngine {
       if (existing?.plain.status === 'done') continue;
       changes.push(
         existing
-          ? { table: 'ops', id: e.id, plain: { ...existing.plain, status: 'pending', nextAt: 0, deps: e.deps ?? [] }, value: { payload: e.payload } satisfies OpBody }
+          ? // Giữ lại `error` của lần gửi trước (nếu có): hàng rào ngày A-1 của OFF-8 cần biết mục đã tới máy chủ và giờ máy chủ
+            // lúc trả lỗi, kể cả khi `complete` được bấm lại và chỉ cập nhật payload.
+            { table: 'ops', id: e.id, plain: { ...existing.plain, status: 'pending', nextAt: 0, deps: e.deps ?? [] }, value: { ...existing.value, payload: e.payload } satisfies OpBody }
           : this.newOpChange(e)
       );
     }
@@ -338,12 +354,12 @@ export class SyncEngine {
     // Chỉ gửi bằng phiên của chính chủ kho (OFF-6, OFF-7): phiên của người khác thì dừng, không gửi gì.
     if (!s || s.tenant !== this.owner.tenant || s.userId !== this.owner.userId) {
       this.emit({ paused: 'owner' });
-      await this.settleFocus(ops, false);
+      await this.settleFocus(ops);
       return;
     }
     // Hết phiên (401): chờ đăng nhập lại (token mới) rồi mới gửi tiếp; không đụng tới mục nào trong lúc chờ.
     if (this.current.paused === 'unauthorized' && s.token === this.expiredToken) {
-      await this.settleFocus(ops, false);
+      await this.settleFocus(ops);
       return;
     }
     if (this.current.paused) this.emit({ paused: false });
@@ -354,6 +370,17 @@ export class SyncEngine {
     const byId = new Map(ops.map((o) => [o.id, o]));
     const now = this.clock.now();
     const day = vnDay(new Date(now));
+    // C1: mục trước (qua mọi bậc, theo `deps`) của một mục đang được người dùng chờ kết quả cũng bỏ qua thời gian chờ gửi lại
+    // trong lượt gửi này — giống "Đồng bộ ngay" nhưng chỉ cho chuỗi của mục focus, không đẩy mục của lượt khám khác.
+    const pushNow = new Set<string>();
+    for (const id of this.focus.keys()) {
+      const stack = [id];
+      while (stack.length) {
+        const cur = byId.get(stack.pop()!);
+        if (!cur) continue;
+        for (const depId of cur.meta.deps) if (!pushNow.has(depId)) (pushNow.add(depId), stack.push(depId));
+      }
+    }
     // Nhiều lượt quét theo thứ tự hàng đợi: mục xong ở lượt này mở đường cho mục phụ thuộc nó ở lượt sau.
     // Mỗi mục được thử nhiều nhất một lần trong một lần chạy (lỗi tạm thì chờ hết thời gian chờ).
     const tried = new Set<string>();
@@ -362,7 +389,7 @@ export class SyncEngine {
       progress = false;
       for (const op of [...byId.values()].sort((a, b) => a.meta.seq - b.meta.seq)) {
         if (tried.has(op.id) || op.meta.status === 'done' || ATTENTION.has(op.meta.status)) continue;
-        if (!force && !this.focus.has(op.id) && op.meta.nextAt > now) continue;
+        if (!force && !this.focus.has(op.id) && !pushNow.has(op.id) && op.meta.nextAt > now) continue;
         if (depState(op, byId).kind !== 'ready') continue;
         const payload = resolveIds(op, ids);
         if (!payload) continue;
@@ -419,7 +446,7 @@ export class SyncEngine {
       }
     }
     ops = [...byId.values()].sort((a, b) => a.meta.seq - b.meta.seq);
-    await this.settleFocus(ops, networkDown);
+    await this.settleFocus(ops);
     ops = await this.refreshCounts();
     this.schedule(ops, !this.isOnline());
   }
@@ -428,32 +455,73 @@ export class SyncEngine {
     byId.set(op.id, { ...op, meta: { ...op.meta, status, nextAt: 0 }, body } as AnyOp);
   }
 
-  /** Mục gửi ngay mà chưa tới được máy chủ vì mất mạng: chuyển sang dạng ngoại tuyến ngay trong lúc giữ khóa (không tab nào kịp gửi bản cũ). */
-  private async settleFocus(ops: AnyOp[], networkDown: boolean): Promise<void> {
-    if (!networkDown) return;
+  /**
+   * Mục đang được người dùng chờ kết quả mà cuối lượt gửi chưa dứt điểm (chưa `done`, chưa cần xử lý): chuyển sang dạng ngoại tuyến
+   * ngay trong lúc giữ khóa (không tab nào kịp gửi bản cũ). OFF-8: không chỉ khi mất mạng, mà cho mọi kết quả không dứt điểm
+   * (waiting, offline chưa chuyển, retrying, paused). Hàng rào ngày A-1: mục đã tới máy chủ (error.status ≠ 0) chỉ chuyển khi
+   * ngày giờ Việt Nam của `signedAt` máy khách trùng ngày của tiêu đề `Date` lúc máy chủ trả lỗi; khác ngày hoặc thiếu `Date`
+   * thì KHÔNG chuyển (giữ nguyên dạng có mạng, vẫn tự gửi lại), tránh một đơn mang hai mã khi máy chủ ghi dở ở ngày khác.
+   */
+  private async settleFocus(ops: AnyOp[]): Promise<void> {
     for (const [id, promote] of this.focus) {
       const op = ops.find((o) => o.id === id);
+      // Mục tự nó đang cần xử lý (409/422/lỗi): không bao giờ chuyển. Mục bị GIỮ vì một mục trước cần xử lý thì VẪN chuyển
+      // (OFF-8: ký như khi mất mạng, in và in lại được từ bản giữ trên máy), vì nó sẽ không bao giờ tự gửi nếu không có đơn.
       if (!promote || !op || op.meta.status === 'done' || ATTENTION.has(op.meta.status)) continue;
       const next = await promote(op.body.payload);
+      if (!this.dateFenceOk(op, next.payload)) continue;
       await this.store.commit([{ table: 'ops', id, plain: op.meta, value: { ...op.body, payload: next.payload } }, ...(next.changes ?? [])]);
       this.focus.set(id, undefined);
       this.promoted.add(id);
     }
   }
 
+  /**
+   * Hàng rào ngày (A-1) cho một mục đang chuyển sang dạng ngoại tuyến. Mục chưa tới máy chủ (chưa có lỗi, hoặc lỗi mạng status 0):
+   * luôn cho chuyển. Mục đã tới máy chủ (error.status ≠ 0) mang giờ ký của máy khách: chỉ cho chuyển khi đọc được `Date` của
+   * phản hồi lỗi và ngày giờ Việt Nam của hai mốc trùng nhau.
+   */
+  private dateFenceOk(op: AnyOp, promoted: Payloads[keyof Payloads]): boolean {
+    const clientSignedAt = (promoted as Payloads['complete']).body?.clientTimes?.signedAt;
+    return dateFenceAllows(op.body.error, clientSignedAt);
+  }
+
+  /**
+   * Hàng rào ngày cho nhánh mất mạng thuần (OFF-8 "dùng chung hàm chuyển"): mục đã lưu trước đó đã tới máy chủ (lỗi tạm status ≠ 0)
+   * chỉ được chuyển/in khi ngày giờ Việt Nam của `signedAt` máy khách trùng ngày của `Date` lúc máy chủ trả lỗi.
+   */
+  async dateFenceBlocks(opId: string, signedAt: string): Promise<boolean> {
+    const op = (await this.ops()).find((o) => o.id === opId);
+    return !dateFenceAllows(op?.body.error, signedAt);
+  }
+
   private async outcome(id: string): Promise<Outcome> {
     const promoted = this.promoted.delete(id);
     this.focus.delete(id);
-    const ops = await this.ops();
+    let ops: AnyOp[];
+    try {
+      ops = await this.ops();
+    } catch (err) {
+      // OFF-8 (bất biến K): kho trên máy vừa bị ĐÓNG ngay sau khi mục đã được chuyển sang dạng ngoại tuyến trong lúc giữ khóa.
+      // Xảy ra thật khi máy chủ trả 401 đúng lúc ký: giao diện đăng xuất ngay (OFF-6) và đóng kho trong lúc lần ký còn đang chạy.
+      // Mục và tờ đơn ĐÃ lưu bền trước đó, nên vẫn trả 'offline' để in từ máy thay vì ném lỗi (im lặng, bác sĩ không có tờ nào).
+      // Chưa chuyển được thì không có gì để in: ném lỗi như trước.
+      if (!promoted) throw err;
+      return { kind: 'offline' };
+    }
     const op = ops.find((o) => o.id === id) as Op | undefined;
     if (!op) return { kind: 'rejected', status: 'error', error: { status: -1, code: 'missing', message: 'Mục không còn trong hàng đợi' } };
     if (op.meta.status === 'done') return { kind: 'done', result: op.body.result };
     if (ATTENTION.has(op.meta.status)) return { kind: 'rejected', status: op.meta.status as 'conflict' | 'rules' | 'error', error: op.body.error! };
+    // Đã chuyển sang dạng ngoại tuyến (trong lúc giữ khóa): in được từ máy, kể cả khi bị giữ, phiên tạm dừng (401), hay không phải chủ kho.
+    if (promoted) return { kind: 'offline' };
     const dep = depState(op as AnyOp, new Map(ops.map((o) => [o.id, o])));
     if (dep.kind === 'held') return { kind: 'held', by: dep.by };
-    if (this.current.paused) return { kind: 'paused' };
-    if (promoted || !this.current.online) return { kind: 'offline' };
+    // Mục đã tới máy chủ (lỗi tạm status ≠ 0) mà KHÔNG được chuyển: hàng rào ngày A-1 từ chối. Giữ `retrying` kể cả khi đang mất mạng,
+    // để `complete()` báo "CHƯA in" thay vì in nhầm một đơn có thể lệch ngày với phần máy chủ đã ghi dở.
     if (op.body.error && op.body.error.status !== 0) return { kind: 'retrying', error: op.body.error };
+    if (this.current.paused) return { kind: 'paused' };
+    if (!this.current.online) return { kind: 'offline' };
     return { kind: 'waiting' };
   }
 

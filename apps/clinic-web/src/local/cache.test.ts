@@ -11,7 +11,7 @@ const CACHE = [
   entry('p3', 'Trần Thị Bình', '0905678123'),
   entry('p4', 'Lê Anh Tuấn', '0911111111', '001085001234'),
 ];
-const names = (q: string) => searchLocal(q, CACHE).map((p) => p.fullName);
+const names = (q: string) => searchLocal(q, CACHE).results.map((p) => p.fullName);
 
 describe('tìm trong bộ đệm khi mất mạng', () => {
   it('tên không dấu, theo tiền tố từng từ, mọi từ phải khớp', () => {
@@ -37,6 +37,22 @@ describe('tìm trong bộ đệm khi mất mạng', () => {
   it('ô trống hoặc quá ngắn: không có kết quả', () => {
     expect(names('')).toEqual([]);
     expect(names('12')).toEqual([]);
+  });
+
+  it('gõ lẫn tên và số: AND tên (đầu-từ) với đuôi điện thoại, xếp người khớp đúng lên đầu', () => {
+    // p1 0912345678 (đuôi 5678), p2 0987655678 (đuôi 5678): cả hai tên "nguyen van an" và đuôi 5678.
+    expect(names('nguyen van an 5678')).toEqual(['Nguyễn Văn An', 'Nguyễn Văn Ân']);
+    // đuôi 45678 chỉ khớp p1 (0912345678 kết thúc 45678), không khớp p2 (0987655678 kết thúc 55678).
+    expect(names('nguyen van an 45678')).toEqual(['Nguyễn Văn An']);
+    // tên khớp nhưng đuôi số không khớp ai: không có kết quả.
+    expect(names('nguyen van an 0000')).toEqual([]);
+    // số đứng trước tên cũng được.
+    expect(names('5678 nguyen')).toEqual(['Nguyễn Văn An', 'Nguyễn Văn Ân']);
+  });
+
+  it('bộ đệm nhỏ: hasMore luôn false', () => {
+    expect(searchLocal('an', CACHE).hasMore).toBe(false);
+    expect(searchLocal('nguyen van an 5678', CACHE).hasMore).toBe(false);
   });
 });
 

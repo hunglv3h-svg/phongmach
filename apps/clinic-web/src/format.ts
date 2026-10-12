@@ -34,6 +34,7 @@ export const INTENT_LABEL: Record<string, string> = {
   'phone-fragment': 'đoạn số điện thoại',
   cccd: 'CCCD',
   name: 'tên (không cần dấu)',
+  'name+number': 'tên và số',
 };
 
 /** "34 tuổi", hoặc "2 tuổi 5 tháng" / "8 tháng" cho trẻ nhỏ. */

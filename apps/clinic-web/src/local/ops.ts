@@ -47,6 +47,8 @@ export interface OpError {
   message: string;
   /** Nội dung phản hồi lỗi (ví dụ danh sách phát hiện của quy tắc khi 422). */
   body?: unknown;
+  /** Giờ máy chủ (tiêu đề `Date`) lúc trả lỗi, nếu đọc được: hàng rào ngày của OFF-8 (A-1) dùng để so với giờ ký. */
+  serverDate?: string;
 }
 
 /** Phần mã hóa của một mục: dữ liệu gửi đi, kết quả của máy chủ, lỗi gần nhất. */

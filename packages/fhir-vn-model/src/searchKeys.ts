@@ -61,14 +61,24 @@ export function phoneSuffixTagQuery(digits: string): string {
   return Array.from({ length: 10 ** missing }, (_, n) => `${SEARCH_TAGS.phoneSuffix}|${String(n).padStart(missing, '0')}${digits}`).join(',');
 }
 
+/** So id tăng dần (UUID): khóa tie-break tất định dùng chung cho mọi xếp hạng tìm. */
+export function byId(a: { id: string }, b: { id: string }): number {
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
+/** Sắp một mảng theo id tăng dần (ổn định). */
+export function stableById<T extends { id: string }>(items: T[]): T[] {
+  return [...items].sort(byId);
+}
+
 /**
  * Xếp kết quả tìm tên: người có đủ từng từ đã gõ (khớp đúng cả từ) lên trước người chỉ khớp đầu từ
- * ("bui an": Bùi Văn An trước Bùi Thị Anh). Giữ nguyên thứ tự trong mỗi nhóm.
+ * ("bui an": Bùi Văn An trước Bùi Thị Anh). Trong mỗi nhóm điểm, xếp theo id (tất định giữa hai lần chạy).
  */
-export function rankByNameWords<T extends { fullName: string }>(items: T[], tokens: string[]): T[] {
+export function rankByNameWords<T extends { id: string; fullName: string }>(items: T[], tokens: string[]): T[] {
   const score = (item: T) => {
     const words = nameTokens(item.fullName);
     return tokens.every((t) => words.includes(t)) ? 0 : 1;
   };
-  return [...items].sort((a, b) => score(a) - score(b));
+  return [...items].sort((a, b) => score(a) - score(b) || byId(a, b));
 }

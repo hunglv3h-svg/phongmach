@@ -1,0 +1,61 @@
+# Demo bằng Docker cho PHONGMACH (project RIÊNG 'phongmach-demo', phương án b).
+# Dựng seed + web (web GỘP cả BFF trong cùng container) và nối vào Medplum ĐANG CHẠY
+# qua host.docker.internal:8103. KHÔNG định nghĩa lại / recreate backend Medplum.
+#
+#   docker compose -p phongmach-demo -f infra/demo/docker-compose.yml up -d --build
+#
+# .demo-tenants.json do service 'seed' sinh được truyền sang BFF qua named volume dùng
+# chung 'demo-tenants' (mount tại /demo trong cả hai service, env TENANTS_FILE trỏ vào đó).
+name: phongmach-demo
+
+services:
+  # Nạp dữ liệu demo vào Medplum rồi thoát. restart:no để chạy một lần.
+  seed:
+    build:
+      context: ../..
+      dockerfile: services/bff/Dockerfile
+    command: ["pnpm", "--filter", "@phongmach/bff", "seed"]
+    environment:
+      MEDPLUM_URL: http://host.docker.internal:8103
+      TENANTS_FILE: /demo/.demo-tenants.json
+      SEED_PATIENTS: "20"
+      MEDPLUM_ADMIN_EMAIL: admin@example.com
+      MEDPLUM_ADMIN_PASSWORD: medplum_admin
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - demo-tenants:/demo
+    restart: "no"
+
+  # Web tĩnh (nginx) + BFF (tsx, nghe 127.0.0.1:8110) trong CÙNG container.
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/clinic-web/Dockerfile
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    environment:
+      DEMO_AUTH: "1"
+      HOST: 127.0.0.1
+      PORT: "8110"
+      MEDPLUM_URL: http://host.docker.internal:8103
+      TENANTS_FILE: /demo/.demo-tenants.json
+      # Bí mật phiên CỐ ĐỊNH chỉ cho demo (>=32 ký tự) để không mất phiên đăng nhập
+      # khi container restart. KHÔNG dùng ngoài demo.
+      SESSION_SECRET: phongmach-demo-session-secret-0123456789
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - demo-tenants:/demo
+    ports:
+      - "8081:80"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8110/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+volumes:
+  demo-tenants:

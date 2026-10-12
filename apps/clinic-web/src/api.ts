@@ -61,7 +61,9 @@ export class ApiError extends Error {
     readonly code: string,
     message: string,
     /** Nội dung JSON của phản hồi lỗi (ví dụ danh sách phát hiện của quy tắc kê đơn). */
-    readonly body?: unknown
+    readonly body?: unknown,
+    /** Tiêu đề `Date` của phản hồi lỗi (giờ máy chủ lúc trả lỗi), để hàng rào ngày của OFF-8 so với giờ ký của máy khách. */
+    readonly serverDate?: string
   ) {
     super(message);
     this.name = 'ApiError';
@@ -119,7 +121,7 @@ async function request<T>(method: string, path: string, options: { body?: unknow
     // phản hồi không phải JSON
   }
   if (res.status === 401 && options.token) onUnauthorized?.();
-  throw new ApiError(res.status, code, message, parsed);
+  throw new ApiError(res.status, code, message, parsed, res.headers.get('date') ?? undefined);
 }
 
 export interface CheckInRequest {
@@ -172,7 +174,7 @@ export const api = {
   demoUsers: () => request<{ demo: boolean; tenants: DemoTenant[] }>('GET', '/api/session/demo-users'),
   login: (tenant: string, userId: string) => request<AuthState>('POST', '/api/session', { body: { tenant, userId } }),
   search: (token: string, q: string, signal?: AbortSignal) =>
-    request<{ intent: string; results: PatientSummary[] }>('GET', `/api/patients/search?q=${encodeURIComponent(q)}`, { token, ...(signal ? { signal } : {}) }),
+    request<{ intent: string; results: PatientSummary[]; hasMore: boolean }>('GET', `/api/patients/search?q=${encodeURIComponent(q)}`, { token, ...(signal ? { signal } : {}) }),
   createPatient: (token: string, patient: NewPatient) => request<{ patient: PatientSummary; created: boolean }>('POST', '/api/patients', { token, body: patient }),
   readPatient: (token: string, id: string) => request<{ patient: PatientSummary }>('GET', `/api/patients/${id}`, { token }),
   audit: (token: string, limit = 50) => request<{ entries: AuditEntry[] }>('GET', `/api/audit?limit=${limit}`, { token }),
