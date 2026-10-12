@@ -227,10 +227,20 @@ try {
   // Ứng dụng coi là có mạng, nhưng máy chủ đang lỗi tạm (503). Trước OFF-8: báo "CHƯA in" và không in. Nay: chuyển sang ký khi
   // mất mạng (cùng ngày — hàng rào ngày A-1 cho qua), in đúng một tờ từ máy; có mạng lại gửi lại cùng UUID, đúng một đơn, mã trùng.
   const before503 = new Set((await anVisits()).map((v) => v.encounterId));
-  await page.getByTestId('queue-row').filter({ hasText: 'Nguyễn Văn An' }).filter({ has: page.getByTestId('call') }).getByTestId('call').click();
+  // Khối "mất phản hồi" ở trên đã hoàn tất lượt khám của An (máy chủ ghi xong dù trình duyệt chỉ thấy lỗi mạng) nên dòng của An
+  // chuyển 'done' và không còn nút "Gọi vào khám"; màn hình cũng còn ở trang kết quả ký. Dựng lại đúng tiền đề của khối OFF-8:
+  // về hàng chờ rồi cấp số mới cho ĐÚNG An (theo id, không theo tên — hàng chờ demo có nhiều người cùng tên, cả không dấu).
+  await page.getByTestId('back-to-queue').click();
+  const again = await doctor('POST', '/api/queue', { clientUuid: crypto.randomUUID(), patientId: anId, specialty: 'noi' });
+  assert.equal(again.item?.status, 'waiting', `cấp số lại cho An phải ra lượt đang chờ: ${JSON.stringify(again)}`);
+  // Hàng chờ tự tải lại mỗi 5 giây; Playwright chờ ĐÚNG điều kiện (dòng có số đó, có nút gọi), không ngủ cố định.
+  await page.locator(`[data-testid="queue-row"][data-number="${again.item.number}"]`).getByTestId('call').click();
   await page.getByTestId('visit').waitFor();
   assert.equal(await page.getByTestId('opened-offline').count(), 0, 'mở có mạng');
   let busy = 0;
+  // 503 là do chính bài kiểm thử dựng ra, nên lỗi tải tài nguyên 503 trong console là điều được chờ đợi ở ĐÚNG khối này (và chỉ
+  // mẫu 503, không nới cho loại lỗi nào khác); hết khối thì trả `d.expected` về undefined để phép kiểm console cuối bài còn nguyên.
+  d.expected = /status of 503/;
   await page.route('**/api/visits/*/complete', async (route) => {
     busy++;
     // Giờ máy chủ cùng ngày với giờ ký của máy khách: hàng rào ngày A-1 cho phép chuyển và in.
@@ -243,6 +253,7 @@ try {
   assert.equal(busy, 1, 'yêu cầu hoàn tất tới máy chủ đúng một lần (503)');
   assert.ok((await lastPrintHtml(page)).includes('KÝ KHI MẤT MẠNG'), '503 lúc ký: in từ dữ liệu trên máy');
   await syncedAll();
+  d.expected = undefined;
   await page.locator('[data-testid="offline-sync-state"][data-status="done"]').waitFor();
   const added503 = (await anVisits()).filter((v) => !before503.has(v.encounterId));
   assert.equal(added503.length, 1, `503 lúc ký rồi tự gửi lại: đúng 1 lượt khám mới, thực tế ${added503.length}`);
