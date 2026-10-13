@@ -4,6 +4,7 @@ import { sortQueue, type AllergyView, type HistoryItem, type PrescriptionDetail,
 import { byId, classifyQuery, digitsOnly, foldName, normalizePhone, rankByPhoneSuffix, type PatientSummary } from '@phongmach/fhir-vn-model';
 import { ATTENTION } from './deps';
 import type { AnyOp, Op } from './ops';
+import { isTerminal } from './store';
 
 /** Một bệnh nhân trong bộ đệm: người trong hàng chờ hôm nay, hồ sơ đã mở trong ngày, hoặc người tạo trên máy này. */
 export interface CachedPatient {
@@ -109,7 +110,8 @@ export function mergeQueue(snapshot: QueueItem[], ops: AnyOp[], ids: Map<string,
   const items = new Map<string, LocalQueueItem>(snapshot.map((i) => [i.id, { ...i }]));
   const find = (visitId: string) => items.get(ids.get(visitId) ?? visitId) ?? items.get(visitId);
   const mark = (item: LocalQueueItem, op: AnyOp) => {
-    const done = op.meta.status === 'done';
+    // Mục đã kết thúc (máy chủ nhận, hoặc người dùng đã đóng) không còn là "pending" trong hàng chờ trên máy.
+    const done = isTerminal(op.meta.status);
     item.local = { ...item.local, ...(done ? {} : { pending: true }), ...(ATTENTION.has(op.meta.status) ? { attention: true } : {}) };
   };
 
@@ -123,7 +125,7 @@ export function mergeQueue(snapshot: QueueItem[], ops: AnyOp[], ids: Map<string,
       if (known || result) {
         const item = known ?? { ...result!.item };
         if (proposed !== undefined && item.number !== proposed) item.local = { ...item.local, renumbered: { from: proposed, to: item.number } };
-        if (op.meta.status !== 'done') mark(item, op);
+        if (!isTerminal(op.meta.status)) mark(item, op);
         items.set(item.id, item);
         continue;
       }
@@ -148,15 +150,15 @@ export function mergeQueue(snapshot: QueueItem[], ops: AnyOp[], ids: Map<string,
       const { visitId, openedAt } = (op as Op<'open'>).body.payload;
       const item = find(visitId);
       if (!item) continue;
-      if (op.meta.status !== 'done' && item.status === 'waiting') {
+      if (!isTerminal(op.meta.status) && item.status === 'waiting') {
         Object.assign(item, { status: 'in-exam', doctorUserId: me.id, doctorName: me.name, ...(openedAt ? { calledAt: openedAt } : {}) });
       }
-      if (op.meta.status !== 'done') mark(item, op);
+      if (!isTerminal(op.meta.status)) mark(item, op);
     } else if (op.meta.kind === 'complete') {
       const { visitId } = (op as Op<'complete'>).body.payload;
       const item = find(visitId);
       if (!item) continue;
-      if (op.meta.status !== 'done') {
+      if (!isTerminal(op.meta.status)) {
         if (item.status === 'waiting' || item.status === 'in-exam') item.status = 'done';
         mark(item, op);
       }

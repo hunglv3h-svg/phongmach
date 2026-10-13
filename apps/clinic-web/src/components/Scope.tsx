@@ -6,7 +6,7 @@ const REAL = [
   'In đơn A5 có mã QR; hộp thư đi không mất đơn khi cổng lỗi; trạng thái từng đơn; thử lại tự động và thủ công',
   'Đồng hồ phiên khám đo ở máy chủ, lượt làm lúc mất mạng đo bằng đồng hồ máy khám và đếm riêng (mục tiêu 60 giây); nhật ký truy cập; cách ly giữa hai phòng khám',
   'Ngoại tuyến trên từng máy: mất mạng vẫn tìm trong hồ sơ đã có trên máy, tạo bệnh nhân, cấp số tạm, gọi vào khám, khám, ký (chữ ký vẫn là mô phỏng) và in đơn có nhãn "ký khi mất mạng"; có mạng lại thì tự đồng bộ, không mất, không trùng (kiểm thử tự động 100 chu kỳ ngắt và khôi phục mạng)',
-  'Dữ liệu trên máy (bản nháp, hàng đợi đồng bộ, bộ đệm hồ sơ) được mã hóa; thao tác bị máy chủ từ chối khi đồng bộ (xung đột, quy tắc kê đơn) luôn được báo, không tự bỏ, không ghi đè',
+  'Dữ liệu trên máy (bản nháp, hàng đợi đồng bộ, bộ đệm hồ sơ) được mã hóa; thao tác bị máy chủ từ chối khi đồng bộ (xung đột, quy tắc kê đơn) luôn được báo, không tự bỏ, không ghi đè; bác sĩ xem được lý do, in lại tờ đơn đã lưu, và đánh dấu "đã xử lý" để mục rời danh sách (không gửi lên máy chủ, không ghi đè dữ liệu máy chủ)',
 ];
 const SIMULATED = [
   'Chữ ký số: băm nội dung đơn và gắn nhãn, chưa gọi nhà cung cấp ký số (T1)',
@@ -16,7 +16,7 @@ const SIMULATED = [
   'Gửi đơn qua Zalo: nút ở màn hình kết quả ký chỉ mở bản xem trước tin nhắn, không gửi gì; tin nhắn không có thuốc hay chẩn đoán (gửi thật cần bệnh nhân đồng ý và mẫu tin ZNS được duyệt, M1)',
 ];
 const MISSING = [
-  'Ngoại tuyến, phần chưa có: hai máy thấy nhau khi phòng khám mất Internet (mỗi máy tự làm, có mạng lại mới thấy nhau); giải quyết xung đột (bản này chỉ phát hiện và báo)',
+  'Ngoại tuyến, phần chưa có: hai máy thấy nhau khi phòng khám mất Internet (mỗi máy tự làm, có mạng lại mới thấy nhau); hợp nhất tự động khi xung đột (bản này phát hiện, báo và cho xử lý tay — bác sĩ liên hệ bệnh nhân rồi đánh dấu đã xử lý; chưa tự đưa bản khám lên máy chủ)',
   'Ngoại tuyến, phần chưa có: chờ ký số và gửi cổng khi mất mạng ở mức đầy đủ; lưu toàn bộ danh sách bệnh nhân trên máy (chỉ có người trong hàng chờ hôm nay, hồ sơ đã mở trong ngày và người tạo trên máy này); mã PIN cho kho trên máy (khóa mã hóa nằm cùng máy với dữ liệu)',
   'Zalo, phần chưa có: gửi tin thật (ZNS); đặt lịch, nhắc lịch',
   'Thu tiền, hóa đơn điện tử, bệnh án điện tử đầy đủ, tương tác thuốc, đơn thuốc cổ truyền',

@@ -1,7 +1,7 @@
 // Trạng thái phụ thuộc của một mục trong hàng đợi đồng bộ (kế hoạch, OFF-7): mục trước xong hết thì gửi được, có mục trước đang
 // cần người xử lý thì bị giữ, còn lại thì chờ. Hàm thuần, dùng chung cho bộ máy đồng bộ, danh sách chờ đồng bộ và màn hình kết quả ký,
 // để ba nơi không bao giờ hiểu khác nhau về "bị giữ".
-import type { OpMeta, OpStatus } from './store';
+import { isTerminal, type OpMeta, type OpStatus } from './store';
 
 /** Trạng thái cần người xử lý: xung đột (409), quy tắc kê đơn (422), lỗi khác. Không tự gửi lại, không tự bỏ (N3). */
 export const ATTENTION: ReadonlySet<OpStatus> = new Set<OpStatus>(['conflict', 'rules', 'error']);
@@ -18,12 +18,16 @@ interface DepNode {
   meta: Pick<OpMeta, 'deps' | 'status'>;
 }
 
-/** Mục không còn trong kho là đã xong và đã được dọn. */
+/**
+ * Mục không còn trong kho là đã xong và đã được dọn. Mục ở trạng thái đã kết thúc (`done` máy chủ đã nhận, hoặc `resolved`
+ * người dùng đã chủ động đóng) cũng coi như không còn chặn mục phụ thuộc: khi bác sĩ đánh dấu "đã xử lý" mục gốc đang xung đột,
+ * các mục bị nó giữ được tính lại và thôi bị giữ (chuyển sang chờ gửi / chờ mục trực tiếp theo đúng `depState`).
+ */
 export function depState(op: DepNode, byId: ReadonlyMap<string, DepNode>, seen = new Set<string>()): DepState {
   let waiting: string | undefined;
   for (const depId of op.meta.deps) {
     const dep = byId.get(depId);
-    if (!dep || dep.meta.status === 'done' || seen.has(depId)) continue;
+    if (!dep || isTerminal(dep.meta.status) || seen.has(depId)) continue;
     if (needsAttention(dep.meta.status)) return { kind: 'held', by: depId };
     seen.add(depId);
     const inner = depState(dep, byId, seen);

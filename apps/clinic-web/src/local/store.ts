@@ -23,8 +23,20 @@ export type OpKind = 'patient' | 'checkin' | 'open' | 'complete' | 'printed';
  * vẫn là `pending`/`retry` và được gửi lại cùng `clientUuid`.
  * - `retry`: lỗi tạm (mạng, 5xx, 503, 429), tự gửi lại.
  * - `conflict` (409), `rules` (422 quy tắc kê đơn), `error` (lỗi khác): cần người xử lý, không tự gửi lại, không tự bỏ.
+ * - `done`: máy chủ đã nhận.
+ * - `resolved`: người dùng CHỦ ĐỘNG đánh dấu "đã xử lý / đã liên hệ bệnh nhân" một mục xung đột (409) hoặc lỗi dữ liệu (`error`)
+ *   mà máy chủ KHÔNG nhận và không tự giải quyết được. Mục rời danh sách chờ đồng bộ nhưng KHÔNG được gửi lên máy chủ và KHÔNG
+ *   ghi đè dữ liệu máy chủ (N3). Chỉ xảy ra do người dùng bấm nút, không bao giờ tự động. Giống `done` ở chỗ "đã kết thúc, không
+ *   còn chờ"; khác ở chỗ máy chủ chưa nhận — bản khám/đơn vẫn giữ trên máy để in lại cho tới khi dọn ngày.
  */
-export type OpStatus = 'pending' | 'retry' | 'conflict' | 'rules' | 'error' | 'done';
+export type OpStatus = 'pending' | 'retry' | 'conflict' | 'rules' | 'error' | 'done' | 'resolved';
+
+/**
+ * Trạng thái "đã kết thúc" của một mục: không còn chờ đồng bộ, không tính vào số mục chờ, không hiện trong danh sách, được dọn
+ * cùng ngày cũ như nhau. `done` = máy chủ đã nhận; `resolved` = người dùng chủ động đóng mục máy chủ không nhận (N3).
+ */
+export const TERMINAL: ReadonlySet<OpStatus> = new Set<OpStatus>(['done', 'resolved']);
+export const isTerminal = (status: OpStatus): boolean => TERMINAL.has(status);
 
 /** Phần dạng rõ của một mục hàng đợi: id (khóa), thứ tự, loại, trạng thái, phụ thuộc, thời điểm. */
 export interface OpMeta {
@@ -290,7 +302,8 @@ class EncryptedStore implements LocalStore {
   }
 
   pendingCount(): Promise<number> {
-    return this.serial(() => this.db.ops.where('status').notEqual('done').count());
+    // Mục chưa xong = mọi trạng thái trừ các trạng thái đã kết thúc (`done` máy chủ đã nhận, `resolved` người dùng đã đóng).
+    return this.serial(() => this.db.ops.filter((r) => !isTerminal(r['status'] as OpStatus)).count());
   }
 
   setOwnerName(userName: string): Promise<void> {
@@ -301,10 +314,12 @@ class EncryptedStore implements LocalStore {
     return this.serial(async () => {
       await this.db.transaction('rw', [this.db.ops, this.db.ids, this.db.patients, this.db.snapshots, this.db.signed], async () => {
         for (const t of [this.db.patients, this.db.snapshots]) await t.where('day').below(day).delete();
-        await this.db.ops.where('day').below(day).and((r) => r['status'] === 'done').delete();
-        // Ánh xạ id cũ và đơn đã ký khi mất mạng chỉ còn cần khi còn mục cũ chưa xong: mục đó có thể tham chiếu id tạm của ngày cũ,
-        // và bản khám của một mục đang xung đột hoặc chờ xác nhận phải in lại được cho tới khi xử lý xong (OFF-7).
-        if ((await this.db.ops.where('day').below(day).count()) === 0) {
+        // Mục đã kết thúc (`done` hoặc `resolved`) của ngày cũ được dọn: cả mục người dùng đã đánh dấu đã xử lý cũng rời đi theo ngày.
+        await this.db.ops.where('day').below(day).and((r) => isTerminal(r['status'] as OpStatus)).delete();
+        // Ánh xạ id cũ và đơn đã ký khi mất mạng chỉ còn cần khi còn mục cũ CHƯA xong: mục đó có thể tham chiếu id tạm của ngày cũ,
+        // và bản khám của một mục đang xung đột hoặc chờ xác nhận phải in lại được cho tới khi xử lý xong (OFF-7). Mục `resolved`
+        // không còn giữ chúng lại — người dùng đã đóng mục đó, không cần in lại nữa.
+        if ((await this.db.ops.where('day').below(day).filter((r) => !isTerminal(r['status'] as OpStatus)).count()) === 0) {
           await this.db.ids.where('day').below(day).delete();
           await this.db.signed.where('day').below(day).delete();
         }
@@ -366,14 +381,16 @@ export class MemoryStore implements LocalStore {
     this.table('drafts').delete(visitId);
   }
   async pendingCount() {
-    return [...this.table('ops').values()].filter((r) => (r.plain as OpMeta).status !== 'done').length;
+    return [...this.table('ops').values()].filter((r) => !isTerminal((r.plain as OpMeta).status)).length;
   }
   async setOwnerName() {}
   async purgeBefore(day: string) {
     for (const t of ['patients', 'snapshots'] as const) for (const [id, r] of this.table(t)) if ((r.plain as DayMeta).day < day) this.table(t).delete(id);
-    for (const [id, r] of this.table('ops')) if ((r.plain as OpMeta).day < day && (r.plain as OpMeta).status === 'done') this.table('ops').delete(id);
-    if (![...this.table('ops').values()].some((r) => (r.plain as OpMeta).day < day)) {
+    for (const [id, r] of this.table('ops')) if ((r.plain as OpMeta).day < day && isTerminal((r.plain as OpMeta).status)) this.table('ops').delete(id);
+    // Giữ ánh xạ id và đơn đã ký của ngày cũ chừng nào còn mục cũ CHƯA kết thúc (xung đột/chờ xác nhận cần in lại); hết thì dọn cả hai.
+    if (![...this.table('ops').values()].some((r) => (r.plain as OpMeta).day < day && !isTerminal((r.plain as OpMeta).status))) {
       for (const [id, r] of this.table('signed')) if ((r.plain as DayMeta).day < day) this.table('signed').delete(id);
+      for (const [id, r] of this.idMap) if (r.day < day) this.idMap.delete(id);
     }
   }
   close() {}
@@ -429,7 +446,8 @@ export async function pendingOnDevice(): Promise<DevicePending[]> {
     try {
       await db.open();
       if (!db.tables.some((t) => t.name === 'ops')) continue;
-      const count = await db.table('ops').where('status').notEqual('done').count();
+      // "Chưa đồng bộ xong" = chưa kết thúc: loại cả `done` (máy chủ nhận) lẫn `resolved` (người dùng đã đóng).
+      const count = await db.table('ops').filter((r) => !isTerminal((r as { status: OpStatus }).status)).count();
       if (count === 0) continue;
       const owner = (await db.table('meta').get('owner')) as { userName?: string } | undefined;
       out.push({ tenant, userId, count, ...(owner?.userName ? { userName: owner.userName } : {}) });

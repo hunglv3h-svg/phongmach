@@ -7,7 +7,7 @@ import { vnDay } from '@phongmach/clinical';
 import { ApiError } from '../api';
 import { ATTENTION, depState } from './deps';
 import { effectsOf, resolveIds, send, type AnyOp, type NewOp, type Op, type OpBody, type OpError, type Payloads } from './ops';
-import { dbName, type Change, type LocalStore, type OpMeta, type OpStatus, type Owner } from './store';
+import { dbName, isTerminal, type Change, type LocalStore, type OpMeta, type OpStatus, type Owner } from './store';
 
 /** Đồng hồ và bộ hẹn giờ, tiêm vào được để kiểm thử chạy bằng thời gian ảo. */
 export interface Clock {
@@ -300,7 +300,8 @@ export class SyncEngine {
     const changes: Change[] = [];
     for (const e of entries) {
       const existing = await this.store.get<'ops', OpBody>('ops', e.id);
-      if (existing?.plain.status === 'done') continue;
+      // Mục đã kết thúc (`done` máy chủ đã nhận, hoặc `resolved` người dùng đã chủ động đóng) thì giữ nguyên: không "mở lại" qua enqueue.
+      if (existing && isTerminal(existing.plain.status)) continue;
       changes.push(
         existing
           ? // Giữ lại `error` của lần gửi trước (nếu có): hàng rào ngày A-1 của OFF-8 cần biết mục đã tới máy chủ và giờ máy chủ
@@ -361,6 +362,28 @@ export class SyncEngine {
     await this.refreshCounts();
   }
 
+  /**
+   * Người dùng CHỦ ĐỘNG đánh dấu "đã xử lý / đã liên hệ bệnh nhân" một mục đang KẸT mà máy chủ không nhận và không tự giải quyết
+   * được: xung đột (409, lượt khám đã do người khác mở/kết thúc) hoặc lỗi dữ liệu (`error`). Mục chuyển sang `resolved` và rời
+   * danh sách chờ đồng bộ, các mục bị nó giữ được tính lại (thôi bị giữ). Bất biến N3:
+   * - KHÔNG gửi gì lên máy chủ và KHÔNG ghi đè dữ liệu máy chủ: chỉ đổi trạng thái bản ghi trên MÁY NÀY.
+   * - KHÔNG tự động: chỉ gọi khi người dùng bấm nút (giao diện xác nhận hai nhịp trước khi gọi).
+   * - KHÔNG dùng cho `rules` (422 có luồng xác nhận riêng), cũng không cho mục chưa dứt điểm (`pending`/`retry`) hay mục `held`
+   *   (bị giữ bởi mục khác — phải đóng mục GỐC gây giữ, không đóng mục bị giữ). Bản khám/đơn vẫn giữ trên máy để in lại tới khi dọn ngày.
+   * KHÁC `discard`: `discard` dành cho mục vừa bị từ chối khi gửi NGAY lúc có mạng (dữ liệu còn trên màn hình) và đòi không có mục
+   * phụ thuộc; `resolveByUser` dành cho mục trong danh sách chờ đồng bộ, giữ bản ghi (status `resolved`) để in lại được.
+   */
+  async resolveByUser(id: string): Promise<void> {
+    const op = (await this.ops()).find((o) => o.id === id);
+    if (!op) throw new Error('Mục không còn trong hàng đợi');
+    if (op.meta.status !== 'conflict' && op.meta.status !== 'error') {
+      throw new Error('Chỉ đánh dấu đã xử lý được cho mục đang xung đột hoặc lỗi dữ liệu');
+    }
+    // Giữ nguyên payload, kết quả và lỗi gần nhất (để tra cứu/kiểm toán sau), chỉ đổi trạng thái. Không gửi, không ghi đè máy chủ.
+    await this.store.commit([{ table: 'ops', id, plain: { ...op.meta, status: 'resolved', nextAt: 0 }, value: op.body }]);
+    await this.refreshCounts();
+  }
+
   /** Chạy một lượt gửi. Gọi nhiều lần khi đang chạy thì gộp thành một lượt chạy tiếp theo. */
   run(): Promise<void> {
     if (this.queued) return this.queued;
@@ -392,7 +415,7 @@ export class SyncEngine {
   private async refreshCounts(ops?: AnyOp[]): Promise<AnyOp[]> {
     const all = ops ?? (await this.ops());
     const byId = new Map(all.map((o) => [o.id, o]));
-    const pending = all.filter((o) => o.meta.status !== 'done');
+    const pending = all.filter((o) => !isTerminal(o.meta.status));
     const attention = pending.filter((o) => ATTENTION.has(o.meta.status) || depState(o, byId).kind === 'held').length;
     // Sau khi tải lại trang: lần gửi thành công cuối lấy từ mục đã xong còn trong kho (mục đã xong của ngày cũ bị dọn khi mở ứng dụng).
     const last = this.current.lastSyncAt ?? all.reduce((max, o) => (o.meta.status === 'done' ? Math.max(max, o.updatedAt) : max), 0);
@@ -447,7 +470,7 @@ export class SyncEngine {
     for (let progress = true; progress && !stop; ) {
       progress = false;
       for (const op of [...byId.values()].sort((a, b) => a.meta.seq - b.meta.seq)) {
-        if (tried.has(op.id) || op.meta.status === 'done' || ATTENTION.has(op.meta.status)) continue;
+        if (tried.has(op.id) || isTerminal(op.meta.status) || ATTENTION.has(op.meta.status)) continue;
         if (!force && !this.focus.has(op.id) && !pushNow.has(op.id) && op.meta.nextAt > now) continue;
         if (depState(op, byId).kind !== 'ready') continue;
         const payload = resolveIds(op, ids);
@@ -526,7 +549,7 @@ export class SyncEngine {
       const op = ops.find((o) => o.id === id);
       // Mục tự nó đang cần xử lý (409/422/lỗi): không bao giờ chuyển. Mục bị GIỮ vì một mục trước cần xử lý thì VẪN chuyển
       // (OFF-8: ký như khi mất mạng, in và in lại được từ bản giữ trên máy), vì nó sẽ không bao giờ tự gửi nếu không có đơn.
-      if (!promote || !op || op.meta.status === 'done' || ATTENTION.has(op.meta.status)) continue;
+      if (!promote || !op || isTerminal(op.meta.status) || ATTENTION.has(op.meta.status)) continue;
       const next = await promote(op.body.payload);
       if (!this.dateFenceOk(op, next.payload)) continue;
       await this.store.commit([{ table: 'ops', id, plain: op.meta, value: { ...op.body, payload: next.payload } }, ...(next.changes ?? [])]);
