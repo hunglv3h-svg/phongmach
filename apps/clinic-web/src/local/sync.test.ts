@@ -649,3 +649,131 @@ describe('nhiều tab', () => {
     expect(bff.patients.size).toBe(1);
   });
 });
+
+describe('thăm dò máy chủ khi mất mạng (lỗi "không tự thoát khi hết mục chờ")', () => {
+  /** Thăm dò qua BFF giả: thành công khi bật, lỗi mạng khi tắt. Đếm số lần gọi để kiểm "đúng một thăm dò". */
+  function withProbe(store: LocalStore, over: Partial<SyncOptions> = {}) {
+    const reach = { up: true, calls: 0 };
+    const probe = async () => {
+      reach.calls++;
+      if (!reach.up) throw new TypeError('Failed to fetch');
+      await bff.fetch('/api/health');
+      return true;
+    };
+    const e = engine(store, { probe, probeMs: 12_000, canProbe: () => true, ...over });
+    return { e, reach };
+  }
+
+  it('hàng đợi RỖNG, mất mạng: đồng hồ ảo trôi → đúng một thăm dò → online lại true (mutation: bỏ thăm dò ⇒ ĐỎ)', async () => {
+    const store = await openStore();
+    const { e, reach } = withProbe(store);
+    await e.start();
+    // Vào "mất mạng" như ca thật: một lời gọi đọc lỗi mạng (observe(false)), hàng đợi rỗng nên không có gì để gửi lại.
+    e.observe(false);
+    expect(e.state.online).toBe(false);
+    expect(e.state.pending).toBe(0);
+
+    // Chưa tới hạn thăm dò: chưa gọi.
+    clock.advance(11_999);
+    await e.idle();
+    expect(reach.calls).toBe(0);
+    expect(e.state.online).toBe(false);
+
+    // Tới hạn: đúng một thăm dò, thành công → online lại true.
+    clock.advance(1);
+    await e.idle();
+    await vi.waitFor(() => expect(e.state.online).toBe(true));
+    expect(reach.calls).toBe(1);
+
+    // Đã có mạng: không thăm dò nữa.
+    clock.advance(60_000);
+    await e.idle();
+    expect(reach.calls).toBe(1);
+  });
+
+  it('thăm dò lỗi thì không làm gì và hẹn lại; thành công ở lần sau mới thoát', async () => {
+    const store = await openStore();
+    const { e, reach } = withProbe(store);
+    await e.start();
+    reach.up = false;
+    e.observe(false);
+    clock.advance(12_000);
+    await e.idle();
+    expect(reach.calls).toBe(1);
+    expect(e.state.online).toBe(false); // lỗi: vẫn mất mạng
+    reach.up = true;
+    clock.advance(12_000);
+    await e.idle();
+    await vi.waitFor(() => expect(e.state.online).toBe(true));
+    expect(reach.calls).toBe(2);
+  });
+
+  it('không thăm dò khi phiên hết hạn (unauthorized) hay khi tab bị ẩn (canProbe=false)', async () => {
+    // Phiên hết hạn: không thăm dò (để không che "Phiên đã hết hạn"). Dựng unauthorized bằng 401 thật rồi mất mạng.
+    {
+      const store = await openStore();
+      let session: Session = { ...docSession, token: 'tok-expired' };
+      const { e, reach } = withProbe(store, { session: () => session });
+      await e.enqueue([patientOp()]);
+      await e.run();
+      expect(e.state.paused).toBe('unauthorized');
+      e.observe(false); // mạng rớt trong lúc đang chờ đăng nhập lại
+      expect(e.state.online).toBe(false);
+      clock.advance(60_000);
+      await e.idle();
+      expect(reach.calls).toBe(0);
+      void session;
+    }
+    // Tab bị ẩn: không thăm dò (nhiều tab không nhân số yêu cầu).
+    {
+      const store = await openStore();
+      const { e, reach } = withProbe(store, { canProbe: () => false });
+      e.observe(false);
+      clock.advance(60_000);
+      await e.idle();
+      expect(reach.calls).toBe(0);
+    }
+  });
+
+  it('browserOnline kẹt false mà không có sự kiện `online`: thăm dò vẫn đặt state.online=true (giao diện đọc lại navigator.onLine)', async () => {
+    // Ở engine, "có mạng lại" là state.online=true; provider đọc lại navigator.onLine để browserOnline không kẹt (lỗi 3.3).
+    // Bài này khẳng định nguồn thoát ở engine không phụ thuộc sự kiện `online` của trình duyệt.
+    const store = await openStore();
+    const { e } = withProbe(store);
+    await e.start();
+    e.observe(false);
+    clock.advance(12_000);
+    await e.idle();
+    await vi.waitFor(() => expect(e.state.online).toBe(true));
+  });
+
+  it('N3 giữ nguyên: thăm dò → syncNow KHÔNG tự gửi lại hay ghi đè mục đang cần xử lý (ATTENTION)', async () => {
+    const store = await openStore();
+    const { e } = withProbe(store);
+    const chain = offlineChain();
+    const other = patientOp('Trần Thị Bình');
+    bff.fault(/\/open$/, { status: 409, body: { error: 'taken', message: 'Hồ sơ đang do BS. B khám' } });
+    await e.start();
+    await e.enqueue([...chain.all, other]);
+    await e.run();
+    const st = await statuses(e);
+    expect(st[chain.open.id]).toBe('conflict');
+    expect(st[chain.complete.id]).toBe('pending'); // bị giữ
+    expect(e.state.attention).toBe(3);
+    const openPayloadBefore = JSON.stringify((await e.ops()).find((o) => o.id === chain.open.id)!.body.payload);
+
+    // Giả vào "mất mạng" rồi để thăm dò thoát ra: observe(true) → syncNow().
+    e.observe(false);
+    const sentBefore = bff.requests.length;
+    clock.advance(12_000);
+    await e.idle();
+    await vi.waitFor(() => expect(e.state.online).toBe(true));
+    // Mục xung đột không bị gửi lại, không bị ghi đè; mục bị giữ không được gửi.
+    expect((await statuses(e))[chain.open.id]).toBe('conflict');
+    expect((await statuses(e))[chain.complete.id]).toBe('pending');
+    expect(JSON.stringify((await e.ops()).find((o) => o.id === chain.open.id)!.body.payload)).toBe(openPayloadBefore);
+    const resentOpen = bff.requests.slice(sentBefore).filter((r) => /\/open$/.test(r.path));
+    expect(resentOpen).toHaveLength(0);
+    expect(bff.completions.size).toBe(0);
+  });
+});

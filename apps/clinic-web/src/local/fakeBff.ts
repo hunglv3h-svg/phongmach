@@ -76,6 +76,8 @@ export class FakeBff {
   };
 
   private handle(method: string, path: string, token: string | undefined, body: Record<string, unknown> | undefined): Response {
+    // Thăm dò máy chủ khi mất mạng: không token, không chạm Medplum, không ghi nhật ký (như BFF thật).
+    if (method === 'GET' && path === '/api/health') return json(200, { ok: true });
     const user = token ? this.tokens.get(token) : undefined;
     if (!user) return json(401, { error: 'unauthenticated' });
     let m: RegExpExecArray | null;

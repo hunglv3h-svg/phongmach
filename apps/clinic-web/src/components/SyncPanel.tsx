@@ -122,7 +122,9 @@ export function SyncPanel({ view, rows, actions, onClose }: { view: IndicatorVie
       </p>
       {view.expired && <p className="error" role="alert">{view.expired}</p>}
       <div className="actions">
-        <button className="secondary" disabled={!view.online} onClick={() => void actions.syncNow()} data-testid="sync-list-now">Đồng bộ ngay</button>
+        {/* Không khóa khi mất mạng: đúng lúc kẹt "Mất mạng" (hàng đợi rỗng, trình duyệt không phát `online`) thì đây là lối thoát
+            tay. Nút thăm dò máy chủ (GET /api/health) rồi gửi hết; thành công thì tự về "Có mạng". */}
+        <button className="secondary" onClick={() => void actions.syncNow()} data-testid="sync-list-now">{view.online ? 'Đồng bộ ngay' : 'Thử kết nối lại'}</button>
       </div>
       <p className="muted small">Các thao tác dưới đây đã lưu trên máy này (mã hóa) nhưng máy chủ chưa nhận. Máy tự gửi khi có mạng; gửi lại nhiều lần cũng không lưu trùng.</p>
       {rows === undefined ? (

@@ -48,13 +48,15 @@ describe('chỉ báo mạng và đồng bộ', () => {
     expect(html).not.toContain('attention-badge');
   });
 
-  it('mất mạng, 3 mục chờ, 2 cần xử lý, đang gửi: đủ cả; "Đồng bộ ngay" bị khóa khi mất mạng', () => {
+  it('mất mạng, 3 mục chờ, 2 cần xử lý, đang gửi: đủ cả; "Đồng bộ ngay" KHÔNG bị khóa khi mất mạng (lối thoát tay)', () => {
+    // Đổi quyết định (lỗi "không tự thoát khi hết mục chờ"): trước đây nút bị khóa khi mất mạng, nhưng đó đúng là lúc người dùng
+    // cần nó nhất để thử kết nối lại khi trình duyệt không phát sự kiện `online`. Nay nút luôn bấm được và sẽ thăm dò máy chủ.
     const html = bar(indicatorView({ ...state, pending: 3, attention: 2, sending: 'op' }, false));
     expect(html).toContain('data-testid="offline-badge"');
     expect(html).toContain('3 mục chờ đồng bộ · đang gửi…');
     expect(html).toMatch(/data-testid="attention-badge"[^>]*>2 cần xử lý</);
     expect([attr(html, 'data-online'), attr(html, 'data-pending'), attr(html, 'data-attention')]).toEqual(['false', '3', '2']);
-    expect(html).toMatch(/<button[^>]*\bdisabled=""[^>]*data-testid="sync-now"/);
+    expect(html).not.toMatch(/<button[^>]*\bdisabled=""[^>]*data-testid="sync-now"/);
     expect(buttons(html)).toEqual(['sync-open', 'attention-badge', 'sync-now']);
   });
 

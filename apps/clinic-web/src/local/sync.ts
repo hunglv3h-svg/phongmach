@@ -41,6 +41,15 @@ export interface SyncOptions {
   capMs?: number;
   /** Chạy định kỳ khi còn mục chưa xong (mục do tab khác thêm, lỡ sự kiện). */
   periodMs?: number;
+  /**
+   * Thăm dò máy chủ khi đang mất mạng (OFF, lỗi "không tự thoát"). CHỈ `GET /api/health` (không token, không chạm Medplum,
+   * không ghi nhật ký truy cập). Thành công → coi như có mạng lại; lỗi → không làm gì. Không truyền thì không thăm dò.
+   */
+  probe?: () => Promise<boolean>;
+  /** Khoảng giữa hai lần thăm dò khi mất mạng (mili giây). */
+  probeMs?: number;
+  /** Có được thăm dò lúc này không (giao diện truyền: dừng khi tab bị ẩn `document.hidden`). Mặc định luôn cho. */
+  canProbe?: () => boolean;
 }
 
 /** Kết quả của một mục sau khi được đẩy đi (dùng khi gửi ngay lúc có mạng). */
@@ -148,11 +157,17 @@ export class SyncEngine {
   private readonly baseMs: number;
   private readonly capMs: number;
   private readonly periodMs: number;
+  private readonly probeFn: (() => Promise<boolean>) | undefined;
+  private readonly probeMs: number;
+  private readonly canProbe: () => boolean;
   private readonly lockName: string;
 
   private current: SyncState = { online: true, paused: false, counted: false, pending: 0, attention: 0, version: 0 };
   private readonly listeners = new Set<(s: SyncState) => void>();
   private timer: unknown;
+  /** Hẹn giờ thăm dò máy chủ khi đang mất mạng (tách khỏi `timer` của hàng đợi). */
+  private probeTimer: unknown;
+  private probing = false;
   private started = false;
   private stopped = false;
   private chain: Promise<void> = Promise.resolve();
@@ -176,6 +191,9 @@ export class SyncEngine {
     this.baseMs = opts.baseMs ?? 2000;
     this.capMs = opts.capMs ?? 60_000;
     this.periodMs = opts.periodMs ?? 30_000;
+    this.probeFn = opts.probe;
+    this.probeMs = opts.probeMs ?? 12_000;
+    this.canProbe = opts.canProbe ?? (() => true);
     this.lockName = `phongmach-sync:${dbName(this.owner)}`;
     this.current.online = this.isOnline();
   }
@@ -193,6 +211,44 @@ export class SyncEngine {
     this.current = { ...this.current, ...patch, ...(bump ? { version: this.current.version + 1 } : {}) };
     if (patch.sending === undefined && 'sending' in patch) delete this.current.sending;
     for (const fn of this.listeners) fn(this.current);
+    // Mỗi lần `online`/`paused` đổi: bật thăm dò nếu đang mất mạng, tắt nếu đã có mạng lại hoặc phiên hết hạn.
+    if ('online' in patch || 'paused' in patch) this.armProbe();
+  }
+
+  /**
+   * Khi bộ máy tin là mất mạng, chính nó phải định kỳ thăm dò máy chủ (lỗi "không tự thoát khi hết mục chờ"): trình duyệt có thể
+   * không bao giờ phát sự kiện `online` lúc "Wi-Fi còn nhưng máy chủ không tới được". Dừng thăm dò khi đã có mạng (`online`),
+   * khi phiên hết hạn (để không che mất "Phiên đã hết hạn"), khi trình duyệt báo mất mạng (sự kiện `online` lo được), khi tab bị
+   * ẩn (`canProbe`), và khi đã dừng. KHÔNG đụng tới hàng đợi hay mục ATTENTION: thành công chỉ gọi `observe(true)` → `syncNow()`.
+   */
+  private armProbe(): void {
+    this.clock.clearTimeout(this.probeTimer);
+    this.probeTimer = undefined;
+    if (!this.probeFn || this.stopped || this.current.online || this.current.paused === 'unauthorized') return;
+    if (!this.isOnline() || !this.canProbe()) return;
+    this.probeTimer = this.clock.setTimeout(() => void this.runProbe(), this.probeMs);
+  }
+
+  private async runProbe(): Promise<void> {
+    this.probeTimer = undefined;
+    if (this.probing) return;
+    // Điều kiện có thể đã đổi giữa lúc hẹn và lúc chạy: kiểm lại trước khi gọi.
+    if (!this.probeFn || this.stopped || this.current.online || this.current.paused === 'unauthorized' || !this.isOnline() || !this.canProbe()) {
+      this.armProbe();
+      return;
+    }
+    this.probing = true;
+    let reachable = false;
+    try {
+      reachable = await this.probeFn();
+    } catch {
+      reachable = false;
+    } finally {
+      this.probing = false;
+    }
+    // Thành công: coi như có mạng lại; `observe(true)` tự gọi `syncNow()` (bỏ qua mục ATTENTION, giữ N3). Lỗi: không làm gì, hẹn lại.
+    if (reachable) this.observe(true);
+    else this.armProbe();
   }
 
   /** Bắt đầu: gửi những gì còn lại từ lần trước (kể cả sau khi trình duyệt sập) và hẹn giờ. */
@@ -208,6 +264,8 @@ export class SyncEngine {
     this.stopped = true;
     this.started = false;
     this.clock.clearTimeout(this.timer);
+    this.clock.clearTimeout(this.probeTimer);
+    this.probeTimer = undefined;
   }
 
   /** Có mạng lại (sự kiện `online`): gửi ngay, không chờ hết thời gian chờ. */
@@ -216,8 +274,9 @@ export class SyncEngine {
     return this.syncNow();
   }
 
-  /** Nút "Đồng bộ ngay". */
-  syncNow(): Promise<void> {
+  /** Nút "Đồng bộ ngay". Thăm dò máy chủ ngay (để thoát "Mất mạng" khi hàng đợi rỗng) rồi gửi hết. */
+  async syncNow(): Promise<void> {
+    if (!this.current.online) await this.runProbe();
     this.force = true;
     return this.run();
   }

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { AuthState } from '../api';
+import { api, type AuthState } from '../api';
 import { OfflineClient } from './client';
 import type { LocalStore } from './store';
 import { SyncEngine, type SyncState } from './sync';
@@ -30,6 +30,10 @@ export function OfflineProvider({ auth, store, children }: { auth: AuthState; st
       store,
       owner: { tenant, userId },
       session: () => ({ token: authRef.current.token, tenant: authRef.current.tenant.slug, userId: authRef.current.user.id }),
+      // Khi mất mạng, thăm dò máy chủ để tự thoát (lỗi "không tự thoát khi hết mục chờ"): chỉ `GET /api/health` (không token,
+      // không chạm Medplum, không ghi nhật ký). Chỉ thăm dò ở tab đang hiện để nhiều tab không nhân lên số yêu cầu.
+      probe: () => api.health().then(() => true),
+      canProbe: () => globalThis.document?.visibilityState !== 'hidden',
     });
     return new OfflineClient({ store, engine, auth: () => authRef.current });
   }, [store, tenant, userId]);
@@ -37,7 +41,12 @@ export function OfflineProvider({ auth, store, children }: { auth: AuthState; st
   const [browserOnline, setBrowserOnline] = useState(() => globalThis.navigator?.onLine !== false);
 
   useEffect(() => {
-    const unsubscribe = client.engine.subscribe(setSync);
+    // Bộ máy báo có mạng lại (thăm dò hoặc một lời gọi thành công): đọc lại `navigator.onLine` để `browserOnline` không kẹt false
+    // khi trình duyệt phát `offline` mà không phát `online` lúc hồi (lỗi 3.3) — sự kiện `online` không còn là nguồn duy nhất.
+    const unsubscribe = client.engine.subscribe((s) => {
+      if (s.online) setBrowserOnline(globalThis.navigator?.onLine !== false);
+      setSync(s);
+    });
     setSync(client.engine.state);
     void client.start();
     const onOnline = () => {
@@ -49,8 +58,12 @@ export function OfflineProvider({ auth, store, children }: { auth: AuthState; st
       setBrowserOnline(false);
       client.engine.observe(false);
     };
+    // Đọc lại `navigator.onLine` khi tab hiện lại / lấy lại focus (lỗi 3.3): nguồn sự kiện online/offline có thể đã lỡ nhịp.
+    const recheck = () => setBrowserOnline(globalThis.navigator?.onLine !== false);
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
+    window.addEventListener('focus', recheck);
+    document.addEventListener('visibilitychange', recheck);
     // Màn hàng chờ đang mở thì nó đã tải mỗi 5 giây: lần nạp định kỳ dùng lại kết quả đó, không thêm dòng nhật ký.
     const refresh = () => void (client.online ? client.refreshQueue(undefined, PREFETCH_MS).catch(() => undefined) : undefined);
     const timer = setInterval(refresh, PREFETCH_MS);
@@ -60,6 +73,8 @@ export function OfflineProvider({ auth, store, children }: { auth: AuthState; st
       client.engine.stop();
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
+      window.removeEventListener('focus', recheck);
+      document.removeEventListener('visibilitychange', recheck);
       clearInterval(timer);
     };
   }, [client]);

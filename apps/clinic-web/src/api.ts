@@ -171,6 +171,8 @@ export interface SimState {
 }
 
 export const api = {
+  /** Thăm dò máy chủ khi đang mất mạng: không token, không chạm Medplum, không ghi nhật ký truy cập. */
+  health: () => request<{ ok: true }>('GET', '/api/health'),
   demoUsers: () => request<{ demo: boolean; tenants: DemoTenant[] }>('GET', '/api/session/demo-users'),
   login: (tenant: string, userId: string) => request<AuthState>('POST', '/api/session', { body: { tenant, userId } }),
   search: (token: string, q: string, signal?: AbortSignal) =>

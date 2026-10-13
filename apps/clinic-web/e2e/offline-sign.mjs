@@ -63,6 +63,28 @@ try {
 
   // ============================================================ Có mạng: cấp số cho An, máy nạp trước hàng chờ
   await login(d, BASE, 'noi-doctor');
+
+  // ============================================================ Tự thoát "Mất mạng" khi HẾT mục chờ (lỗi "không tự thoát")
+  // Ca "Wi-Fi còn nhưng máy chủ không tới được": cắt ở TẦNG MẠNG bằng route.abort (KHÔNG context.setOffline, vì nó phát sự kiện
+  // `offline`/`online` của trình duyệt — chính đường mà lỗi KHÔNG nằm trên). Hàng đợi rỗng (vừa đăng nhập). Lúc này trình duyệt
+  // không phát sự kiện nào; chỉ cơ chế thăm dò định kỳ /api/health mới đưa ứng dụng trở lại "Có mạng".
+  d.expected = OFFLINE_ERRORS;
+  await page.route('**/api/**', (route) => route.abort('internetdisconnected'));
+  await page.getByTestId('tab-queue').click(); // màn Hàng chờ tự tải mỗi 5 giây (qua client.call) → observe(false)
+  await page.getByTestId('offline-badge').waitFor();
+  assert.equal(await page.locator('[data-testid="sync-status"]').getAttribute('data-pending'), '0', 'hàng đợi rỗng ở ca này');
+  // Mạng tầng dưới hồi (bỏ chặn). KHÔNG bấm gì, KHÔNG đổi navigator.onLine: chỉ thăm dò mới cứu được.
+  await page.unroute('**/api/**');
+  d.expected = undefined;
+  // BẪY: KHÔNG dùng page.waitForFunction với hàm async (coi lời hứa là "đúng" và xong ngay). Dùng eventually + page.evaluate.
+  await eventually(
+    () => page.evaluate(async () => document.querySelector('[data-testid="sync-status"]')?.getAttribute('data-online') === 'true'),
+    'ứng dụng tự thoát "Mất mạng" nhờ thăm dò /api/health khi hàng đợi rỗng',
+    30_000
+  );
+  await page.getByTestId('tab-reception').click();
+  ok('tự thoát "Mất mạng" khi hết mục chờ: cắt /api ở tầng mạng (không sự kiện trình duyệt), bỏ chặn, thăm dò /api/health đưa về "Có mạng" trong ~30s');
+
   await search('nguyen van an');
   await page.getByTestId('result').filter({ hasText: 'Nguyễn Văn An' }).first().click();
   await page.getByTestId('patient-detail').filter({ hasText: 'Nguyễn Văn An' }).waitFor();
