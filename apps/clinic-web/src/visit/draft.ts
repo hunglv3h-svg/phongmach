@@ -149,6 +149,8 @@ export function evaluate(
     allergies: Allergy[];
     /** false: máy chưa có dữ liệu dị ứng của bệnh nhân này (mở hồ sơ khi mất mạng), phải xác nhận 'allergy-unknown' (OFF-4). */
     allergiesKnown?: boolean;
+    /** false: máy chưa có bản tóm tắt bệnh nhân, nên không biết có CCCD hay không: xác nhận 'cccd-unknown' thay vì bị 'no-cccd' chặn. */
+    cccdKnown?: boolean;
   },
   config?: Partial<RulesConfig>,
   now = new Date()
@@ -161,6 +163,7 @@ export function evaluate(
       patient: { ageYears: ageInYears(ctx.patient.birthDate, now), hasCccd: !!ctx.patient.cccdMasked, weightKg: vitals.weightKg },
       allergies: ctx.allergies,
       allergiesKnown: ctx.allergiesKnown ?? true,
+      cccdKnown: ctx.cccdKnown ?? true,
       diagnoses: d.diagnoses,
     },
     config

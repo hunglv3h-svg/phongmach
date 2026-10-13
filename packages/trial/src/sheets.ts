@@ -14,6 +14,7 @@ export const RULE_LABEL: Record<RuleId, string> = {
   'duplicate-ingredient': 'trùng hoạt chất',
   allergy: 'dị ứng thuốc',
   'no-cccd': 'thiếu CCCD (chặn ký)',
+  'cccd-unknown': 'chưa có dữ liệu CCCD trên máy (mở hồ sơ lúc mất mạng)',
   'no-birthdate': 'chưa có ngày sinh',
   'no-weight': 'trẻ chưa được ghi cân nặng',
   'paediatric-form': 'dạng viên cho trẻ nhỏ',

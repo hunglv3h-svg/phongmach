@@ -513,10 +513,115 @@ describe('tiếp đón khi mất mạng (OFF-2, OFF-4)', () => {
     expect((await client.searchCache('001190001234')).results.map((p) => p.id)).toEqual([created.id]);
   });
 
+  it('người vừa tiếp đón mà máy chủ chưa nhận vẫn tìm thấy khi có mạng, có nhãn "chưa đồng bộ"; nhận rồi thì không hiện hai dòng', async () => {
+    // Máy chủ lỗi tạm: hồ sơ nằm trên máy với id tạm, máy chủ chưa có gì để tìm.
+    bff.fault(/POST \/api\/patients/, { status: 503 });
+    const { patient, tentative } = await client.createPatient({ clientUuid: crypto.randomUUID(), fullName: 'Zq Phạm Thị Dung', phone: '0901234567', cccd: '001190001234' });
+    expect([tentative, patient.id.startsWith('tmp-')]).toEqual([true, true]);
+    // Có mạng nên ô tìm gọi máy chủ; thiếu phần nối thêm thì hồ sơ này biến mất khỏi màn hình Tiếp đón.
+    const offServer = await client.searchOnline('dung', 'tok-doc');
+    expect(offServer.results.map((p) => p.id)).toEqual([patient.id]);
+    expect(offServer.pending).toEqual([patient.id]);
+
+    // Máy chủ đã nhận: đúng một dòng, của máy chủ, không còn nhãn.
+    await goOnline();
+    const created = [...bff.patients.values()].find((p) => p.fullName === 'Zq Phạm Thị Dung')!;
+    const onServer = await client.searchOnline('dung', 'tok-doc');
+    expect(onServer.results.map((p) => p.id)).toEqual([created.id]);
+    expect(onServer.pending).toEqual([]);
+  });
+
   it('có mạng: máy chủ từ chối thì bỏ mục, báo lỗi tại chỗ (biểu mẫu còn), không để lại gì trên máy', async () => {
     bff.fault(/POST \/api\/patients/, { status: 422, body: { error: 'invalid-name', message: 'Nhập đủ họ và tên' } });
     await expect(client.createPatient({ clientUuid: crypto.randomUUID(), fullName: 'Zq Thử' })).rejects.toBeInstanceOf(RejectedError);
     expect(await engine.ops()).toEqual([]);
     expect(await store.list('patients')).toEqual([]);
+  });
+});
+
+// Chu kỳ 16 của M0-2 (xem .agents/tasks/fix-m0-2-cycles.md): bệnh nhân do chính máy này tiếp đón, mất phản hồi ở "tạo bệnh nhân",
+// mở hồ sơ khi mất mạng, tải lại trang, rồi có mạng lại. Trong CI lần đó hồ sơ mở bằng BẢN DỰ PHÒNG (không có CCCD, không có dị
+// ứng) nên quy tắc `no-cccd` mức chặn khóa nút "Ký & In" — bác sĩ không có cách chữa. Hai lớp độc lập phải giữ:
+//   1. mở hồ sơ không được bỏ rơi dữ liệu máy này ĐANG CÓ (hàng đợi còn mục "tạo bệnh nhân" với CCCD đã nhập);
+//   2. khi máy thật sự không có dữ liệu, quy tắc đòi XÁC NHẬN kèm lý do, không kết luận "bệnh nhân chưa có CCCD".
+describe('mở hồ sơ bằng dữ liệu trên máy: "không biết" khác "không có" (chu kỳ 16 của M0-2)', () => {
+  const CCCD = '000123456789';
+  const NAME = 'Zc Nguyễn Văn Bình';
+  const ruleCtx = (opened: Awaited<ReturnType<OfflineClient['openVisit']>>) => ({
+    specialty: 'noi' as const,
+    patient: opened.context.patient,
+    allergies: [],
+    allergiesKnown: opened.allergiesKnown,
+    cccdKnown: opened.cccdKnown,
+  });
+
+  /** Tải lại trang: cùng CSDL trên máy, nhưng kho, bộ máy đồng bộ và lớp gọi API đều dựng lại từ đầu. */
+  async function reload() {
+    engine.stop();
+    store.close();
+    store = await openEncryptedStore({ tenant: 'noi', userId: 'doc' });
+    engine = new SyncEngine({ store, owner: { tenant: 'noi', userId: 'doc' }, session: () => ({ token: sessionToken, tenant: 'noi', userId: 'doc' }), clock, isOnline: () => online });
+    client = new OfflineClient({ store, engine, auth: () => auth, now: clock.now, printLocal: async () => undefined });
+    await client.start();
+  }
+
+  /** Tiếp đón trên máy này: mất phản hồi ở "tạo bệnh nhân" (máy chủ đã ghi), rồi mất mạng, cấp số và gọi vào khám. */
+  async function receiveThenOpenOffline() {
+    bff.fault(/^POST \/api\/patients$/, 'lost');
+    const { patient, tentative } = await client.createPatient({ clientUuid: crypto.randomUUID(), fullName: NAME, phone: '0912000016', cccd: CCCD, birthDate: '1956-05-10', gender: 'male' });
+    expect(tentative).toBe(true);
+    goOffline();
+    const { item } = await client.checkIn(patient, { clientUuid: crypto.randomUUID(), specialty: 'noi', priority: 'normal' });
+    const first = await client.openVisit(item);
+    expect(first.context.patient.cccdMasked).toBeTruthy();
+    return patient;
+  }
+
+  const rowOf = async (fullName: string) => (await client.localQueue((await client.refreshQueue())?.items))!.find((i) => i.patientName === fullName)!;
+
+  it('tải lại trang khi mất mạng rồi có mạng lại: mở lại hồ sơ vẫn đủ CCCD, không có phát hiện nào chặn ký', async () => {
+    await receiveThenOpenOffline();
+    await reload();
+    await goOnline();
+
+    const opened = await client.openVisit(await rowOf(NAME));
+    expect(opened.cccdKnown).toBe(true);
+    expect(opened.context.patient.cccdMasked).toBeTruthy();
+    expect(evaluate(signedDraft(newDraft()), ruleCtx(opened)).verdict.blocking).toEqual([]);
+  });
+
+  it('bộ đệm bệnh nhân tra trượt: mở hồ sơ lấy lại CCCD từ mục "tạo bệnh nhân" còn trong hàng đợi trên máy', async () => {
+    const patient = await receiveThenOpenOffline();
+    await reload();
+    // Đúng triệu chứng đã thấy trong CI (ảnh FAILED-cycles.png, run 38252273087): lần tra bộ đệm theo id không ra hồ sơ nào.
+    for (const row of await store.list('patients')) await store.commit([{ table: 'patients', id: row.id, delete: true }]);
+    expect(await client.cachedPatient(patient.id)).toBeUndefined();
+
+    const opened = await client.openVisit((await client.localQueue()).find((i) => i.patientName === NAME)!);
+    expect(opened.offline).toBe(true);
+    expect(opened.cccdKnown).toBe(true);
+    expect(opened.context.patient).toMatchObject({ fullName: NAME, cccdMasked: expect.stringContaining('6789'), birthDate: '1956-05-10' });
+    // Không có phát hiện mức chặn: bác sĩ ký và in được như mọi chu kỳ khác (vẫn phải xác nhận 'allergy-unknown').
+    const { findings, verdict } = evaluate(signedDraft(newDraft()), ruleCtx(opened));
+    expect(findings.map((f) => f.rule)).not.toContain('no-cccd');
+    expect(verdict.blocking).toEqual([]);
+  });
+
+  it('máy không có gì về bệnh nhân này (tiếp đón ở máy khác): đòi xác nhận "cccd-unknown", không kết luận "chưa có CCCD"', async () => {
+    const item: QueueItem = { ...serverVisit('Zc Lê Văn Cường', 7), birthDate: '1950-03-02' };
+    goOffline();
+    const opened = await client.openVisit(item);
+    expect(opened).toMatchObject({ offline: true, cccdKnown: false, allergiesKnown: false });
+    expect(opened.context.patient.cccdMasked).toBeUndefined();
+
+    const draft = signedDraft(newDraft());
+    const { findings, verdict } = evaluate(draft, ruleCtx(opened));
+    expect(findings.map((f) => f.rule)).toContain('cccd-unknown');
+    expect(findings.map((f) => f.rule)).not.toContain('no-cccd');
+    // Vẫn phải ghi lý do mới ký được (N3: không âm thầm), nhưng không còn bị chặn cứng khi mất mạng.
+    expect(verdict.blocking).toEqual([]);
+    expect(verdict.unacknowledged.map((f) => f.rule)).toContain('cccd-unknown');
+    const acked = { ...draft, acks: { ...draft.acks, 'cccd-unknown': 'Đã đối chiếu CCCD trên giấy tờ bệnh nhân mang theo' } };
+    expect(evaluate(acked, ruleCtx(opened)).verdict.canSign).toBe(true);
   });
 });

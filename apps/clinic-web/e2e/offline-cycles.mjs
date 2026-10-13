@@ -236,16 +236,39 @@ async function openVisit(c) {
   // dòng của máy chủ (đang chờ) và dòng tạm trên máy. Máy chủ vẫn chỉ có một lượt khám. Ghi lại để báo ở cuối bài, rồi bấm nút mà
   // bác sĩ đang khám dở sẽ bấm: "Tiếp tục khám" nếu có, không thì "Gọi vào khám".
   if ((await rows.count()) > 1) c.run.doubleRow = true;
-  const resume = rows.getByTestId('continue');
-  await ((await resume.count()) ? resume : rows.getByTestId('call')).first().click();
+  // Màn hàng chờ tự tải lại 5 giây một lần và dựng lại dòng mỗi khi hàng đợi đồng bộ đổi, nên nút vừa tìm được có thể rời khỏi
+  // DOM đúng lúc bấm. Tìm lại nút ở từng lần thử (giữ nguyên hạn 30 giây của Playwright) thay vì giữ một thẻ cũ: thao tác vẫn
+  // buộc phải thành công trong hạn đó, chỉ không đòi dòng đứng yên suốt cả lần bấm.
+  const deadline = Date.now() + 30_000;
+  for (let last; ; ) {
+    const resume = rows.getByTestId('continue');
+    const button = (await resume.count()) ? resume : rows.getByTestId('call');
+    try {
+      await button.first().click({ timeout: 2000 });
+      break;
+    } catch (err) {
+      last = err;
+      c.run.queueClickRetries = (c.run.queueClickRetries ?? 0) + 1;
+      if (Date.now() > deadline) throw new Error(`không bấm được nút mở hồ sơ sau 30 giây (dòng hàng chờ bị dựng lại liên tục, ${c.run.queueClickRetries} lần thử): ${last.message.split('\n')[0]}`);
+    }
+  }
   await page().getByTestId('visit').waitFor();
 }
 const onVisit = async () => (await page().getByTestId('visit').count()) > 0;
 
+/** Lý do xác nhận đúng với từng quy tắc mức `ack` (bác sĩ phải ghi lý do thật, không có lối tắt "bỏ qua tất cả"). */
+const ACK_REASON = {
+  'allergy-unknown': 'Đã hỏi bệnh nhân trực tiếp, không dị ứng thuốc',
+  'cccd-unknown': 'Đã đối chiếu CCCD trên giấy tờ bệnh nhân mang theo',
+};
+
 async function fillAcks() {
-  const reasons = page().getByTestId('ack-reason');
-  for (let i = 0; i < (await reasons.count()); i++) {
-    if (!(await reasons.nth(i).inputValue())) await reasons.nth(i).fill('Đã hỏi bệnh nhân trực tiếp, không dị ứng thuốc');
+  const rules = page().getByTestId('rule');
+  for (let i = 0; i < (await rules.count()); i++) {
+    const rule = rules.nth(i);
+    const reason = rule.getByTestId('ack-reason');
+    if (!(await reason.count()) || (await reason.inputValue())) continue;
+    await reason.fill(ACK_REASON[await rule.getAttribute('data-rule')] ?? 'Đã đối chiếu trực tiếp với bệnh nhân trước khi ký');
   }
 }
 
@@ -274,7 +297,11 @@ async function sign(c) {
   if (JSON.stringify(shown) !== JSON.stringify(want)) throw new Error(`bản nháp trước khi ký khác dữ liệu đã nhập: ${JSON.stringify(shown)}, cần ${JSON.stringify(want)}`);
   await fillAcks();
   await page().locator('[data-testid="draft-saved"][data-dirty="false"]').waitFor();
-  if (await page().getByTestId('sign').isDisabled()) throw new Error(`không ký được: ${await page().getByTestId('sign-blocked').innerText()}`);
+  if (await page().getByTestId('sign').isDisabled()) {
+    // Nói rõ quy tắc nào chặn: không phải đi tìm trong ảnh chụp khi CI đỏ.
+    const rules = await page().getByTestId('rule').evaluateAll((els) => els.map((e) => `${e.dataset.severity}:${e.dataset.rule}`));
+    throw new Error(`không ký được: ${await page().getByTestId('sign-blocked').innerText()} [${rules.join(', ') || 'không có phát hiện nào'}]`);
+  }
 
   // Chờ tờ đơn ra (cổng chặn trong print() báo về), không chờ theo màn hình: lúc máy "sập" trang đứng yên và không trả lời.
   const printed = new Promise((resolve) => (onPrinted = resolve));
@@ -365,6 +392,7 @@ try {
       c.run.syncedMs !== undefined ? `máy chủ nhận sau ${(c.run.syncedMs / 1000).toFixed(1)} giây` : 'MÁY CHỦ CHƯA NHẬN',
       ...(c.run.signRefused.length ? [`"Ký & In" bị từ chối ${c.run.signRefused.length} lần trước khi in`] : []),
       ...(c.run.doubleRow ? ['hàng chờ hiện hai dòng cho lượt khám này'] : []),
+      ...(c.run.queueClickRetries ? [`nút mở hồ sơ phải thử lại ${c.run.queueClickRetries} lần (dòng hàng chờ dựng lại)`] : []),
     ];
     console.log(`· chu kỳ ${pad(c.index)}: ${describe(c)} → ${notes.join(', ')} [${((Date.now() - from) / 1000).toFixed(1)} giây]`);
   }
@@ -489,6 +517,8 @@ try {
   if (refused.length) console.log(`"Ký & In" báo chưa ký được, phải bấm lại, ở ${refused.length} chu kỳ: ${refused.map((c) => `${pad(c.index)} (${c.run.signRefused.length} lần)`).join(', ')}. Câu báo: "${refused[0].run.signRefused[0]}"`);
   const doubled = ran.filter((c) => c.run.doubleRow);
   if (doubled.length) console.log(`Hàng chờ hiện hai dòng cho cùng một lượt khám (dòng của máy chủ và dòng tạm trên máy) ở ${doubled.length} chu kỳ: ${doubled.map((c) => pad(c.index)).join(', ')}. Máy chủ vẫn chỉ có một lượt khám cho mỗi bệnh nhân.`);
+  const retried = ran.filter((c) => c.run.queueClickRetries);
+  if (retried.length) console.log(`Nút mở hồ sơ trên hàng chờ phải thử bấm lại (dòng bị dựng lại trong lúc hàng đợi đồng bộ chạy) ở ${retried.length} chu kỳ: ${retried.map((c) => `${pad(c.index)} (${c.run.queueClickRetries} lần)`).join(', ')}.`);
   if (failed) {
     console.error(`\n✗ M0-2 KHÔNG đạt với hạt giống ${SEED}: ${failed}/${step} bước kiểm sai.`);
     await page().screenshot({ path: `${shots}FAILED-cycles-end.png` }).catch(() => {});

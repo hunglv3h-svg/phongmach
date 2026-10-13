@@ -104,8 +104,10 @@ function VisitEditor({
         allergies: allergies.map(({ kind, value, label }) => ({ kind, value, label })),
         // Mở khi mất mạng mà máy không có dữ liệu dị ứng: phải hỏi bệnh nhân và xác nhận 'allergy-unknown' (OFF-4).
         allergiesKnown: opened.allergiesKnown,
+        // Mở bằng bản dự phòng (máy chưa có tóm tắt bệnh nhân): không biết có CCCD hay không, xác nhận 'cccd-unknown'.
+        cccdKnown: opened.cccdKnown,
       }),
-    [draft, visit.specialty, context.patient, allergies, opened.allergiesKnown]
+    [draft, visit.specialty, context.patient, allergies, opened.allergiesKnown, opened.cccdKnown]
   );
   const { invalid } = toVitals(draft);
   const hasRx = draft.lines.length > 0;
@@ -188,7 +190,8 @@ function VisitEditor({
         <span className="queue-number">{pad3(visit.number)}</span>
         <div>
           <h1>{context.patient.fullName}</h1>
-          <small>{[age, SPECIALTY_LABEL[visit.specialty], context.patient.cccdMasked ? `CCCD ${context.patient.cccdMasked}` : 'chưa có CCCD'].filter(Boolean).join(' · ')}</small>
+          {/* Máy chưa có tóm tắt bệnh nhân (mở bằng bản dự phòng): nói "chưa tải", không nói "chưa có CCCD" — đó là hai việc khác nhau. */}
+          <small>{[age, SPECIALTY_LABEL[visit.specialty], context.patient.cccdMasked ? `CCCD ${context.patient.cccdMasked}` : opened.cccdKnown ? 'chưa có CCCD' : 'CCCD chưa tải về máy'].filter(Boolean).join(' · ')}</small>
           <small className={saveError ? 'error draft-state' : 'muted draft-state'} data-testid="draft-saved" data-dirty={String(dirty)} data-persistent={String(store.persistent)}>
             {saveError
               ? 'Không lưu được bản nháp trên máy'
@@ -217,7 +220,8 @@ function VisitEditor({
       <section className="visit-rx card">
         <PrescriptionEditor draft={draft} onChange={setDraft} specialty={visit.specialty} findings={findings} />
         {hasRx && <RulesPanel draft={draft} onChange={setDraft} findings={findings} verdict={verdict} {...(server ? { extra: [...server.blocking, ...server.unacknowledged] } : {})} />}
-        {!context.patient.cccdMasked && hasRx && <p className="muted small">Thiếu CCCD? Bổ sung ở màn hình Tiếp đón rồi mở lại hồ sơ này.</p>}
+        {/* Gợi ý "bổ sung ở Tiếp đón" cần mạng: chỉ hiện khi máy thật sự biết bệnh nhân chưa có CCCD. */}
+        {!context.patient.cccdMasked && hasRx && opened.cccdKnown && <p className="muted small">Thiếu CCCD? Bổ sung ở màn hình Tiếp đón rồi mở lại hồ sơ này.</p>}
 
         <div className="sign-bar">
           {error && <p className="error" role="alert" data-testid="sign-error">{error}</p>}
