@@ -43,18 +43,29 @@ chỉ thêm một phần tử `totalFhirQuota` bên cạnh `userFhirQuota` và n
   xảy ra khi chạy nhiều lần liền ở khâu dựng dữ liệu. **KHÔNG phải việc này** — chờ ~1 phút rồi chạy lại; nâng
   quota không sửa và không nên sửa loại này.
 
-## Trạng thái kiểm chứng — CHƯA chạy được ở môi trường này
+## Trạng thái kiểm chứng — ✅ ĐÃ CHẠY XANH
 
-`pnpm typecheck && pnpm test`, dựng stack, seed, và `pnpm e2e:cycles` **CHƯA chạy được** trên hộp này.
+> Lịch sử: lần đầu agent không chạy được lệnh nào (shell trả exit code -1, không output, kể cả `echo hello`) do
+> Kiro vừa crash. Sau khi khởi động lại Kiro, chủ dự án chạy tay trên Windows + Git Bash với stack Medplum thật.
+> Dưới đây là kết quả thật.
 
-Lý do: công cụ thực thi lệnh (shell) trong môi trường agent hiện tại trả về exit code -1 và **không có output**
-cho MỌI lệnh, kể cả lệnh tầm thường (`echo hello`, `node --version`, `cmd /c echo probe-ok`). Đây là trục trặc
-của lớp thực thi lệnh, không phải lỗi của thay đổi. Vì vậy không chạy được:
-- `pnpm typecheck` / `pnpm test` (không cần Medplum nhưng vẫn cần shell).
-- `bash infra/dev-up.sh` + `pnpm seed` + `pnpm e2e:cycles` (ngoài ra còn cần Docker Desktop mở và `openssl`
-  để `setup.mjs` sinh khóa RSA — các điều kiện Windows đã biết).
+**`pnpm typecheck`** — xanh, cả 8 package qua.
 
-**KHÔNG tuyên bố bài T6 đã pass.** Thay đổi config đã sẵn sàng, nhưng chưa được một lần chạy nào xác nhận ở đây.
+**`pnpm test`** — xanh, toàn bộ unit test qua (fhir-vn-model 54, catalogs 16, rules 28, clinical 83, print 4,
+trial 13, clinic-web 222, bff unit 129). Không có gì vỡ do thay đổi quota.
+
+**`pnpm e2e:cycles`** — chạy trên stack thật, build+preview (BFF 8111, web 4174):
+
+- `E2E_CYCLES=80` (hạt giống 1217833390 / 1905334753): **80/80 chu kỳ, 13/13 kiểm cuối bài đạt, 0 mất, 0 trùng,
+  0 kết quả 429**. 186 giây. Máy chủ nhận lượt khám sau khi có mạng: trung vị 0.0s, lâu nhất 2.4s.
+- `E2E_CYCLES=100` (hạt giống 3495038889): **100/100 chu kỳ, 13/13 kiểm cuối bài đạt, 0 mất, 0 trùng, 0 kết quả
+  429**. 243 giây. Máy chủ nhận lượt khám sau khi có mạng: trung vị 0.0s, lâu nhất 2.3s — dư xa ngưỡng 60s của T6.
+  Bản ghi khớp đếm: Patient = Encounter = List = Task = Provenance = ClinicalImpression = 100; 100 số thứ tự liền
+  nhau 1→100; hàng đợi 470 mục đều xong; IndexedDB không có PII ở dạng rõ (kiểm F10); hàng rào in F12 đạt 100/100.
+
+**Phân loại 429:** KHÔNG có 429 nào ở cả hai mức — không FHIR-quota, không login-F5. Quota mới
+(`userFhirQuota` + `totalFhirQuota` = 1.000.000) đủ cho đỉnh của 100 chu kỳ + đợt xả hàng đợi 470 mục. Mục tiêu
+T-QUOTA đạt: bài T6 ở mức đầy đủ 100 chu kỳ không còn chạm trần.
 
 ## Mức độ tin cậy của thay đổi (dù chưa chạy)
 
