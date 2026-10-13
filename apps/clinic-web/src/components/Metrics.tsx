@@ -10,8 +10,10 @@ const Value = ({ seconds, target }: { seconds?: number; target: number }) =>
 
 export function Metrics({ auth }: { auth: AuthState }) {
   const [days, setDays] = useState(14);
-  const { online } = useOffline();
-  const m = usePoll(() => api.metrics(auth.token, days), 10_000, [auth.token, days]);
+  const { client, online } = useOffline();
+  // Qua `client.call`: lời gọi thành công gỡ cờ mất mạng (và lời gọi lỗi mạng cũng được tính), nên màn này không tự mâu thuẫn
+  // ("Mất mạng" cạnh bảng số vừa tải) và cũng trở thành một nguồn thoát khỏi "Mất mạng".
+  const m = usePoll(() => client.call(() => api.metrics(auth.token, days)), 10_000, [auth.token, days]);
   const data = m.data;
   return (
     <main className="page">

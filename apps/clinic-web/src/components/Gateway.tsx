@@ -36,9 +36,11 @@ function Pending({ p, token, onChanged, now, online }: { p: PendingPrescription;
 
 export function Gateway({ auth }: { auth: AuthState }) {
   const { token, user } = auth;
-  const { online } = useOffline();
-  const pending = usePoll((signal) => api.pending(token, signal), 2000, [token]);
-  const sim = usePoll(() => api.simGet(token).catch((e: Error & { status?: number }) => (e.status === 404 ? undefined : Promise.reject(e))), 3000, [token]);
+  const { client, online } = useOffline();
+  // Qua `client.call`: lời gọi thành công gỡ cờ mất mạng (lỗi mạng cũng được tính), tránh "Mất mạng" cạnh dữ liệu vừa tải;
+  // màn này cũng trở thành một nguồn thoát khỏi "Mất mạng".
+  const pending = usePoll((signal) => client.call(() => api.pending(token, signal)), 2000, [token]);
+  const sim = usePoll(() => client.call(() => api.simGet(token)).catch((e: Error & { status?: number }) => (e.status === 404 ? undefined : Promise.reject(e))), 3000, [token]);
   const now = useNow(1000);
   const [error, setError] = useState<string>();
   const canControl = user.role !== 'assistant' && online;

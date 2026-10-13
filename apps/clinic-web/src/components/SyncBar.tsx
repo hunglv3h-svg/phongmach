@@ -18,7 +18,8 @@ export function SyncBar({ view, open, onToggle, onSyncNow }: { view: IndicatorVi
         <button className="badge bad attention" onClick={onToggle} data-testid="attention-badge">{view.attention} cần xử lý</button>
       )}
       {view.lastSync && <small className="muted" data-testid="last-sync">{view.lastSync}</small>}
-      {(view.pending ?? 0) > 0 && <button className="ghost" disabled={!view.online} onClick={onSyncNow} data-testid="sync-now">Đồng bộ ngay</button>}
+      {/* Không khóa khi mất mạng: nút thăm dò máy chủ rồi gửi hết (lối thoát tay khỏi "Mất mạng" khi còn mục chờ). */}
+      {(view.pending ?? 0) > 0 && <button className="ghost" onClick={onSyncNow} data-testid="sync-now">Đồng bộ ngay</button>}
     </div>
   );
 }
