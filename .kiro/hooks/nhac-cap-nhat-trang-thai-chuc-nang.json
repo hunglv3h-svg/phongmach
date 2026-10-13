@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Nhắc cập nhật trạng thái chức năng",
+      "trigger": "PostFileSave",
+      "matcher": "(apps/clinic-web/src/|services/bff/src/|packages/[^/]+/src/).*\\.(ts|tsx)$",
+      "action": {
+        "type": "agent",
+        "prompt": "Bạn vừa đổi một file code chức năng. NẾU thay đổi này thêm, hoàn thành, hoặc đổi trạng thái một chức năng, hãy cập nhật dòng tương ứng trong `trang-thai-chuc-nang.md` ở thư mục gốc dự án: CHỈ sửa dòng liên quan, dựa trên trạng thái đã ghi trong tracker lần trước — KHÔNG đọc lại toàn bộ code. Giữ nguyên ký hiệu ✅/🟡/🔧/⬜ và cấu trúc bảng; cập nhật cột Ghi chú trỏ đúng file/hàm. Sau khi sửa .md, chạy `python scripts/md-to-docx.py` để sinh lại `trang-thai-chuc-nang.docx`. Nếu thay đổi chỉ là refactor hoặc sửa lỗi KHÔNG đổi trạng thái chức năng nào thì bỏ qua, không cần làm gì."
+      }
+    }
+  ]
+}
