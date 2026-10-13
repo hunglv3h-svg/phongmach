@@ -20,6 +20,8 @@ type Search = {
   hasMore?: boolean;
   /** Loại ý định đã tạo ra kết quả này, để quyết định có hiện câu nhắc "còn người trùng tên" hay không. */
   kind?: SearchIntent['kind'];
+  /** id các hồ sơ máy này đã tạo mà máy chủ chưa nhận: hiện kèm nhãn "chưa đồng bộ" (N3). */
+  pending?: string[];
 };
 
 const MORE_HINT = 'còn người trùng tên, gõ thêm năm sinh hoặc 4 số cuối';
@@ -66,8 +68,9 @@ export function Reception({ token }: { token: string }) {
       };
       try {
         if (!online) return await searchLocal();
-        const r = await client.call(() => api.search(token, query, abort.signal));
-        setSearch({ status: 'done', results: r.results, forQuery: query, hasMore: r.hasMore, kind: r.intent as SearchIntent['kind'] });
+        const r = await client.searchOnline(query, token, abort.signal);
+        if (abort.signal.aborted) return;
+        setSearch({ status: 'done', results: r.results, forQuery: query, hasMore: r.hasMore, kind: r.intent as SearchIntent['kind'], pending: r.pending });
         setActive(0);
       } catch (e) {
         if ((e as Error).name === 'AbortError') return;
@@ -173,6 +176,8 @@ export function Reception({ token }: { token: string }) {
                 <span className="result-name">{p.fullName}</span>
                 <span className="result-meta">
                   {[p.phone, ageText(p.birthDate), p.cccdMasked].filter(Boolean).join(' · ')}
+                  {/* Hồ sơ máy này tạo khi mất mạng, máy chủ chưa nhận: nói rõ ra, không để người dùng tưởng đã lên máy chủ. */}
+                  {search.pending?.includes(p.id) && <span className="chip" data-testid="result-unsynced">chưa đồng bộ</span>}
                 </span>
               </button>
             </li>

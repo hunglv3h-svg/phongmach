@@ -1,0 +1,7 @@
+{
+  "task_id": "task-phongmach-docker-demo",
+  "task_description": "Đóng gói Docker demo 'một lệnh' cho PHONGMACH: dựng BFF (Fastify, tsx) + PWA web (Vite→nginx) bằng Docker và nối vào backend Medplum ĐANG CHẠY (project phongmach-medplum, cổng 8103) mà KHÔNG dựng lại/recreate/xóa Medplum. Compose demo là project riêng (phongmach-demo), BFF nối Medplum qua host.docker.internal:8103. Giữ chốt an toàn BFF chỉ nghe localhost bằng cách gộp nginx+BFF cùng container. Seed một lần sinh .demo-tenants.json vào volume dùng chung. Cập nhật README mục 'Demo bằng Docker'.",
+  "status": "completed",
+  "feature_order": ["FEAT-001", "FEAT-002"],
+  "blocked_reason": null
+}
