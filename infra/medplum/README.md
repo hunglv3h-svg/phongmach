@@ -34,6 +34,15 @@ Thử nghiệm hiệu năng và vòng đời phòng khám: xem [`experiments/`](
 - Hạn mức mặc định: đăng nhập 5 lần/phút; FHIR 50.000 điểm/phút/người dùng (đọc = 1, tìm = 20, ghi = 100,
   tức khoảng 500 lần ghi/phút), mỗi project gấp 10 lần. Nhập dữ liệu hàng loạt sẽ chạm hạn mức; `batch` vẫn trả
   HTTP 200 còn từng phần tử bên trong trả 429, nên phải kiểm tra từng phần tử.
+- **Nâng hạn mức FHIR theo project (T-QUOTA).** Hạn mức FHIR của một project nâng được qua mảng
+  `Project.systemSetting` với hai setting `valueInteger`: `userFhirQuota` (điểm/phút cho mỗi user của project) và
+  `totalFhirQuota` (tổng điểm/phút của mọi user trong project; **mặc định = 10× hạn mức mỗi user**). Phòng khám thử
+  của bài T6/e2e-cycles và phòng khám buổi-thử đặt **cả hai = 1.000.000 điểm/phút** trong
+  `services/bff/scripts/{e2e-clinic,trial/clinic}.ts`, để chạy 100 chu kỳ ngắt/khôi phục mạng + đồng bộ 40 ca ≤ 60s
+  không chạm trần. Vì phòng khám thử chỉ có MỘT tài khoản máy, trần tổng-project mặc định (500.000) bằng đúng trần
+  mỗi-user cũ nên là nút thắt — phải nâng cả hai. Đây là bump **theo-project có chủ đích**, KHÔNG tắt hạn mức toàn
+  cục; luồng đo hiệu năng riêng vẫn dùng `setup.mjs --no-rate-limits` (xem [`experiments/`](experiments/README.md)).
+  *Nội dung về cơ chế hạn mức Medplum đã diễn giải lại cho tuân thủ giấy phép.*
 - `saveAuditEvents: true` được bật. Đọc và ghi sinh `AuditEvent` được lưu; **tìm kiếm thì không**.
 - `Project/{id}/$expunge` xóa dữ liệu của project (kể cả `AuditEvent`) nhưng **không xóa `Binary`** (ảnh, PDF) lẫn file trên đĩa.
   Export cấp project (`$export`) không có `Binary` hay `AuditEvent` và có file `ClientApplication` chứa `secret`.
