@@ -832,13 +832,21 @@ Lát 4 tách làm hai commit. **Lát 4-1 xong** (hàm thuần, chỉ báo, danh 
   - Số đo trên máy này: kiểu đạt 7 gói, 345 kiểm thử đơn vị, 41 tích hợp, e2e 13 + 24 + 13 + 12 bước trên cả bản dev và bản build.
 
 **Lát 5 xong (03/10/2026)** (bài e2e 20 chu kỳ ngắt và khôi phục mạng, đo tiêu chí M0-2; không sửa mã sản phẩm, không sửa BFF):
-- **Kết quả M0-2: đạt [Đã đo].** 20 chu kỳ ngắt và khôi phục mạng liên tiếp, 0 bản ghi mất, 0 bản ghi trùng.
+- **Kết quả M0-2: đạt trên các hạt giống đã chạy [Đã đo]** — xem phần nói lại ngày 12/10/2026 ngay dưới trước khi trích dẫn khẳng định này. 20 chu kỳ ngắt và khôi phục mạng liên tiếp, 0 bản ghi mất, 0 bản ghi trùng.
   - Trên máy dev, bản build: 4/4 lần chạy liên tiếp đạt 11/11 bước kiểm. Ba hạt giống ngẫu nhiên là 1204340693, 4025600034, 3101454767; hạt giống cố định là 12345.
   - Sau lần đỏ đầu tiên ở CI (do chính bài kiểm thử, xem dòng "CI"), chạy thêm 8 lần trên máy dev, đều đạt 11/11: hai lần với hạt giống của CI (2533173637) và sáu hạt giống ngẫu nhiên (2623727053, 1479480661, 575007583, 1765272687, 366576775, 2878407743).
   - Một lần chạy 100 chu kỳ (`E2E_CYCLES=100`, hạt giống 558698034) cũng đạt 11/11, mất 251 giây. Đây chưa phải T6 đầy đủ: T6 còn đòi đồng bộ 40 ca trong 60 giây.
   - Thời gian: bài 20 chu kỳ 44–55 giây; cả lệnh `pnpm e2e:cycles` (tạo phòng khám thử, chạy BFF và bản build, bài, dừng) 46–57 giây khi đã build sẵn, 63 giây khi phải build. Máy chủ nhận lượt khám sau khi có mạng lại: trung vị 0,3–1,2 giây, lâu nhất 4,3 giây.
   - Cấu hình máy đo: Windows 11, Intel i7-11800H (8 nhân, 16 luồng), 32 GB RAM, Medplum 5.2.0 trong Docker Desktop, `chrome-headless-shell` của Playwright.
   - CI: xem dòng "CI" ở cuối mục này.
+- **Nói lại khẳng định "M0-2 đạt" cho đúng mức (cập nhật 12/10/2026).** Khẳng định "đạt" ở trên được đo ngày 03/10 khi bài còn **11 bước kiểm**; sau khi thêm bước kiểm OFF-8, bài nay có **13 bước kiểm**. Bài sinh kế hoạch từ một hạt giống **ngẫu nhiên mỗi lần chạy** (không ghim), nên một lần xanh chỉ chứng nhận *một* tổ hợp lỗi mạng — không chứng nhận cho mọi hạt giống. Thực tế đã có **ba lỗi tiềm ẩn độc lập** làm đỏ bước này trong CI (Linux), tất cả phụ thuộc thời điểm nên không hạt giống nào "xấu":
+  - **(A)** quy tắc `no-cccd` chặn ký khi lượt khám mở bằng bản dự phòng (máy chưa có tóm tắt bệnh nhân) — "máy không biết CCCD" bị coi là "bệnh nhân không có CCCD";
+  - **(B)** người vừa tiếp đón khi mất mạng biến mất khỏi ô tìm ngay khi có mạng lại (ô tìm chỉ gọi máy chủ, bỏ qua hồ sơ còn trên máy);
+  - **(C)** dòng hàng chờ bị dựng lại liên tục trong lúc hàng đợi đồng bộ chạy, làm nút mở hồ sơ rời khỏi DOM đúng lúc bấm.
+  Cả ba đã sửa (PR #20, nhánh `fix/m0-2-cycles-sign-blocked`) và đều có phép thử ngược. Hồ sơ điều tra và cách sửa: `.agents/tasks/fix-m0-2-cycles.md` và `.agents/tasks/plan-m0-2-cycles.md`.
+  - **Hạt giống đã thực sự chạy qua và đạt 13/13:** CI (Linux) xanh cả bộ e2e ở `8847519`; máy dev (Windows, bản build) đạt 13/13 với `1393699289` và `2402878975` (hai hạt giống từng đỏ ở CI) cùng sáu hạt giống ngẫu nhiên `775421903, 1680994237, 284417755, 3920118664, 1142507739, 902551887` (12/10/2026).
+  - **Tiêu chí chỉ được coi là đạt bền vững** khi bài xanh với nhiều hạt giống khác nhau trên **cả Linux (CI) lẫn Windows**, trong đó bắt buộc gồm `1393699289`, `1256812025` và `1962719789` (ba hạt giống dựng lại ba lỗi A/B/C). Một vài lần xanh không thay cho điều kiện này.
+  - **Việc còn lại (chưa làm, non-blocking):** gốc churn hàng chờ (nguyên nhân C) mới chỉ chữa ở bài test, chưa chữa ở `apps/clinic-web/src/components/Queue.tsx`/`usePoll`; và đường "bệnh nhân thật sự chưa có CCCD, mở bằng bản dự phòng → ký+in được trên máy rồi máy chủ từ chối 422 lúc đồng bộ" (cùng lớp `allergy-unknown`) nên được nêu ở trang "Phạm vi".
 - Bài nằm ở `apps/clinic-web/e2e/offline-cycles.mjs` (script `e2e:cycles` của `clinic-web`). Chạy trọn bằng `pnpm e2e:cycles` ở gốc kho (`infra/e2e-cycles.mjs`):
   - tạo một phòng khám thử mới (`services/bff/scripts/e2e-clinic.ts`: Project, tài khoản máy, một bác sĩ có `Practitioner`), ghi tệp phòng khám tạm ở `services/bff/.data/e2e-cycles/` (đã gitignore);
   - chạy một BFF riêng ở cổng 8111 với tệp phòng khám tạm và tệp nhật ký riêng, và bản build của giao diện ở cổng 4174 trỏ `/api` tới 8111;
