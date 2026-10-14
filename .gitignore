@@ -8,3 +8,9 @@ coverage/
 services/bff/.demo-tenants.json
 services/bff/.data/
 apps/clinic-web/e2e/screenshots/
+
+# Worktree tạm của workflow agent (không commit)
+.worktrees/
+
+# Lockfile của npm (dự án dùng pnpm) — tránh commit nhầm
+package-lock.json
