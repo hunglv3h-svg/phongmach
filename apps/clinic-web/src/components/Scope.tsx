@@ -6,6 +6,7 @@ const REAL = [
   'In đơn A5 có mã QR; hộp thư đi không mất đơn khi cổng lỗi; trạng thái từng đơn; thử lại tự động và thủ công',
   'Bộ quét đối soát tìm đơn đã ký nhưng chưa được xếp hàng gửi (khoảng trống ghi kép) và tự xếp lại hàng gửi, idempotent theo mã đơn (không tạo đơn trùng)',
   'Đồng hồ phiên khám đo ở máy chủ, lượt làm lúc mất mạng đo bằng đồng hồ máy khám và đếm riêng (mục tiêu 60 giây); nhật ký truy cập; cách ly giữa hai phòng khám',
+  'Đăng nhập nhân viên bằng mật khẩu (băm Argon2id) và xác thực hai bước TOTP bắt buộc cho chủ phòng khám và bác sĩ; vòng đời phiên có cấp, gia hạn (refresh xoay một lần) và thu hồi; tenant lấy từ phiên đã ký, không từ tham số request',
   'Ngoại tuyến trên từng máy: mất mạng vẫn tìm trong hồ sơ đã có trên máy, tạo bệnh nhân, cấp số tạm, gọi vào khám, khám, ký (chữ ký vẫn là mô phỏng) và in đơn có nhãn "ký khi mất mạng"; có mạng lại thì tự đồng bộ, không mất, không trùng (kiểm thử tự động 100 chu kỳ ngắt và khôi phục mạng)',
   'Dữ liệu trên máy (bản nháp, hàng đợi đồng bộ, bộ đệm hồ sơ) được mã hóa; thao tác bị máy chủ từ chối khi đồng bộ (xung đột, quy tắc kê đơn) luôn được báo, không tự bỏ, không ghi đè; bác sĩ xem được lý do, in lại tờ đơn đã lưu, và đánh dấu "đã xử lý" để mục rời danh sách (không gửi lên máy chủ, không ghi đè dữ liệu máy chủ)',
 ];
@@ -13,7 +14,7 @@ const SIMULATED = [
   'Chữ ký số: băm nội dung đơn và gắn nhãn, chưa gọi nhà cung cấp ký số (T1)',
   'Cổng đơn thuốc quốc gia: bộ nối giả có nút chèn lỗi, cùng giao diện với bộ nối thật (chưa có tài liệu API và sandbox, TL34 Q1)',
   'Danh mục ICD-10, thuốc và đơn mẫu: tập con minh họa, chưa được cố vấn y khoa duyệt, chưa phải danh mục chính thức',
-  'Đăng nhập: chọn người dùng demo, chưa có mật khẩu (T-IDP)',
+  'MFA qua OTP tin nhắn (SMS) và "thiết bị tin cậy": bộ nối giả cùng giao diện với bộ nối thật, chưa gửi tin thật (M1); TOTP là xác thực hai bước THẬT',
   'Gửi đơn qua Zalo: nút ở màn hình kết quả ký chỉ mở bản xem trước tin nhắn, không gửi gì; tin nhắn không có thuốc hay chẩn đoán (gửi thật cần bệnh nhân đồng ý và mẫu tin ZNS được duyệt, M1)',
 ];
 const MISSING = [

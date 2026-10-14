@@ -166,7 +166,7 @@ note_winpid() {
   if [ -n "$winpid" ]; then echo "$pid $winpid" >"$file"; fi
 }
 say "chạy BFF (log: $LOGS/bff.log)"
-launch bff "$BFF_PORT" services/bff env DEMO_AUTH=1 ${OUTBOX_BASE_MS:+OUTBOX_BASE_MS=$OUTBOX_BASE_MS} ${OUTBOX_CAP_MS:+OUTBOX_CAP_MS=$OUTBOX_CAP_MS} pnpm start
+launch bff "$BFF_PORT" services/bff env AUTH_MODE=demo DEMO_AUTH=1 ${OUTBOX_BASE_MS:+OUTBOX_BASE_MS=$OUTBOX_BASE_MS} ${OUTBOX_CAP_MS:+OUTBOX_CAP_MS=$OUTBOX_CAP_MS} pnpm start
 say "chạy giao diện (log: $LOGS/web.log)"
 # --strictPort: cổng bị giữ thì Vite lỗi rõ ràng, không lặng lẽ nhảy sang cổng kế tiếp mà script không biết.
 launch web "$WEB_PORT" apps/clinic-web pnpm dev --host 127.0.0.1 --port "$WEB_PORT" --strictPort

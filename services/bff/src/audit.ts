@@ -31,12 +31,18 @@ export type AuditAction =
 /**
  * Nhật ký truy cập do BFF ghi (T-AUD, A3). KHÔNG chứa nội dung truy vấn hay dữ liệu bệnh nhân:
  * chỉ ghi loại truy vấn, số kết quả và id tài nguyên.
+ *
+ * `tenant`/`userId` là optional VÌ nhánh đăng nhập tiền-phiên (action:'login', outcome:'denied') chưa có
+ * danh tính (§4.5). Mọi action DỮ LIỆU khác bắt buộc có cả hai: `record()` (đường dữ liệu, app.ts) khẳng
+ * định điều này lúc chạy và ném nếu thiếu — nên optional ở đây KHÔNG làm yếu bất biến #2 cho đường dữ liệu.
+ * `recent(tenant)` lọc theo `tenant`, nên entry có `tenant` undefined (login/denied) không lọt vào màn
+ * nhật ký theo-tenant của bất kỳ phòng khám nào.
  */
 export interface AuditEntry {
   ts: string;
   requestId: string;
-  tenant: string;
-  userId: string;
+  tenant?: string;
+  userId?: string;
   userName?: string;
   /** `system`: việc nền của BFF (hộp thư đi), không do người dùng gọi. */
   role: Role | 'system';

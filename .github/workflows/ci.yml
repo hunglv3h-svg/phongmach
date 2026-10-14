@@ -77,7 +77,7 @@ jobs:
       - name: Chạy BFF (thử lại nhanh để bước chèn lỗi cổng không chờ lâu) và bản build của giao diện
         run: |
           pnpm --filter @phongmach/clinic-web build
-          (cd services/bff && DEMO_AUTH=1 OUTBOX_BASE_MS=500 OUTBOX_CAP_MS=2000 nohup pnpm start > "$RUNNER_TEMP/bff.log" 2>&1 &)
+          (cd services/bff && AUTH_MODE=demo DEMO_AUTH=1 OUTBOX_BASE_MS=500 OUTBOX_CAP_MS=2000 nohup pnpm start > "$RUNNER_TEMP/bff.log" 2>&1 &)
           (cd apps/clinic-web && nohup pnpm preview --host 127.0.0.1 > "$RUNNER_TEMP/web.log" 2>&1 &)
           curl --silent --fail --retry 30 --retry-delay 2 --retry-connrefused --retry-all-errors http://127.0.0.1:8110/api/health
           curl --silent --fail --retry 30 --retry-delay 2 --retry-connrefused --retry-all-errors http://127.0.0.1:4173/

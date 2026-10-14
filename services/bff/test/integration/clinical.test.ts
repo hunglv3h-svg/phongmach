@@ -76,7 +76,7 @@ beforeAll(async () => {
   });
   simulator = new SimulatedGateway();
   stores = new MedplumTenants(MEDPLUM_URL, tenants.tenants, RETRY).store;
-  app = buildApp({ tenants, stores, audit, sessions: new SessionService('i'.repeat(40), 60), simulator, now: () => clock, logLevel: 'silent' });
+  app = buildApp({ mode: 'demo', tenants, stores, audit, sessions: new SessionService('i'.repeat(40), 60), simulator, now: () => clock, logLevel: 'silent' });
   for (const u of tenants.users) tokens[u.id] = (await app.inject({ method: 'POST', url: '/api/session', payload: { tenant: u.tenant, userId: u.id } })).json().token;
 }, 60_000);
 afterAll(async () => app?.close());

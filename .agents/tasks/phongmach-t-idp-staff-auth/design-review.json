@@ -1,0 +1,12 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    { "severity": "LOW", "summary": "NIT-1: 'optional only for action:login' audit fields can't be expressed on one interface; specify a discriminated union / separate LoginAuditEntry or a runtime assertion in record() so non-login data-path writes still require tenant+userId, and state recent() behavior for undefined-tenant entries." },
+    { "severity": "LOW", "summary": "NIT-2: owner-only read route /api/audit is not re-stated under the new sid-revocation-on-every-route rule; add it to §9/B5 or state 'every requireSession route, no exemption' and name /api/audit as covered." },
+    { "severity": "LOW", "summary": "NIT-3: internal login rate-limit (§4.6) has no named test/mutation unlike every other guard; add a virtual-clock unit B-row proven RED when the counter/lock is removed." },
+    { "severity": "LOW", "summary": "NIT-4: Option-A HIBP-egress failure mode is under-stated for the owner's A/B decision; add one sentence that under A with egress blocked, account creation and password set/change (not just login) break (F2 fires on create/set/change)." },
+    { "severity": "LOW", "summary": "NIT-5: Argon2id and RFC6238 TOTP libraries are unpinned; name and pin maintained libraries and state Argon2id parameters in the identity-module checklist." },
+    { "severity": "LOW", "summary": "NIT-6: 'no PII' for login must explicitly cover the Fastify request body (credentials arrive in the body); add an invariant+test that login/MFA routes and the error handler never log the body, incl. on a 400 validation failure." }
+  ],
+  "reviewDoc": "d:\\My Documents D\\UNIGIS\\PM\\phongmach\\.worktrees\\t-idp-design\\.agents\\tasks\\phongmach-t-idp-staff-auth\\design-review.md"
+}

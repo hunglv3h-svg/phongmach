@@ -31,6 +31,13 @@ export interface DemoTenant {
   users: Array<{ id: string; name: string; role: Role }>;
 }
 
+/** Phản hồi bước đăng nhập THẬT: hoặc cấp phiên luôn, hoặc đòi MFA, hoặc buộc đăng ký MFA, hoặc chọn tenant. */
+export type LoginStep =
+  | ({ step: 'session' } & AuthState)
+  | { step: 'mfa'; mfaToken: string }
+  | { step: 'enroll'; mfaToken: string; secret: string; otpauth: string }
+  | { step: 'choose-tenant'; pretenantToken: string; tenants: Array<{ slug: string; name: string }> };
+
 export interface AuditEntry {
   ts: string;
   requestId: string;
@@ -95,7 +102,7 @@ export function setUnauthorizedHandler(fn: (() => void) | undefined): void {
   onUnauthorized = fn;
 }
 
-async function request<T>(method: string, path: string, options: { body?: unknown; token?: string; signal?: AbortSignal; text?: boolean } = {}): Promise<T> {
+async function request<T>(method: string, path: string, options: { body?: unknown; token?: string; signal?: AbortSignal; text?: boolean; credentials?: RequestCredentials } = {}): Promise<T> {
   let res: Response;
   try {
     res = await fetch(path, {
@@ -103,6 +110,8 @@ async function request<T>(method: string, path: string, options: { body?: unknow
       headers: { ...(options.body ? { 'content-type': 'application/json' } : {}), ...(options.token ? { authorization: `Bearer ${options.token}` } : {}) },
       ...(options.body ? { body: JSON.stringify(options.body) } : {}),
       ...(options.signal ? { signal: options.signal } : {}),
+      // Cookie refresh (HttpOnly) phải được gửi kèm cho các route /api/session/*.
+      ...(options.credentials ? { credentials: options.credentials } : {}),
     });
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') throw err;
@@ -170,11 +179,47 @@ export interface SimState {
   accepted: number;
 }
 
+/** Dạng thô máy chủ trả cho các bước đăng nhập thật. */
+interface RawLoginResponse {
+  token?: string;
+  user?: { id: string; name: string; role: Role };
+  tenant?: { slug: string; name: string };
+  mfaRequired?: boolean;
+  enrollMfa?: boolean;
+  mfaToken?: string;
+  secret?: string;
+  otpauth?: string;
+  chooseTenant?: Array<{ slug: string; name: string }>;
+  pretenantToken?: string;
+}
+
+function toLoginStep(r: RawLoginResponse): LoginStep {
+  if (r.token && r.user && r.tenant) return { step: 'session', token: r.token, user: r.user, tenant: r.tenant };
+  if (r.enrollMfa && r.mfaToken && r.secret) return { step: 'enroll', mfaToken: r.mfaToken, secret: r.secret, otpauth: r.otpauth ?? '' };
+  if (r.mfaRequired && r.mfaToken) return { step: 'mfa', mfaToken: r.mfaToken };
+  if (r.chooseTenant && r.pretenantToken) return { step: 'choose-tenant', pretenantToken: r.pretenantToken, tenants: r.chooseTenant };
+  throw new ApiError(500, 'bad-login-response', 'Phản hồi đăng nhập không hợp lệ');
+}
+
 export const api = {
   /** Thăm dò máy chủ khi đang mất mạng: không token, không chạm Medplum, không ghi nhật ký truy cập. */
   health: () => request<{ ok: true }>('GET', '/api/health'),
   demoUsers: () => request<{ demo: boolean; tenants: DemoTenant[] }>('GET', '/api/session/demo-users'),
-  login: (tenant: string, userId: string) => request<AuthState>('POST', '/api/session', { body: { tenant, userId } }),
+  /** Đăng nhập chế độ DEMO (không mật khẩu): chỉ dùng khi BFF chạy mode demo (có nhãn). */
+  demoLogin: (tenant: string, userId: string) => request<AuthState>('POST', '/api/session', { body: { tenant, userId } }),
+
+  /** Đăng nhập THẬT bước 1: mật khẩu. Trả bước tiếp theo (session / mfa / enroll / choose-tenant). */
+  login: (loginId: string, password: string) => request<RawLoginResponse>('POST', '/api/session', { body: { loginId, password }, credentials: 'include' }).then(toLoginStep),
+  /** Bước 2: nhập mã TOTP (hoặc đăng ký TOTP khi enroll, kèm secret). */
+  mfa: (mfaToken: string, code: string, secret?: string) =>
+    request<RawLoginResponse>('POST', '/api/session/mfa', { body: { mfaToken, code, ...(secret ? { secret } : {}) }, credentials: 'include' }).then(toLoginStep),
+  /** Chọn tenant cho nhân viên nhiều phòng khám (tenant phải thuộc danh sách đã ký trong pretenantToken). */
+  selectTenant: (pretenantToken: string, tenant: string) =>
+    request<RawLoginResponse>('POST', '/api/session/select-tenant', { body: { pretenantToken, tenant }, credentials: 'include' }).then(toLoginStep),
+  /** Gia hạn phiên bằng cookie refresh (gửi kèm credentials). Trả phiên mới. */
+  refresh: () => request<AuthState>('POST', '/api/session/refresh', { credentials: 'include' }),
+  /** Đăng xuất: thu hồi phiên ở máy chủ và xóa cookie refresh. */
+  logout: (token: string) => request<{ ok: true }>('POST', '/api/session/logout', { token, credentials: 'include' }),
   search: (token: string, q: string, signal?: AbortSignal) =>
     request<{ intent: string; results: PatientSummary[]; hasMore: boolean }>('GET', `/api/patients/search?q=${encodeURIComponent(q)}`, { token, ...(signal ? { signal } : {}) }),
   createPatient: (token: string, patient: NewPatient) => request<{ patient: PatientSummary; created: boolean }>('POST', '/api/patients', { token, body: patient }),

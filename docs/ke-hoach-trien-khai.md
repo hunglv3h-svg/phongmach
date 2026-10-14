@@ -298,7 +298,7 @@ Kubernetes hai vùng. Những điều chỉnh bên dưới đều có bằng ch�
 | A5 | **Danh mục dùng chung** (ICD-10, thuốc, dịch vụ mẫu) trong một project riêng, các phòng khám `Project.link` tới | Q7 |
 | A6 | **Mã hóa cấp trường + chỉ số mù** cho CCCD và trường nhạy cảm; quyết định trường nào, vì sao các tìm kiếm còn lại không bị ảnh hưởng | Mục 3.2 dòng 10 |
 | A7 | **Chuẩn hóa tên không dấu** ở lớp dịch vụ khi ghi (thêm `HumanName` thứ hai) hoặc `SearchParameter` tùy biến; ở client thì chuẩn hóa khi tìm trong cache. Từ 04/10/2026 thêm khóa tìm chính xác trong `meta.tag` (từng từ của tên, 4 số cuối điện thoại) để người khớp đúng không bị cắt khỏi kết quả (mục 2, M0-3) | F4 |
-| A8 | **Xác thực nhân viên**: chốt người dùng Medplum (kèm TOTP, chấp nhận egress HIBP qua proxy) hay IdP riêng của UNIGIS ánh xạ vào Medplum | F2 |
+| A8 | **Xác thực nhân viên** — **ĐÃ CHỐT: Phương án B** (IdP riêng UNIGIS; M0 là IdP tối giản nhúng trong BFF theo ranh giới OIDC-ready). Tránh egress HIBP bắt buộc (F2) và hạn mức 5/phút/IP của Medplum (F5) trên đường xác thực. Đã triển khai (T-IDP) | F2 (đóng) |
 | A9 | **Công suất**: nhiều bản Medplum sau cân bằng tải, object storage S3-compatible, DB riêng khỏi bộ tạo tải; đặt `userFhirQuota`/`totalFhirQuota` theo từng project | Mục 2 (một node bão hòa ≈ 700 req/s), F5, F10 |
 
 ---
@@ -454,7 +454,7 @@ Bài học từ M0-S1, đã đưa vào mã và kiểm thử:
 5. **Nạp dữ liệu qua hạn mức mặc định** (≈ 500 lần ghi/phút): script seed tự chờ và gửi lại các phần tử bị từ chối (429); 1.000 lần ghi mất 2 phút 14 giây. Dùng lại được cho công cụ chuyển dữ liệu (T-MIG).
 6. **Công cụ**: pnpm 12 coi script build của `esbuild` là lỗi cứng, phải khai báo `allowBuilds` trong `pnpm-workspace.yaml`; shim `corepack` của pnpm hỏng trong môi trường này nên cài pnpm trực tiếp.
 
-Chế độ demo: BFF chưa có xác thực thật (T-IDP) nên chỉ khởi động khi đặt `DEMO_AUTH=1` và chỉ lắng nghe trên localhost; điều này giữ nguyên cho đến khi chốt Q7.
+Chế độ demo: BFF chọn chế độ bằng biến `AUTH_MODE` **không có mặc định** (`real` hoặc `demo`; thiếu/sai ⇒ không khởi động). `AUTH_MODE=demo` giữ nguyên hành vi diễn tập cũ (chọn người dùng demo không mật khẩu, chỉ localhost) — thay cho `DEMO_AUTH=1`. T-IDP đã xong (xem §5.7): đường thật `AUTH_MODE=real` có xác thực mật khẩu + MFA.
 
 ### 5.7 Trạng thái M0-S2 (cập nhật 02/10/2026)
 
@@ -470,6 +470,7 @@ M0-S2 (19–30/10) được làm trước lịch vì M0-S1 xong sớm. Bảng d�
 | "Kê lại" một nút | Xong | Sao chép thuốc, chẩn đoán, lời dặn từ lượt cũ; xác nhận cũ không mang sang; quy tắc chạy lại với dị ứng hiện tại |
 | In A5 có mã QR (T-PRINT) | Xong | Xuất PDF từ Chromium: đúng 1 trang, khổ A5 (419,5 × 595,3 pt); mọi chuỗi từ dữ liệu được thoát ký tự và trang in mang CSP `default-src 'none'` |
 | Ký số | **Mô phỏng** | Băm SHA-256 nội dung đơn lưu trong `Provenance.signature`, gắn nhãn "mô phỏng" ở mọi nơi hiển thị |
+| Xác thực nhân viên (T-IDP) | Xong (A8/F2 đóng theo Phương án B) | Đường thật `AUTH_MODE=real`: mật khẩu Argon2id + TOTP bắt buộc cho owner/doctor (cổng buộc-đăng-ký); access ~15 phút + refresh 7 ngày xoay-một-lần (replay ⇒ thu hồi `sid`); thu hồi tức thì mọi route gồm route đọc; tenant từ phiên đã ký; chọn tenant cho nhân viên nhiều phòng khám; route quản trị owner tạo nhân viên. Kho phiên SQLite (`node:sqlite`) cạnh BFF, consume refresh nguyên tử. Chế độ `demo` tách riêng, có nhãn. **Mô phỏng-có-nhãn**: OTP qua SMS, thiết bị tin cậy (TOTP là thật). Mọi chốt chặn B0–B7 có kiểm thử xác nhận ĐỎ khi gỡ chốt |
 | Liên thông: hộp thư đi, trạng thái từng đơn, thử lại, màn hình "đơn chưa gửi" (T-SIM) | Xong, cổng **mô phỏng** | Đã ký → đang gửi → chờ gửi lại → đã gửi / lỗi; thử lại theo lũy thừa 2 có trần; quá số lần thì "lỗi" và gửi lại thủ công; cổng gửi idempotent theo mã đơn; trạng thái cổng tách riêng từng phòng khám |
 | Đồng hồ phiên khám (T-TELE) | Xong phần đo | Máy chủ đo từ lúc mở hồ sơ đến lúc ký; p50/p90 theo bác sĩ so với 60/120 giây; phiên dài hơn 30 phút được đếm riêng, không giấu. **M0-1 chưa đo được** vì cần 3 bác sĩ thật |
 | Trang "Phạm vi" (M0-5) | Xong | Liệt kê đã thật / mô phỏng / chưa làm, có kiểm tra trong e2e |
@@ -574,7 +575,7 @@ Không hợp lý thì **vẫn lưu lượt khám**, không tính vào p50/p90, �
 
 **OFF-5. Kho cục bộ có mã hóa.** *Quyết định:* IndexedDB qua Dexie, một CSDL cho mỗi (phòng khám, người dùng). Mọi bản ghi có dữ liệu bệnh nhân lưu dạng `{iv, ciphertext}` AES-GCM 256 bit, IV 96 bit ngẫu nhiên mỗi lần ghi, dữ liệu kèm (AAD) là tên bảng + id để không tráo được bản ghi giữa các chỗ. Khóa là `CryptoKey` sinh bằng WebCrypto lúc đăng nhập, `extractable: false`, lưu trong chính CSDL đó. Trường dạng rõ chỉ gồm id, trạng thái, thời điểm, loại thao tác (không tên, chẩn đoán, thuốc). Kho này thay `sessionStorage` của bản nháp. Đăng xuất xóa cả CSDL lẫn khóa **nếu không còn mục chờ đồng bộ** (còn thì xem OFF-6). Gọi `navigator.storage.persist()` để giảm khả năng trình duyệt tự dọn; dùng Web Locks để chỉ một tab gửi đồng bộ. Trình duyệt không có IndexedDB hoặc WebCrypto thì ứng dụng chạy như hiện nay (chỉ trực tuyến) và ghi rõ.
 
-*Giới hạn bảo vệ khi chưa có xác thực thật (T-IDP), nói thẳng:* khóa nằm cùng máy với dữ liệu.
+*Giới hạn bảo vệ, nói thẳng:* khóa nằm cùng máy với dữ liệu. T-IDP (xác thực nhân viên thật) đã xong nhưng **cố ý giữ** mô hình khóa-tại-máy: khóa kho KHÔNG dẫn xuất từ mật khẩu, để mất mạng vẫn mở được kho (khám/ký/in offline) mà không cần xác minh mật khẩu/MFA qua mạng. T-IDP nối đăng xuất-khi-hết-mục-chờ → `store.destroy()` (xóa khóa+dữ liệu); còn mục chờ → chỉ `close()`, giữ kho. Mã PIN kho vẫn là việc M1.
 
 - Ai mở được trình duyệt đó (cùng tài khoản hệ điều hành, phiên còn hạn) là xem được, vì ứng dụng tự giải mã.
 - Ai lấy được ổ đĩa thì lấy được cả khóa từ tệp của trình duyệt: `extractable: false` chỉ chặn JavaScript xuất khóa, không chặn đọc đĩa [Phân tích].
@@ -586,7 +587,7 @@ Không hợp lý thì **vẫn lưu lượt khám**, không tính vào p50/p90, �
 
 *Loại:* `localStorage`/`sessionStorage` (không mã hóa, dung lượng nhỏ); khóa dẫn xuất từ token phiên (token đổi mỗi lần đăng nhập và hết hạn, hàng đợi sẽ không giải mã được nữa, tức là mất dữ liệu).
 
-**OFF-6. Phiên đăng nhập hết hạn.** *Quyết định:* hàng đợi gắn với người tạo (phòng khám + id người dùng), không gắn với token. Mất mạng thì không gửi gì, nên token hết hạn trong lúc đó không ảnh hưởng. Có mạng lại mà token đã hết hạn thì BFF trả 401 và ứng dụng **tạm dừng đồng bộ** (không xóa, không bỏ mục nào), hiện "Phiên đã hết hạn: đăng nhập lại để đồng bộ N mục". Màn hình đăng nhập ghi "máy này còn N mục chưa đồng bộ của BS. A"; số đếm và tên nhân viên lưu dạng rõ (không phải dữ liệu bệnh nhân). Đăng nhập lại đúng người thì đồng bộ tiếp. Đăng xuất khi còn mục chờ thì hỏi "Chờ đồng bộ" hoặc "Đăng xuất, giữ dữ liệu đã mã hóa trên máy để đồng bộ lần đăng nhập sau"; **ở M0 không có nút hủy dữ liệu chưa đồng bộ**. Không tự gia hạn token ở M0 (T-IDP sẽ thay cơ chế phiên).
+**OFF-6. Phiên đăng nhập hết hạn.** *Quyết định:* hàng đợi gắn với người tạo (phòng khám + id người dùng), không gắn với token. Mất mạng thì không gửi gì, nên token hết hạn trong lúc đó không ảnh hưởng. Có mạng lại mà token đã hết hạn thì BFF trả 401 và ứng dụng **tạm dừng đồng bộ** (không xóa, không bỏ mục nào), hiện "Phiên đã hết hạn: đăng nhập lại để đồng bộ N mục". Màn hình đăng nhập ghi "máy này còn N mục chưa đồng bộ của BS. A"; số đếm và tên nhân viên lưu dạng rõ (không phải dữ liệu bệnh nhân). Đăng nhập lại đúng người thì đồng bộ tiếp. Đăng xuất khi còn mục chờ thì hỏi "Chờ đồng bộ" hoặc "Đăng xuất, giữ dữ liệu đã mã hóa trên máy để đồng bộ lần đăng nhập sau"; **ở M0 không có nút hủy dữ liệu chưa đồng bộ**. T-IDP (đã xong) thay cơ chế phiên bằng access ~15 phút + refresh 7 ngày xoay-một-lần: khi online, giao diện gia hạn im lặng qua `POST /api/session/refresh` (cookie refresh); khi offline, hàng đợi vẫn gắn với người tạo nên token hết hạn trong lúc mất mạng không ảnh hưởng — hành vi "tạm dừng đồng bộ, nhắc đăng nhập lại" ở trên giữ nguyên.
 
 *Rủi ro:* đóng tab khi đang mất mạng làm mất token (`sessionStorage`), phải chờ có mạng để đăng nhập lại mới làm tiếp; dữ liệu không mất. Mục chờ của người nghỉ việc nằm lại trên máy: M1 cần quy trình quản trị.
 
@@ -1253,7 +1254,7 @@ Mục "Mới" là việc phát sinh từ thử nghiệm hoặc từ quyết đ�
 | T-SIM | Cổng đơn thuốc mô phỏng | Bộ nối giả lập có nút chèn lỗi, cùng giao diện với bộ nối thật (T-RX) để thay không đổi ứng dụng | S | M0 | ✓ |
 | T-DEMO | Dữ liệu và kịch bản trình diễn | Dữ liệu giả hoàn toàn, hai phòng khám, kịch bản 10 phút, bản dự phòng, nhãn "mô phỏng" | S | M0 | ✓ |
 | T-SEC0 | Vô hiệu tài khoản mặc định, quản lý bí mật | Xóa/đổi `admin@example.com`; đổi mật khẩu qua API cần egress HIBP (F2) nên cần quy trình thay thế được duyệt; khóa ký trong kho bí mật; tắt tự đăng ký | M | 0, 1 | |
-| T-IDP | Xác thực nhân viên | Người dùng Medplum (TOTP, dính F2) hay IdP riêng; xác thực hai lớp cho người ký | M | 0 | |
+| T-IDP | Xác thực nhân viên | **Xong ở M0 (Phương án B)**: IdP tối giản nhúng BFF, mật khẩu Argon2id + TOTP bắt buộc owner/doctor; access ~15′ + refresh 7 ngày xoay-một-lần + thu hồi `sid` mọi route; kho phiên SQLite; chế độ demo tách riêng có nhãn. OTP-SMS/thiết bị tin cậy mô phỏng-có-nhãn → M1 (IdP OIDC tách rời) | M | 0 | ✔ M0 |
 | T-EGR | Kiểm soát egress | Danh sách host được phép, chặn mặc định; xác định host của kiểm tra phiên bản (F7); proxy hay thay thế cho HIBP | S | 0, 1 | |
 | T-TEN | Cấp phòng khám | Dịch vụ tạo `Project`, `ClientApplication`, `AccessPolicy`, hạn mức, `Project.link` tới danh mục; tạo/tạm khóa/xóa; không dùng quyền siêu quản trị cho vận hành thường xuyên. M0: mức tối thiểu cho hai phòng khám demo | L | M0, 1 | |
 | T-QUOTA | Hạn mức | `userFhirQuota`/`totalFhirQuota` từng project; tài khoản nhập dữ liệu hạn mức cao; proxy chuyển IP thật để hạn mức đăng nhập không gộp phòng khám. ✅ **M0: phần đủ cho T6 đã xong và đã kiểm chứng** — phòng khám thử e2e-cycles và buổi-thử đặt cả hai = 1.000.000 điểm/phút trong `services/bff/scripts/{e2e-clinic,trial/clinic}.ts` (dựng-lại-được); đã chạy thật `E2E_CYCLES=100 pnpm e2e:cycles` xanh 100/100, 0 kết quả 429 (xem T6 trong bảng "còn lại M0"). Phần tài khoản nhập dữ liệu hạn mức cao và proxy chuyển IP thật còn lại thuộc M1 | S | M0 (phần T6), 1 | |

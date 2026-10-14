@@ -23,8 +23,11 @@
     "@phongmach/fhir-vn-model": "workspace:*",
     "@phongmach/print": "workspace:*",
     "@phongmach/rules": "workspace:*",
+    "@fastify/cookie": "11.1.3",
+    "@node-rs/argon2": "2.2.2",
     "fastify": "^5.0.0",
     "jose": "^6.0.0",
+    "otpauth": "9.5.2",
     "zod": "^4.0.0"
   },
   "devDependencies": {

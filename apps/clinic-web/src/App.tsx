@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { loadAuth, saveAuth, setUnauthorizedHandler, type AuthState } from './api';
+import { api, loadAuth, saveAuth, setUnauthorizedHandler, type AuthState } from './api';
 import { DemoBanner } from './components/DemoBanner';
 import { Login } from './components/Login';
 import { Shell } from './components/Shell';
@@ -9,6 +9,7 @@ import { useLocalStore } from './local/useLocalStore';
 
 export function App() {
   const [auth, setAuth] = useState<AuthState | undefined>(() => loadAuth());
+  const [mode, setMode] = useState<'demo' | 'real'>();
   const [notice, setNotice] = useState<string>();
   // Phiên vừa hết hạn (401) của ai: màn hình đăng nhập báo "Phiên đã hết hạn: đăng nhập lại để đồng bộ N mục" (OFF-6).
   const [expired, setExpired] = useState<{ tenant: string; userId: string }>();
@@ -22,6 +23,14 @@ export function App() {
   }, []);
 
   useEffect(() => purgeLegacySessionDrafts(), []);
+
+  // Phát hiện chế độ BFF (demo/real) để dải nhãn nói đúng về xác thực. demoUsers() 200 ⇒ demo; 404 ⇒ real.
+  useEffect(() => {
+    api.demoUsers().then(
+      () => setMode('demo'),
+      () => setMode('real')
+    );
+  }, []);
 
   // Hết phiên (401): chỉ về màn hình đăng nhập, KHÔNG xóa dữ liệu trên máy (đăng nhập lại đúng người thì dùng tiếp).
   useEffect(() => {
@@ -46,6 +55,9 @@ export function App() {
   const logout = async (keep: boolean) => {
     setNotice(undefined);
     setExpired(undefined);
+    // Thu hồi phiên ở máy chủ (mode real có route logout; mode demo không có — bỏ qua lỗi).
+    const token = authRef.current?.token;
+    if (token) await api.logout(token).catch(() => undefined);
     if (keep) {
       store?.close();
     } else {
@@ -60,7 +72,7 @@ export function App() {
 
   return (
     <>
-      <DemoBanner />
+      <DemoBanner {...(mode ? { mode } : {})} />
       {auth ? (
         store ? (
           <OfflineProvider auth={auth} store={store}>

@@ -228,7 +228,7 @@ beforeAll(async () => {
       { id: `${s}-doctor`, name: `BS. ${s}`, role: 'doctor' as const, tenant: s },
     ]),
   });
-  app = buildApp({ tenants, stores: async (slug) => stores[slug]!, audit, sessions: new SessionService('i'.repeat(40), 60), simulator, logLevel: 'silent' });
+  app = buildApp({ mode: 'demo', tenants, stores: async (slug) => stores[slug]!, audit, sessions: new SessionService('i'.repeat(40), 60), simulator, logLevel: 'silent' });
   for (const u of tenants.users) tokens[u.id] = (await app.inject({ method: 'POST', url: '/api/session', payload: { tenant: u.tenant, userId: u.id } })).json().token;
 }, 90_000);
 afterAll(async () => app?.close());
