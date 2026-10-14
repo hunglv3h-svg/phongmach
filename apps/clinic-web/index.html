@@ -8,14 +8,12 @@
     <title>Phòng mạch – bản trình diễn</title>
     <script>
       // Đặt chủ đề trước khi vẽ để tránh "nháy" sai màu. Hook React (theme.ts) tiếp quản sau.
+      // Chỉ hai chế độ: 'light' thì sáng, mọi giá trị khác (vắng, cũ 'system') đều về tối.
       (function () {
         try {
-          var m = localStorage.getItem('phongmach.theme');
-          var t = (m === 'light' || m === 'dark')
-            ? m
-            : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          var t = localStorage.getItem('phongmach.theme') === 'light' ? 'light' : 'dark';
           document.documentElement.setAttribute('data-theme', t);
-        } catch (e) { /* localStorage bị chặn: để CSS media-query lo. */ }
+        } catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
       })();
     </script>
   </head>

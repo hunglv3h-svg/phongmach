@@ -1,18 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { readStoredMode, resolveTheme, THEME_KEY } from './theme';
-
-describe('resolveTheme', () => {
-  it('system theo sở thích hệ điều hành', () => {
-    expect(resolveTheme('system', true)).toBe('dark');
-    expect(resolveTheme('system', false)).toBe('light');
-  });
-  it('light/dark bỏ qua sở thích hệ điều hành', () => {
-    expect(resolveTheme('light', true)).toBe('light');
-    expect(resolveTheme('light', false)).toBe('light');
-    expect(resolveTheme('dark', true)).toBe('dark');
-    expect(resolveTheme('dark', false)).toBe('dark');
-  });
-});
+import { readStoredMode, THEME_KEY } from './theme';
 
 describe('readStoredMode', () => {
   const store = new Map<string, string>();
@@ -25,30 +12,35 @@ describe('readStoredMode', () => {
 
   afterEach(() => store.clear());
 
-  it('trả đúng giá trị đã lưu', () => {
-    for (const m of ['light', 'dark', 'system'] as const) {
-      store.set(THEME_KEY, m);
-      expect(readStoredMode()).toBe(m);
-    }
+  it('trả đúng giá trị đã lưu (light/dark)', () => {
+    store.set(THEME_KEY, 'light');
+    expect(readStoredMode()).toBe('light');
+    store.set(THEME_KEY, 'dark');
+    expect(readStoredMode()).toBe('dark');
   });
 
-  it('mặc định system khi vắng', () => {
-    expect(readStoredMode()).toBe('system');
+  it('mặc định dark khi vắng (lần chạy đầu)', () => {
+    expect(readStoredMode()).toBe('dark');
   });
 
-  it('mặc định system khi giá trị lạ', () => {
+  it('quy giá trị cũ "system" về dark (di trú êm cho người từng chọn "theo hệ thống")', () => {
+    store.set(THEME_KEY, 'system');
+    expect(readStoredMode()).toBe('dark');
+  });
+
+  it('quy giá trị lạ về dark', () => {
     store.set(THEME_KEY, 'neon');
-    expect(readStoredMode()).toBe('system');
+    expect(readStoredMode()).toBe('dark');
   });
 
-  it('mặc định system khi localStorage ném lỗi', () => {
+  it('mặc định dark khi localStorage ném lỗi', () => {
     vi.stubGlobal('localStorage', {
       getItem: () => {
         throw new Error('bị chặn');
       },
     });
     try {
-      expect(readStoredMode()).toBe('system');
+      expect(readStoredMode()).toBe('dark');
     } finally {
       vi.stubGlobal('localStorage', stub);
     }

@@ -2,7 +2,6 @@ import type { ThemeMode } from '../theme';
 import { useTheme } from '../theme';
 
 const OPTIONS: Array<{ value: ThemeMode; label: string }> = [
-  { value: 'system', label: 'Theo hệ thống' },
   { value: 'light', label: 'Sáng' },
   { value: 'dark', label: 'Tối' },
 ];

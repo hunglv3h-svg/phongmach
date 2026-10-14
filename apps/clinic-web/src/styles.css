@@ -94,9 +94,15 @@ h2 { font-size: 1.15rem; margin: 0 0 .75rem; }
   color: var(--warn-ink);
   padding: .4rem 1rem;
   font-size: .85rem;
-  text-align: center;
   border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: .5rem 1rem;
+  flex-wrap: wrap;
 }
+/* Nhãn mô phỏng chiếm phần còn lại và đẩy nút chọn chủ đề sang phải trên cùng (góc trên bên phải). */
+.demo-banner-text { flex: 1 1 auto; min-width: 0; }
+.demo-banner .theme-toggle { margin-left: auto; flex: 0 0 auto; }
 
 button, input, select { font: inherit; color: inherit; }
 button {
@@ -493,23 +499,20 @@ h2 { font-weight: 650; letter-spacing: -.01em; }
 @media (min-width: 1024px) and (prefers-color-scheme: dark) { .topbar { border-right: 1px solid var(--line); } }
 @media (min-width: 1024px) { [data-theme="dark"] .topbar { border-right: 1px solid var(--line); } }
 
-/* Nút chọn chủ đề: nhóm 3 nút nhỏ liền nhau, đọc được cả ở vùng nội dung sáng lẫn cột mực tối */
+/* Nút chọn Sáng / Tối: hai nút nhỏ liền nhau ở góc trên bên phải dải nhãn mô phỏng.
+   Dải nhãn có nền riêng (--warn-bg) ở cả hai chủ đề; nút lấy màu theo mực của dải (--warn-ink)
+   để luôn đủ tương phản và không che chữ "BẢN TRÌNH DIỄN M0". */
 .theme-toggle { display: inline-flex; gap: 2px; }
 .theme-opt {
-  min-height: 36px;
+  min-height: 32px;
   padding: 0 .6rem;
   font-size: .8rem;
-  border: 1px solid var(--line);
+  border: 1px solid color-mix(in srgb, var(--warn-ink) 45%, transparent);
   border-radius: 0;
-  background: var(--surface);
-  color: var(--text);
+  background: transparent;
+  color: var(--warn-ink);
 }
 .theme-opt:first-child { border-top-left-radius: var(--radius); border-bottom-left-radius: var(--radius); }
 .theme-opt:last-child { border-top-right-radius: var(--radius); border-bottom-right-radius: var(--radius); }
-.theme-opt.active { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
-
-/* Trong cột mực tối (máy bàn/tablet ngang) nút phải hợp với các tab mực */
-@media (min-width: 1024px) {
-  .topbar .theme-opt { color: var(--ink-text); background: transparent; border-color: rgba(255,255,255,.18); }
-  .topbar .theme-opt.active { background: rgba(255,255,255,.14); color: #fff; }
-}
+.theme-opt:hover { background: color-mix(in srgb, var(--warn-ink) 12%, transparent); }
+.theme-opt.active { background: color-mix(in srgb, var(--warn-ink) 20%, transparent); font-weight: 600; }
