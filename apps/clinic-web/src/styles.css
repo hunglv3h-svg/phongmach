@@ -37,6 +37,42 @@
   }
 }
 
+/* Người dùng chọn chủ đề rõ ràng (lưu trên máy) phải THẮNG sở thích hệ điều hành.
+   Giữ nguyên :root và @media ở trên làm bản dự phòng khi chưa có JS / chưa chọn. */
+[data-theme="light"] {
+  --bg: #f4f7f7;
+  --surface: #ffffff;
+  --text: #14282a;
+  --muted: #5b6f72;
+  --line: #d6e0e1;
+  --primary: #0f766e;
+  --primary-ink: #ffffff;
+  --primary-soft: #dff3f1;
+  --danger: #b42318;
+  --warn-bg: #fff4d6;
+  --warn-ink: #6b4a00;
+  --ok-bg: #dcf5e4;
+  --ok-ink: #14532d;
+  --bad-bg: #fde4e1;
+}
+
+[data-theme="dark"] {
+  --bg: #0e1819;
+  --surface: #152325;
+  --text: #e6f0f0;
+  --muted: #93a9ac;
+  --line: #28393b;
+  --primary: #2dd4bf;
+  --primary-ink: #04201d;
+  --primary-soft: #12383a;
+  --danger: #ff8a7a;
+  --warn-bg: #3a2f10;
+  --warn-ink: #ffe29a;
+  --ok-bg: #123a22;
+  --ok-ink: #b6efc8;
+  --bad-bg: #3d1a17;
+}
+
 * { box-sizing: border-box; }
 html, body, #root { min-height: 100%; }
 body {
@@ -455,3 +491,25 @@ h2 { font-weight: 650; letter-spacing: -.01em; }
 .queue-number { width: 5.75rem; min-width: 0; padding-inline: 0; }
 @media (min-width: 1024px) { .topbar small, .topbar .muted { color: var(--ink-muted); } }
 @media (min-width: 1024px) and (prefers-color-scheme: dark) { .topbar { border-right: 1px solid var(--line); } }
+@media (min-width: 1024px) { [data-theme="dark"] .topbar { border-right: 1px solid var(--line); } }
+
+/* Nút chọn chủ đề: nhóm 3 nút nhỏ liền nhau, đọc được cả ở vùng nội dung sáng lẫn cột mực tối */
+.theme-toggle { display: inline-flex; gap: 2px; }
+.theme-opt {
+  min-height: 36px;
+  padding: 0 .6rem;
+  font-size: .8rem;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--text);
+}
+.theme-opt:first-child { border-top-left-radius: var(--radius); border-bottom-left-radius: var(--radius); }
+.theme-opt:last-child { border-top-right-radius: var(--radius); border-bottom-right-radius: var(--radius); }
+.theme-opt.active { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+
+/* Trong cột mực tối (máy bàn/tablet ngang) nút phải hợp với các tab mực */
+@media (min-width: 1024px) {
+  .topbar .theme-opt { color: var(--ink-text); background: transparent; border-color: rgba(255,255,255,.18); }
+  .topbar .theme-opt.active { background: rgba(255,255,255,.14); color: #fff; }
+}

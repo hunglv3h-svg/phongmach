@@ -16,6 +16,7 @@ import { Reception } from './Reception';
 import { Scope } from './Scope';
 import { SyncBar } from './SyncBar';
 import { SyncNotices, SyncPanel } from './SyncPanel';
+import { ThemeToggle } from './ThemeToggle';
 
 type Screen = 'reception' | 'queue' | 'visit' | 'display' | 'gateway' | 'metrics' | 'audit' | 'scope';
 
@@ -75,6 +76,7 @@ export function Shell({ auth, store, onLogout }: { auth: AuthState; store: Local
             <span className="tab-label">Thêm</span>
           </button>
         </nav>
+        <ThemeToggle />
         <SyncBar view={overview.view} open={listOpen} onToggle={() => setListOpen((o) => !o)} onSyncNow={() => void actions.syncNow()} />
         <button className="ghost" onClick={() => void logout()}>Đăng xuất</button>
       </header>
