@@ -20,7 +20,7 @@ import { buildPatient, type NewPatientInput, type PatientSummary, type SearchInt
 import { MemoryAuditSink, type AuditSink } from '../../src/audit.js';
 import { buildApp, type AppDeps } from '../../src/app.js';
 import { SessionService } from '../../src/session.js';
-import type { CheckInOptions, ClinicStore, CompleteCommand, CompleteResult, Doctor, FinishedVisit, OpenResult, OutboxJob, PatientSearchResult, StoreFactory } from '../../src/store.js';
+import type { CheckInOptions, ClinicStore, CompleteCommand, CompleteResult, Doctor, FinishedVisit, OpenResult, OutboxJob, PatientSearchResult, ReconcileResult, StoreFactory } from '../../src/store.js';
 import { parseTenantsFile } from '../../src/tenants.js';
 
 export const tenantsFile = parseTenantsFile({
@@ -246,6 +246,23 @@ export class FakeStore implements ClinicStore {
   }
   async fail(job: OutboxJob, error: string, _now: Date, retryable: boolean) {
     this.outbox.push({ op: 'fail', taskId: job.taskId, detail: error, retryable });
+  }
+
+  /**
+   * Đối soát (A2): một đơn đã ký mà `prescription.gateway` thiếu đại diện cho "có List nhưng mất Task gửi" — nó không hiện ở
+   * `pendingPrescriptions`. Quét tạo lại gateway (như tạo lại Task) rồi đưa mã vào `requeued`; gọi lần hai không thêm trùng vì
+   * gateway đã có (idempotent theo mã đơn).
+   */
+  async reconcilePrescriptions(_now: Date, limit: number): Promise<ReconcileResult> {
+    const signed = [...this.visits.values()].filter((v) => v.item.status === 'done' && v.result?.prescription).slice(0, limit);
+    const requeued: string[] = [];
+    for (const v of signed) {
+      const rx = v.result!.prescription!;
+      if (rx.gateway) continue;
+      rx.gateway = { taskId: crypto.randomUUID(), status: 'signed', attempts: 0 };
+      requeued.push(rx.code);
+    }
+    return { scanned: signed.length, requeued };
   }
 }
 

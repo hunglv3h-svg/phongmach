@@ -43,8 +43,25 @@ export function Gateway({ auth }: { auth: AuthState }) {
   const sim = usePoll(() => client.call(() => api.simGet(token)).catch((e: Error & { status?: number }) => (e.status === 404 ? undefined : Promise.reject(e))), 3000, [token]);
   const now = useNow(1000);
   const [error, setError] = useState<string>();
+  const [reconciling, setReconciling] = useState(false);
+  const [reconcileNote, setReconcileNote] = useState<string>();
   const canControl = user.role !== 'assistant' && online;
   const state = sim.data?.state;
+
+  const reconcile = async () => {
+    setReconciling(true);
+    setReconcileNote(undefined);
+    setError(undefined);
+    try {
+      const res = await api.reconcile(token);
+      setReconcileNote(res.requeued.length > 0 ? `Đã xếp hàng lại ${res.requeued.length} đơn đã ký bị kẹt` : 'Không có đơn nào bị kẹt');
+      pending.reload();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setReconciling(false);
+    }
+  };
 
   const set = async (body: { mode?: 'up' | 'down'; failNext?: number }) => {
     setError(undefined);
@@ -83,7 +100,14 @@ export function Gateway({ auth }: { auth: AuthState }) {
       )}
       {(error || pending.error) && <p className="error" role="alert">{error ?? pending.error}</p>}
 
-      <h2>Đơn chưa gửi được</h2>
+      <div className="sim-head">
+        <h2>Đơn chưa gửi được</h2>
+        <button className="secondary" disabled={!canControl || reconciling} title={online ? undefined : NEED_NETWORK} onClick={() => void reconcile()} data-testid="reconcile">
+          {reconciling ? 'Đang quét…' : 'Quét đối soát'}
+        </button>
+      </div>
+      <p className="muted small">Quét tìm đơn đã ký nhưng chưa có việc gửi (khoảng trống ghi kép) và xếp lại hàng. Lặp lại an toàn: không tạo đơn trùng.</p>
+      {reconcileNote && <p className="ok-text" data-testid="reconcile-note">{reconcileNote}</p>}
       {pending.data && rows.length === 0 && <p className="ok-text" data-testid="pending-empty">Không có đơn nào đang chờ: tất cả đã gửi.</p>}
       {rows.length > 0 && (
         <div className="table-wrap" tabIndex={0} role="region" aria-label="Bảng dữ liệu, cuộn ngang bằng phím mũi tên">

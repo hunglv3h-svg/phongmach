@@ -208,6 +208,8 @@ export const api = {
   /** Ghi nhật ký một lần in làm lúc mất mạng (trình duyệt in từ dữ liệu trên máy, không qua /print). */
   printed: (token: string, id: string, body: { printedAt: string }) => request<{ ok: true }>('POST', `/api/prescriptions/${id}/printed`, { token, body }),
   retry: (token: string, id: string) => request<{ ok: true }>('POST', `/api/prescriptions/${id}/retry`, { token }),
+  /** Đối soát (A2): tìm đơn đã ký nhưng chưa được xếp hàng gửi và xếp lại. Idempotent theo mã đơn. */
+  reconcile: (token: string) => request<{ scanned: number; requeued: string[] }>('POST', '/api/prescriptions/reconcile', { token }),
 
   simGet: (token: string) => request<{ simulated: boolean; state: SimState }>('GET', '/api/sim/gateway', { token }),
   simSet: (token: string, body: { mode?: 'up' | 'down'; failNext?: number }) => request<{ simulated: boolean; state: SimState }>('POST', '/api/sim/gateway', { token, body }),

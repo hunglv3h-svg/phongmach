@@ -92,6 +92,14 @@ export interface FinishedVisit {
   finishedAt?: string | undefined;
 }
 
+/** Kết quả một lần đối soát hộp thư đi (A2). `requeued` = mã các đơn đã được xếp lại hàng gửi. */
+export interface ReconcileResult {
+  /** Số đơn đã ký (List `prescription`) đã quét trong cửa sổ. */
+  scanned: number;
+  /** Mã đơn (prescriptionLocal) của những đơn thiếu Task gửi và vừa được tạo lại Task. */
+  requeued: string[];
+}
+
 /** Hộp thư đi của MỘT phòng khám. */
 export interface OutboxStore {
   /** Việc đến hạn gửi, chỉ của các lượt khám đã đóng (điểm chốt của việc hoàn tất). */
@@ -100,6 +108,12 @@ export interface OutboxStore {
   claim(job: OutboxJob, now: Date): Promise<boolean>;
   complete(job: OutboxJob, nationalCode: string, now: Date): Promise<void>;
   fail(job: OutboxJob, error: string, now: Date, retryable: boolean): Promise<void>;
+  /**
+   * Đối soát khoảng trống ghi kép (A2, F11): quét các đơn đã ký (List `prescription`) gần đây và tìm đơn KHÔNG có Task
+   * `send-prescription` tương ứng — đơn bị kẹt, không bao giờ được xếp hàng gửi vì worker chỉ quét Task. Với mỗi đơn như vậy
+   * (của lượt khám đã đóng), tạo lại Task bằng `createResourceIfNoneExist` theo mã đơn: idempotent, gọi lặp không sinh Task trùng.
+   */
+  reconcilePrescriptions(now: Date, limit: number): Promise<ReconcileResult>;
 }
 
 /**

@@ -4,6 +4,7 @@ const REAL = [
   'Khám một trang: sinh hiệu, triệu chứng, chẩn đoán ICD-10 gõ tắt, dị ứng, tiền sử, lịch sử khám',
   'Kê đơn: đơn mẫu, "kê lại" một nút, kiểm tra trùng hoạt chất, dị ứng, số ngày tối đa (30 ngày, mạn tính 90 ngày), thiếu CCCD; xác nhận kèm lý do được lưu',
   'In đơn A5 có mã QR; hộp thư đi không mất đơn khi cổng lỗi; trạng thái từng đơn; thử lại tự động và thủ công',
+  'Bộ quét đối soát tìm đơn đã ký nhưng chưa được xếp hàng gửi (khoảng trống ghi kép) và tự xếp lại hàng gửi, idempotent theo mã đơn (không tạo đơn trùng)',
   'Đồng hồ phiên khám đo ở máy chủ, lượt làm lúc mất mạng đo bằng đồng hồ máy khám và đếm riêng (mục tiêu 60 giây); nhật ký truy cập; cách ly giữa hai phòng khám',
   'Ngoại tuyến trên từng máy: mất mạng vẫn tìm trong hồ sơ đã có trên máy, tạo bệnh nhân, cấp số tạm, gọi vào khám, khám, ký (chữ ký vẫn là mô phỏng) và in đơn có nhãn "ký khi mất mạng"; có mạng lại thì tự đồng bộ, không mất, không trùng (kiểm thử tự động 100 chu kỳ ngắt và khôi phục mạng)',
   'Dữ liệu trên máy (bản nháp, hàng đợi đồng bộ, bộ đệm hồ sơ) được mã hóa; thao tác bị máy chủ từ chối khi đồng bộ (xung đột, quy tắc kê đơn) luôn được báo, không tự bỏ, không ghi đè; bác sĩ xem được lý do, in lại tờ đơn đã lưu, và đánh dấu "đã xử lý" để mục rời danh sách (không gửi lên máy chủ, không ghi đè dữ liệu máy chủ)',

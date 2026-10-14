@@ -73,7 +73,7 @@ GĐ2 = 04–07/2027; GĐ3 = 08–12/2027. Nguồn mốc: `ke-hoach-trien-khai.md
 | Bộ nối (giao diện chuẩn `Gateway`), hàng đợi gửi, trạng thái từng đơn | ✅ | M0 | `services/bff/src/gateway.ts` (interface `Gateway`), `outbox.ts`; `medplum.ts` `dueSends`/`claim`/`complete`/`fail`; trạng thái signed/sending/retry/sent/failed (`GATEWAY_LABEL`) |
 | Thử lại (tự động + thủ công), màn hình "đơn chưa gửi được" | ✅ | M0 | `medplum.ts` `pendingPrescriptions`/`retryPrescription`; `components/Gateway.tsx`; outbox có backoff (`isDue`) |
 | Cổng quốc gia (gửi thật) | 🟡 | M0 → M1 | `SimulatedGateway` (gateway.ts): có nút bật/tắt (`mode up/down`) và chèn lỗi (`failNext`), mã quốc gia tiền tố `SIM-`, idempotent theo `localCode`; nhãn ở `SignResult.tsx`/`Scope.tsx`. Gửi thật = T-RX (chờ tài liệu API + sandbox, TL34 Q1) |
-| Outbox đối soát idempotent theo mã đơn (đầy đủ) | 🔧 | M1 (S2) | M0 có outbox + thử lại; đối soát đầy đủ ở T-OUTBOX |
+| Outbox đối soát idempotent theo mã đơn (đầy đủ) | ✅ | M0 | `medplum.ts` `reconcilePrescriptions` quét List `prescription` thiếu Task `send-prescription` (khoảng trống ghi kép A2/F11) rồi tạo lại Task qua `createResourceIfNoneExist` theo mã đơn (idempotent); route `POST /api/prescriptions/reconcile` (`routes/clinical.ts`, CLINICAL_ROLES, nhật ký `prescription-reconcile` không PII); nút "Quét đối soát" ở `components/Gateway.tsx`; test đột biến `test/unit/reconcile.test.ts` (đã quan sát ĐỎ) + tích hợp `test/integration/clinical.test.ts` (A2) |
 
 ## 5. Ngoại tuyến (offline)
 

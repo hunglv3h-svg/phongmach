@@ -522,3 +522,50 @@ describe('ngoại tuyến: thao tác làm lúc mất mạng, gửi lên khi đ�
     expect((await call('POST', `/api/prescriptions/${offlineRx.id}/printed`, 'b-owner', { printedAt })).statusCode).toBe(404);
   });
 });
+
+describe('đối soát: đơn đã ký thiếu trạng thái gửi (A2, F11)', () => {
+  async function signNew(name: string) {
+    clock = new Date();
+    const patientId = await newPatient(name);
+    const visit = await enqueue(patientId);
+    await call('POST', `/api/visits/${visit.id}/open`, 'a-doctor');
+    const res = await complete(visit.id, 'a-doctor', completionBody(randomUUID(), { prescription: { lines: [PARA], acknowledgements: [] } }));
+    expect(res.statusCode).toBe(201);
+    return res.json().prescription as { id: string; code: string };
+  }
+  const taskQuery = (code: string) => `&identifier=urn:phongmach:ma-don-noi-bo|${code}&code=urn:phongmach:task|send-prescription`;
+
+  it('đơn mất Task gửi: không hiện ở pending; đối soát xếp lại hàng, worker gửi được; gọi lại không tạo Task trùng', async () => {
+    const rx = await signNew('Phan Văn Kẹt');
+
+    // Mô phỏng khoảng trống ghi kép: đơn đã ký nhưng Task gửi biến mất (BFF ghi dở hoặc mất Task).
+    const task = await adminA.searchOne('Task', { identifier: `urn:phongmach:ma-don-noi-bo|${rx.code}`, code: 'urn:phongmach:task|send-prescription' });
+    expect(task).toBeDefined();
+    await adminA.deleteResource('Task', task!.id!);
+    expect(await count('Task', taskQuery(rx.code))).toBe(0);
+
+    // Không có Task thì đơn không hiện ở "đơn chưa gửi được": worker không bao giờ thấy nó.
+    const before = (await call('GET', '/api/prescriptions/pending', 'a-assistant')).json().pending as Array<{ code: string }>;
+    expect(before.some((p) => p.code === rx.code)).toBe(false);
+
+    // Đối soát: tạo lại Task theo mã đơn, đơn quay lại pending ở trạng thái "đã ký".
+    const store = await stores('a');
+    const result = await store.reconcilePrescriptions(nowForWorker(), 100);
+    expect(result.requeued).toContain(rx.code);
+    expect(await count('Task', taskQuery(rx.code))).toBe(1);
+    const after = (await call('GET', '/api/prescriptions/pending', 'a-assistant')).json().pending as Array<{ code: string; gateway: { status: string } }>;
+    expect(after.find((p) => p.code === rx.code)!.gateway.status).toBe('signed');
+
+    // Worker gửi được đơn đã đối soát (tenant dùng chung có thể còn đơn khác đến hạn: gửi hết là được, không lỗi).
+    const run = await outbox();
+    expect(run.failed).toBe(0);
+    expect(run.sent).toBeGreaterThanOrEqual(1);
+    const sent = (await call('GET', `/api/prescriptions/${rx.id}`, 'a-doctor')).json().prescription.gateway;
+    expect(sent).toMatchObject({ status: 'sent', nationalCode: expect.stringMatching(/^SIM-/) });
+
+    // Gọi lại đối soát: idempotent theo mã đơn, không tạo Task thứ hai.
+    const again = await store.reconcilePrescriptions(nowForWorker(), 100);
+    expect(again.requeued).not.toContain(rx.code);
+    expect(await count('Task', taskQuery(rx.code))).toBe(1);
+  });
+});

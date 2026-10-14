@@ -5,6 +5,7 @@ import {
   buildAllergy,
   buildCheckIn,
   buildHistoryItem,
+  buildSendTask,
   claim,
   failedEntries,
   isDue,
@@ -45,7 +46,7 @@ import {
 import { EXTENSIONS, SYSTEMS, buildPatient, clientUuidQuery, digitsOnly, nameWordTag, patchPatient, phoneSuffixTagQuery, rankByNameWords, rankByPhoneSuffix, stableById, toPatientSummary, type NewPatientInput, type PatientSummary, type SearchIntent } from '@phongmach/fhir-vn-model';
 import { DEFAULT_CONFLICT_RETRY, backoff, isConflictEntry, retryOnConflict, type ConflictRetry } from './conflict.js';
 import type { GatewayPayload } from './gateway.js';
-import { BusyError, type CheckInOptions, type ClinicStore, type CompleteCommand, type CompleteResult, type Doctor, type FinishedVisit, type OpenResult, type OutboxJob, type PatientSearchResult, type StoreFactory } from './store.js';
+import { BusyError, type CheckInOptions, type ClinicStore, type CompleteCommand, type CompleteResult, type Doctor, type FinishedVisit, type OpenResult, type OutboxJob, type PatientSearchResult, type ReconcileResult, type StoreFactory } from './store.js';
 import type { Tenant } from './tenants.js';
 
 /** Số kết quả "chứa đoạn số" lấy về để lấp chỗ sau những người có số KẾT THÚC bằng đoạn đó (tìm riêng, theo khóa). */
@@ -62,6 +63,7 @@ const PREFETCH_CHUNK = 50;
 const PREVIOUS_VISITS = 10;
 const PROBLEM_LIST = 'http://terminology.hl7.org/CodeSystem/condition-category|problem-list-item';
 const SEND_TASK = `${SYSTEMS.task}|send-prescription`;
+const PRESCRIPTION_LIST = `${SYSTEMS.task}|prescription`;
 
 const REVINCLUDES = ['Condition:encounter', 'Observation:encounter', 'ClinicalImpression:encounter', 'MedicationRequest:encounter', 'List:encounter'] as const;
 
@@ -492,6 +494,43 @@ export class MedplumClinicStore implements ClinicStore {
   async fail(job: OutboxJob, error: string, now: Date, retryable: boolean): Promise<void> {
     const task = await this.medplum.readResource('Task', job.taskId);
     await this.medplum.updateResource(markFailed(task, error, now, this.policy, !retryable), ifMatch(task));
+  }
+
+  async reconcilePrescriptions(now: Date, limit: number): Promise<ReconcileResult> {
+    // Quét `limit` đơn mới nhất (cửa sổ thời gian đơn giản cho M0): các List đã ký trong khoảng gần đây.
+    const lists = await this.medplum.searchResources('List', { code: PRESCRIPTION_LIST, _sort: '-date', _count: String(limit) });
+    const byCode = new Map<string, List>();
+    for (const list of lists) {
+      const code = list.identifier?.find((i) => i.system === SYSTEMS.prescriptionLocal)?.value;
+      if (code && list.id && !byCode.has(code)) byCode.set(code, list);
+    }
+    const codes = [...byCode.keys()];
+    if (codes.length === 0) return { scanned: 0, requeued: [] };
+
+    // Một truy vấn: mã nào đã có Task gửi (dù trạng thái nào) thì không cần tạo lại.
+    const tasks = await this.medplum.searchResources('Task', {
+      identifier: codes.map((c) => `${SYSTEMS.prescriptionLocal}|${c}`).join(','),
+      code: SEND_TASK,
+      _count: String(codes.length),
+    });
+    const hasTask = new Set(tasks.map((t) => t.identifier?.find((i) => i.system === SYSTEMS.prescriptionLocal)?.value).filter((c): c is string => !!c));
+
+    const requeued: string[] = [];
+    for (const [code, list] of byCode) {
+      if (hasTask.has(code)) continue;
+      const patientId = refId(list.subject?.reference, 'Patient');
+      const encounterId = refId(list.encounter?.reference, 'Encounter');
+      if (!patientId || !encounterId) continue;
+      // Điểm chốt như `toJob`: chỉ xếp hàng gửi đơn của lượt khám đã đóng (hoàn tất ghi dở thì chưa gửi).
+      const enc = await this.readOrUndefined('Encounter', encounterId);
+      if (enc?.status !== 'finished') continue;
+      // Tạo lại Task theo mã đơn: idempotent, gọi lặp (hoặc hai lần quét song song) không sinh Task trùng.
+      await this.retry('reconcile', () =>
+        this.medplum.createResourceIfNoneExist(buildSendTask({ listRef: `List/${list.id}`, patientId, localCode: code, now }), `identifier=${SYSTEMS.prescriptionLocal}|${code}`)
+      );
+      requeued.push(code);
+    }
+    return { scanned: byCode.size, requeued };
   }
 
   // ------------------------------------------------------------------------------------------------ số đo

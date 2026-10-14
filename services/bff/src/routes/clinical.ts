@@ -88,6 +88,7 @@ const simBody = z.object({ mode: z.enum(['up', 'down']).optional(), failNext: z.
 const metricsQuery = z.object({ days: z.coerce.number().int().min(1).max(90).default(14) });
 const visitsQuery = z.object({ limit: z.coerce.number().int().min(1).max(50).default(10) });
 const pendingQuery = z.object({ limit: z.coerce.number().int().min(1).max(100).default(50) });
+const reconcileQuery = z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) });
 const prefetchQuery = z.object({ patients: z.string().max(4000).optional() });
 const printedBody = z.object({ printedAt: clientTime.optional() }).default({});
 
@@ -316,6 +317,15 @@ export function registerClinicalRoutes(api: FastifyInstance, ctx: RouteContext):
     const pending = await (await ctx.store(req)).pendingPrescriptions(limit);
     await ctx.record(req, 'prescription-read', { resultCount: pending.length });
     return { pending };
+  });
+
+  // Đối soát khoảng trống ghi kép (A2, F11): tìm đơn đã ký nhưng chưa có việc gửi và xếp lại hàng. Idempotent theo mã đơn.
+  // Khai báo trước ':id' để "reconcile" không bị hiểu là một id.
+  api.post('/api/prescriptions/reconcile', { preHandler: ctx.guard('prescription-reconcile', ...CLINICAL_ROLES) }, async (req) => {
+    const { limit } = reconcileQuery.parse(req.query);
+    const result = await (await ctx.store(req)).reconcilePrescriptions(ctx.now(), limit);
+    await ctx.record(req, 'prescription-reconcile', { resultCount: result.requeued.length });
+    return result;
   });
 
   api.get('/api/prescriptions/:id', { preHandler: ctx.guard('prescription-read', ...ALL_ROLES) }, async (req, reply) => {

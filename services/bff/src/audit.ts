@@ -23,6 +23,7 @@ export type AuditAction =
   | 'prescription-read'
   | 'prescription-print'
   | 'prescription-retry'
+  | 'prescription-reconcile'
   | 'gateway-send'
   | 'gateway-sim'
   | 'metrics-read';
