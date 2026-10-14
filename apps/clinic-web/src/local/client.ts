@@ -9,7 +9,7 @@ import { localPrescriptionCode, printLocal } from '../print';
 import { parseNum, toCompleteRequest, toLineInput, type Draft } from '../visit/draft';
 import { mergeQueue, nextLocalNumber, searchLocal, type CachedPatient, type LocalQueueItem, type QueueSnapshot, type SignedOffline } from './cache';
 import { isTmp, newTmpId, type AnyOp, type NewOp, type Op, type OpDisplay, type Payloads } from './ops';
-import type { Change, LocalStore } from './store';
+import { isTerminal, type Change, type LocalStore } from './store';
 import type { Outcome, SyncEngine } from './sync';
 import type { SyncData } from './syncList';
 
@@ -167,7 +167,7 @@ export class OfflineClient {
 
   /** Hồ sơ trong bộ đệm khớp ô tìm mà mục "tạo bệnh nhân" của nó chưa được máy chủ nhận. */
   private async unsyncedMatches(query: string): Promise<PatientSummary[]> {
-    const unsent = new Set((await this.engine.ops()).filter((o) => o.meta.kind === 'patient' && o.meta.status !== 'done').map((o) => (o as Op<'patient'>).body.payload.tmpId));
+    const unsent = new Set((await this.engine.ops()).filter((o) => o.meta.kind === 'patient' && !isTerminal(o.meta.status)).map((o) => (o as Op<'patient'>).body.payload.tmpId));
     if (unsent.size === 0) return [];
     return (await this.searchCache(query)).results.filter((p) => unsent.has(p.id));
   }
@@ -275,7 +275,7 @@ export class OfflineClient {
 
   /** Mục chưa xong mà một thao tác mới trên lượt khám này phải chờ (cấp số lúc mất mạng, mở hồ sơ lúc mất mạng). */
   private async visitDeps(visitId: string, kinds: Array<AnyOp['meta']['kind']> = ['checkin', 'open']): Promise<string[]> {
-    return (await this.opsFor(visitId)).ops.filter((o) => o.meta.status !== 'done' && kinds.includes(o.meta.kind)).map((o) => o.id);
+    return (await this.opsFor(visitId)).ops.filter((o) => !isTerminal(o.meta.status) && kinds.includes(o.meta.kind)).map((o) => o.id);
   }
 
   // ------------------------------------------------------------------------------------------- tiếp đón
@@ -318,7 +318,7 @@ export class OfflineClient {
   ): Promise<{ item: LocalQueueItem; created: boolean; tentative: boolean }> {
     const clickAt = iso(this.now());
     const visitTmpId = newTmpId();
-    const deps = (await this.engine.ops()).filter((o) => o.meta.kind === 'patient' && o.meta.status !== 'done' && (o as Op<'patient'>).body.payload.tmpId === patient.id).map((o) => o.id);
+    const deps = (await this.engine.ops()).filter((o) => o.meta.kind === 'patient' && !isTerminal(o.meta.status) && (o as Op<'patient'>).body.payload.tmpId === patient.id).map((o) => o.id);
     const body = { clientUuid: sel.clientUuid, patientId: patient.id, specialty: sel.specialty, priority: sel.priority, ...(sel.reason ? { reason: sel.reason } : {}) };
     const display = { patientName: patient.fullName, ...(patient.birthDate ? { birthDate: patient.birthDate } : {}) };
     const offlinePayload = async (): Promise<Payloads['checkin']> => ({ visitTmpId, display, body: { ...body, arrivedAt: clickAt, proposedNumber: nextLocalNumber(await this.localQueue()) } });
@@ -354,8 +354,8 @@ export class OfflineClient {
   async openVisit(item: LocalQueueItem): Promise<Opened> {
     const clickAt = iso(this.now());
     const { ops } = await this.opsFor(item.id);
-    const pendingOpen = ops.find((o) => o.meta.kind === 'open' && o.meta.status !== 'done') as Op<'open'> | undefined;
-    const deps = ops.filter((o) => o.meta.kind === 'checkin' && o.meta.status !== 'done').map((o) => o.id);
+    const pendingOpen = ops.find((o) => o.meta.kind === 'open' && !isTerminal(o.meta.status)) as Op<'open'> | undefined;
+    const deps = ops.filter((o) => o.meta.kind === 'checkin' && !isTerminal(o.meta.status)).map((o) => o.id);
     const display: OpDisplay = { patientName: item.patientName, number: item.number };
 
     if (this.online && !pendingOpen) {
@@ -524,7 +524,7 @@ export class OfflineClient {
   /** In (lại) một đơn từ dữ liệu trên máy khi mất mạng: ghi mục ghi nhận in để máy chủ có dòng nhật ký khi có mạng (OFF-1). */
   async recordLocalPrint(prescriptionId: string, completeOpId?: string, display?: OpDisplay): Promise<void> {
     const ops = await this.engine.ops();
-    const dep = completeOpId && ops.some((o) => o.id === completeOpId && o.meta.status !== 'done') ? [completeOpId] : [];
+    const dep = completeOpId && ops.some((o) => o.id === completeOpId && !isTerminal(o.meta.status)) ? [completeOpId] : [];
     await this.engine.enqueue([{ id: crypto.randomUUID(), kind: 'printed', deps: dep, payload: { prescriptionId, printedAt: iso(this.now()), ...(display ? { display } : {}) } }]);
     void this.engine.run();
   }

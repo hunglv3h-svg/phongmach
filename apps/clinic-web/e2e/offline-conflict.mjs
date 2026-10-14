@@ -133,10 +133,11 @@ try {
   const heldText = await completeRow.innerText();
   assert.ok(heldText.includes(`Bị giữ: mục «Mở hồ sơ khám · ${CONFLICT_NAME} · số ${pad3(conflict.number)}» đang xung đột`), `mục ký ghi rõ bị giữ vì mục nào: ${heldText}`);
   assert.ok(heldText.includes(CONFLICT_NAME) && heldText.includes(conflictCode), 'dòng có tên bệnh nhân và mã đơn');
-  // Không có nút xóa hay hủy: mọi nút trong danh sách thuộc đúng tập đã chốt.
+  // Không có nút xóa/bỏ/gỡ âm thầm: tập nút của danh sách là tập đã chốt, cộng "Đánh dấu đã xử lý…" (hành động CÓ CHỦ ĐÍCH cho
+  // mục xung đột/lỗi, mở ra bước xác nhận hai nhịp — N3: mục không bao giờ tự biến mất, chỉ rời khi người dùng khẳng định).
   const buttonIds = await list.getByRole('button').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
-  assert.deepEqual([...new Set(buttonIds)].sort(), ['sync-list-close', 'sync-list-now', 'sync-reprint'], `các nút của danh sách: ${buttonIds}`);
-  assert.equal(await list.getByRole('button', { name: /Xóa|Hủy|Bỏ|Gỡ/ }).count(), 0, 'không có nút xóa hay hủy mục chưa đồng bộ');
+  assert.deepEqual([...new Set(buttonIds)].sort(), ['sync-list-close', 'sync-list-now', 'sync-mark-handled', 'sync-reprint'], `các nút của danh sách: ${buttonIds}`);
+  assert.equal(await list.getByRole('button', { name: /Xóa|Bỏ|Gỡ/ }).count(), 0, 'không có nút xóa/bỏ/gỡ mục chưa đồng bộ');
   await A.page.screenshot({ path: `${shots}40-sync-list-conflict.png` });
   ok('danh sách chờ đồng bộ: mục mở hồ sơ "xung đột" (kèm lỗi 409 của máy chủ), mục ký và ghi nhận in "bị giữ vì mục mở hồ sơ"; không có nút xóa hay hủy');
 
@@ -197,6 +198,35 @@ try {
   await status(A, { pending: 4, attention: 4 });
   assert.equal(A.completes.length, 0, 'đăng nhập lại cũng không gửi mục bị giữ');
   ok('hết phiên (401): màn hình đăng nhập báo "Phiên đã hết hạn: đăng nhập lại để đồng bộ 4 mục" và "Máy này còn 4 mục…"; đăng nhập lại thì các mục còn nguyên');
+
+  // Xử lý tay mục xung đột: bác sĩ đã liên hệ bệnh nhân / xử lý ngoài hệ thống, nay đánh dấu "đã xử lý" để mục rời danh sách.
+  // N3: xác nhận HAI NHỊP (bấm "Đánh dấu đã xử lý…" mới hiện bước xác nhận; chưa bấm xác nhận thì mục chưa rời). KHÔNG gửi gì lên
+  // máy chủ, KHÔNG ghi đè — lượt khám vẫn do chủ phòng khám giữ. Bản ghi giữ lại trên máy ở trạng thái `resolved`, không xóa âm thầm.
+  await A.page.getByTestId('attention-badge').click();
+  const resolveList = A.page.getByTestId('sync-list');
+  await resolveList.waitFor();
+  const openRow2 = resolveList.locator('[data-testid="sync-row"][data-kind="open"]');
+  await openRow2.getByTestId('sync-mark-handled').click();
+  // Mới bấm một nhịp: bước xác nhận hiện ra (nói rõ không gửi/không ghi đè), mục CHƯA rời.
+  await openRow2.getByTestId('sync-mark-handled-confirm').waitFor();
+  assert.ok((await openRow2.getByTestId('sync-mark-handled-warn').innerText()).includes('KHÔNG gửi'), 'bước xác nhận nói rõ không gửi lên máy chủ');
+  assert.equal(await A.page.locator('[data-testid="sync-row"][data-kind="open"]').count(), 1, 'chưa xác nhận thì mục xung đột chưa rời (N3: hai nhịp)');
+  // Hủy rồi bấm lại: vẫn chưa rời cho tới khi xác nhận thật.
+  await openRow2.getByTestId('sync-mark-handled-cancel').click();
+  assert.equal(await A.page.locator('[data-testid="sync-row"][data-kind="open"]').count(), 1, 'bấm Hủy: mục xung đột vẫn còn');
+  await openRow2.getByTestId('sync-mark-handled').click();
+  await openRow2.getByTestId('sync-mark-handled-confirm').click();
+  await eventually(async () => (await A.page.locator('[data-testid="sync-row"][data-kind="open"]').count()) === 0, 'mục xung đột rời danh sách sau khi đánh dấu đã xử lý');
+  // Đánh dấu đã xử lý KHÔNG ghi đè máy chủ: lượt khám vẫn do chủ phòng khám giữ, máy chủ vẫn không có đơn của bác sĩ cho lượt này.
+  const afterResolve = (await doctor('GET', '/api/queue')).items.find((i) => i.id === conflict.visitId);
+  assert.equal(afterResolve.doctorUserId, 'noi-owner', 'lượt khám vẫn do chủ phòng khám giữ sau khi bác sĩ đánh dấu đã xử lý (không ghi đè)');
+  const afterVisits = (await doctor('GET', `/api/patients/${conflict.patientId}/visits?limit=10`)).visits ?? [];
+  assert.ok(!afterVisits.some((v) => v.prescription?.code === conflictCode), 'máy chủ vẫn không có đơn của bác sĩ cho lượt này');
+  // Bản ghi vẫn còn trên máy ở trạng thái `resolved` (giữ để tra cứu/in lại, chỉ đổi trạng thái — không xóa âm thầm).
+  assert.ok((await rawLocalDump(A.page)).text.includes('resolved'), 'kho còn mục ở trạng thái resolved');
+  await A.page.screenshot({ path: `${shots}44-sync-list-resolved.png` });
+  ok('đánh dấu "đã xử lý" (xác nhận hai nhịp, có Hủy): mục xung đột rời danh sách, lượt khám vẫn do chủ phòng khám giữ, máy chủ không có đơn của bác sĩ (N3, không ghi đè)');
+
   await A.context.close();
 
   // ================================================================================================== 422: dị ứng mới

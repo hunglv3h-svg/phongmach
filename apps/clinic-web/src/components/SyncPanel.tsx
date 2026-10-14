@@ -15,14 +15,16 @@ const SHORT: Record<RowStatus, string> = {
   held: 'Bị giữ',
 };
 
-/** Thao tác của danh sách: chỉ ba việc trong `SyncListActions`. Không có việc bỏ hay sửa mục. */
-type Actions = Pick<SyncListActions, 'acknowledge' | 'reprint'>;
+/** Thao tác của danh sách: các việc trong `SyncListActions`, không ghi thẳng vào kho. */
+type Actions = Pick<SyncListActions, 'acknowledge' | 'reprint' | 'markHandled'>;
 
 function Row({ row, actions }: { row: SyncRow; actions: Actions }) {
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string>();
   const [reprinted, setReprinted] = useState(false);
+  // Xác nhận hai nhịp cho "đánh dấu đã xử lý" (N3: không bao giờ tự đóng mục; người dùng phải khẳng định rõ).
+  const [confirming, setConfirming] = useState(false);
   const tone = row.attention ? 'bad' : row.status === 'sending' ? 'ok' : 'warn';
   const who = [
     row.patientName ?? 'Không rõ bệnh nhân',
@@ -54,7 +56,7 @@ function Row({ row, actions }: { row: SyncRow; actions: Actions }) {
       {row.statusLabel !== SHORT[row.status] && <p className={`small ${row.attention ? 'error' : 'muted'}`} data-testid="sync-row-state">{row.statusLabel}</p>}
       {row.conflict && (
         <p className="error" role="alert" data-testid="sync-row-conflict">
-          {row.conflict} Bản khám vẫn giữ trên máy này và in lại được. Bản này chưa có chức năng giải quyết xung đột: báo chủ phòng khám.
+          {row.conflict} Bản khám vẫn giữ trên máy này và in lại được.
         </p>
       )}
       {row.rules && (
@@ -97,6 +99,37 @@ function Row({ row, actions }: { row: SyncRow; actions: Actions }) {
           {reprinted && <span className="small muted" role="status" data-testid="sync-reprinted">Đã in lại.</span>}
         </div>
       )}
+      {/* Xử lý một mục KẸT (xung đột 409 hoặc lỗi dữ liệu) mà máy chủ không nhận: bác sĩ xử lý tay (liên hệ bệnh nhân, kê lại nếu cần)
+          rồi đánh dấu đã xử lý để mục rời danh sách. KHÔNG gửi gì lên máy chủ, KHÔNG ghi đè dữ liệu máy chủ (N3). Chỉ cho mục tự nó
+          xung đột/lỗi — mục bị GIỮ (held) thì đóng mục gốc gây giữ, không đóng ở đây. */}
+      {(row.status === 'conflict' || row.status === 'error') && (
+        <div className="sync-resolve" data-testid="sync-resolve">
+          {!confirming ? (
+            <button className="ghost" disabled={busy} onClick={() => { setFailed(undefined); setConfirming(true); }} data-testid="sync-mark-handled">
+              Đánh dấu đã xử lý…
+            </button>
+          ) : (
+            <div className="confirm" role="group" aria-label="Xác nhận đã xử lý">
+              <p className="small" data-testid="sync-mark-handled-warn">
+                Chỉ đóng mục này trên máy của bạn. Việc này KHÔNG gửi gì lên máy chủ và KHÔNG sửa dữ liệu đã có trên máy chủ.
+                {row.reprint ? ' Đơn vẫn in lại được tới hết hôm nay. ' : ' '}
+                Hãy liên hệ bệnh nhân và kê lại nếu cần trước khi đóng.
+              </p>
+              <div className="actions">
+                <button
+                  className="primary"
+                  disabled={busy}
+                  onClick={() => void run(() => actions.markHandled(row), () => setConfirming(false))}
+                  data-testid="sync-mark-handled-confirm"
+                >
+                  {busy ? 'Đang xử lý…' : 'Tôi đã xử lý — đóng mục này'}
+                </button>
+                <button className="ghost" disabled={busy} onClick={() => setConfirming(false)} data-testid="sync-mark-handled-cancel">Hủy</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       {failed && <p className="error small" role="alert" data-testid="sync-row-failed">{failed}</p>}
     </li>
   );
@@ -104,8 +137,9 @@ function Row({ row, actions }: { row: SyncRow; actions: Actions }) {
 
 /**
  * Danh sách "Chờ đồng bộ" (kế hoạch, N3, OFF-7): mọi thao tác đã lưu trên máy mà máy chủ chưa nhận, kèm trạng thái và lỗi gần nhất.
- * Nút: "Đồng bộ ngay", "Đóng", "Xác nhận và gửi lại" (422), "In lại đơn". KHÔNG có nút xóa hay hủy mục chưa đồng bộ (đã chốt ở M0):
- * mục chỉ rời danh sách khi máy chủ nhận.
+ * Nút: "Đồng bộ ngay", "Đóng", "Xác nhận và gửi lại" (422), "In lại đơn", và "Đánh dấu đã xử lý" cho mục KẸT (xung đột 409 / lỗi dữ
+ * liệu) — có xác nhận hai nhịp. Mục rời danh sách khi máy chủ nhận HOẶC khi người dùng chủ động đánh dấu đã xử lý; không bao giờ tự
+ * biến mất, không tự ghi đè máy chủ (N3).
  */
 export function SyncPanel({ view, rows, actions, onClose }: { view: IndicatorView; rows: SyncRow[] | undefined; actions: SyncListActions; onClose: () => void }) {
   return (

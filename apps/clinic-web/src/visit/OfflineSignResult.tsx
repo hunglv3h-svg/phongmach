@@ -8,7 +8,7 @@ import { useOffline } from '../local/OfflineProvider';
 import { printLocal, printSaved } from '../print';
 import { ZaloButton } from './ZaloPreview';
 
-type SyncView = { status: 'pending' | 'done' | 'conflict' | 'rules' | 'error' | 'held'; op?: AnyOp };
+type SyncView = { status: 'pending' | 'done' | 'conflict' | 'rules' | 'error' | 'held' | 'resolved'; op?: AnyOp };
 
 /**
  * Kết quả ký khi mất mạng: đơn đã lưu bền trên máy và đã in từ dữ liệu trên máy (nhãn "KÝ KHI MẤT MẠNG").
@@ -27,7 +27,8 @@ export function OfflineSignResult({ result, onBack }: { result: Extract<SignOutc
       const op = ops.find((o) => o.id === opId);
       if (!live) return;
       if (!op) return setView({ status: 'pending' });
-      if (op.meta.status === 'done' || needsAttention(op.meta.status)) return setView({ status: op.meta.status as SyncView['status'], op });
+      // `resolved`: người dùng đã đánh dấu đã xử lý mục này ở danh sách "Chờ đồng bộ" (hiếm khi màn này còn mở). Coi là đã kết thúc.
+      if (op.meta.status === 'done' || op.meta.status === 'resolved' || needsAttention(op.meta.status)) return setView({ status: op.meta.status as SyncView['status'], op });
       // Mục hoàn tất bị giữ vì một mục trước nó (cấp số, mở hồ sơ, kể cả qua nhiều bậc) đang cần xử lý: cùng cách tính với danh sách chờ đồng bộ.
       const dep = depState(op, new Map(ops.map((o) => [o.id, o])));
       const blocker = dep.kind === 'held' ? ops.find((o) => o.id === dep.by) : undefined;
@@ -79,6 +80,7 @@ export function OfflineSignResult({ result, onBack }: { result: Extract<SignOutc
           {view.status === 'rules' && <span className="badge bad">Cần bác sĩ xác nhận</span>}
           {view.status === 'error' && <span className="badge bad">Cần xử lý</span>}
           {view.status === 'held' && <span className="badge bad">Bị giữ: thao tác trước đó cần xử lý</span>}
+          {view.status === 'resolved' && <span className="badge warn">Đã đánh dấu đã xử lý (không gửi lên máy chủ)</span>}
         </p>
         {serverRx && detail && serverRx.code !== detail.prescription.code && (
           <p className="error" role="alert" data-testid="code-mismatch">

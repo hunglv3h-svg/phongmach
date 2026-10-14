@@ -12,7 +12,7 @@ import { SyncNotices, SyncPanel } from './SyncPanel';
 const noop = () => undefined;
 const state = { online: true, paused: false as const, counted: true, pending: 0, attention: 0, version: 1 };
 const bar = (view: IndicatorView) => renderToStaticMarkup(<SyncBar view={view} open={false} onToggle={noop} onSyncNow={noop} />);
-const actions: SyncListActions = { syncNow: async () => undefined, acknowledge: async () => undefined, reprint: async () => undefined };
+const actions: SyncListActions = { syncNow: async () => undefined, acknowledge: async () => undefined, reprint: async () => undefined, markHandled: async () => undefined };
 const panel = (view: IndicatorView, rows: SyncRow[] | undefined) => renderToStaticMarkup(<SyncPanel view={view} rows={rows} actions={actions} onClose={noop} />);
 /** data-testid của mọi nút bấm trong HTML. */
 const buttons = (html: string) => [...html.matchAll(/<button\b[^>]*>/g)].map((m) => /data-testid="([^"]+)"/.exec(m[0])?.[1] ?? m[0]);
@@ -97,15 +97,19 @@ describe('danh sách chờ đồng bộ', () => {
     expect(html).toContain('6 mục chờ đồng bộ · 4 cần xử lý');
   });
 
-  it('không có nút xóa hay hủy: mỗi dòng chỉ có đúng các nút của trạng thái đó ("Xác nhận và gửi lại" cho 422, "In lại đơn" khi máy còn giữ đơn)', () => {
+  it('không có nút xóa/hủy âm thầm: mỗi dòng chỉ có đúng các nút của trạng thái đó ("Xác nhận và gửi lại" cho 422, "In lại đơn" khi máy còn giữ đơn, "Đánh dấu đã xử lý…" cho xung đột/lỗi dữ liệu)', () => {
     const frame = ['sync-list-close', 'sync-list-now'];
-    const perRow: string[][] = [[], ['sync-reprint'], ['sync-ack-submit'], [], [], []];
+    // conflict (0) và error (3): nút "Đánh dấu đã xử lý…" (hành động CÓ CHỦ ĐÍCH, mở ra bước xác nhận hai nhịp — nút Hủy/xác
+    // nhận chỉ render sau khi bấm, không có ở trạng thái tĩnh). held (1): chỉ in lại. rules (2): xác nhận gửi lại.
+    const perRow: string[][] = [['sync-mark-handled'], ['sync-reprint'], ['sync-ack-submit'], ['sync-mark-handled'], [], []];
     expect(perRow).toHaveLength(rows.length);
     for (const [i, r] of rows.entries()) expect(buttons(panel(view, [r])), `${r.kind}/${r.status}`).toEqual([...frame, ...perRow[i]!]);
     expect(buttons(panel(view, rows))).toEqual([...frame, ...perRow.flat()]);
     for (const html of [panel(view, rows), panel(view, []), panel(view, undefined)]) {
-      expect(html).not.toMatch(/>\s*(Xóa|Hủy|Bỏ|Gỡ)(?=[\s<])/);
-      expect(html).not.toMatch(/data-testid="[^"]*(delete|discard|remove|cancel)[^"]*"/);
+      // Không có nút xóa/bỏ/gỡ mục một cách âm thầm. ("Hủy" của bước xác nhận chỉ xuất hiện sau khi người dùng bấm "Đánh dấu đã
+      // xử lý…" — nó hủy chính thao tác đó, không xóa mục — nên không render ở trạng thái tĩnh này.)
+      expect(html).not.toMatch(/>\s*(Xóa|Bỏ|Gỡ)(?=[\s<])/);
+      expect(html).not.toMatch(/data-testid="[^"]*(delete|discard|remove)[^"]*"/);
     }
   });
 

@@ -273,6 +273,36 @@ describe('kho version 2: hàng đợi đồng bộ và bộ đệm ngoại tuy�
     }
   });
 
+  it('mục người dùng đã đánh dấu đã xử lý (resolved) không tính là chưa xong; được dọn như mục đã xong, và thôi giữ đơn/ánh xạ ngày cũ', async () => {
+    for (const make of [() => open(), async () => new MemoryStore() as LocalStore]) {
+      const s = await make();
+      const meta = (status: OpMeta['status'], day: string): OpMeta => opMeta({ status, day });
+      // Hôm nay: một mục resolved + đơn để in lại. Mục resolved KHÔNG tính vào số mục chờ.
+      await s.commit([
+        { table: 'ops', id: 'today-resolved', plain: meta('resolved', '2026-10-20'), value: { payload: 'đã xử lý' } },
+        { table: 'signed', id: 'tmp-today-rx', plain: { day: '2026-10-20' }, value: { detail: 'đơn hôm nay' } },
+      ]);
+      expect(await s.pendingCount()).toBe(0);
+      // Dọn hôm nay: mục resolved của HÔM NAY chưa bị dọn (chỉ dọn ngày < hôm nay), nhưng vì nó đã kết thúc nên không giữ đơn lại.
+      await s.purgeBefore('2026-10-20');
+      // Chỉ còn mục resolved của hôm nay (ngày cũ chưa có); đơn hôm nay giữ (dọn theo ngày, chưa tới).
+      expect((await s.list('signed')).map((r) => r.id)).toEqual(['tmp-today-rx']);
+
+      // Mục resolved thành của NGÀY CŨ: lần dọn sang ngày mới bỏ cả mục resolved lẫn đơn/ánh xạ ngày cũ (giống `done`).
+      await s.commit([
+        { table: 'ops', id: 'old-resolved', plain: meta('resolved', '2026-10-19'), value: { payload: 'đã xử lý ngày cũ' } },
+        { table: 'signed', id: 'tmp-old-rx', plain: { day: '2026-10-19' }, value: { detail: 'đơn ngày cũ' } },
+        { table: 'ids', id: 'tmp-old', serverId: 'srv', day: '2026-10-19' },
+        { table: 'ops', id: 'today-resolved', plain: meta('done', '2026-10-20'), value: { payload: 'x' } },
+      ]);
+      await s.purgeBefore('2026-10-20');
+      // Mục resolved ngày cũ bị dọn; không còn mục cũ CHƯA xong nên đơn/ánh xạ ngày cũ cũng bị dọn.
+      expect((await s.list('ops')).map((r) => r.id).sort()).toEqual(['today-resolved']);
+      expect((await s.list('signed')).map((r) => r.id)).toEqual(['tmp-today-rx']);
+      expect((await s.ids()).get('tmp-old')).toBeUndefined();
+    }
+  });
+
   it('dọn bộ đệm ngày cũ; mục chưa đồng bộ của ngày cũ không bao giờ bị dọn (kèm ánh xạ id nó cần)', async () => {
     const s = await open();
     const day = (d: string) => ({ day: d });

@@ -309,6 +309,9 @@ tr.total td { background: var(--primary-soft); }
 .sync-rules p { margin: 0; }
 .sync-rules .ack { display: flex; flex-direction: column; gap: .2rem; margin: .3rem 0; color: var(--text); }
 .sync-row .actions { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+.sync-resolve { margin-top: .2rem; }
+.sync-resolve .confirm { display: flex; flex-direction: column; gap: .4rem; border: 1px dashed var(--line); border-radius: var(--radius); padding: .5rem .6rem; }
+.sync-resolve .confirm p { margin: 0; color: var(--muted); }
 .sync-notices { display: flex; flex-direction: column; gap: .4rem; padding: .5rem 1rem 0; }
 .sync-notice { display: flex; gap: .5rem; align-items: center; padding: .4rem .8rem; border-radius: var(--radius); }
 .sync-notice p { margin: 0; flex: 1 1 auto; }

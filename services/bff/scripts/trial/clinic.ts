@@ -15,11 +15,14 @@ import { MEDPLUM_URL, adminClient, createTenantProject, tenantClient } from '../
 import { CLINIC_NAME, DOCTOR_IDS, PRIOR_DOCTOR, SLUG, TENANTS_FILE, TRIAL, USERS, patientUuid, readTenantsFile, stableUuid, type DoctorId } from './common.js';
 
 /**
- * Điểm FHIR mỗi phút cho tài khoản máy của phòng khám thử (mặc định của Medplum: 50.000). Nạp các lượt khám cũ tốn khoảng 2.500 điểm
- * mỗi lượt (kế hoạch, mục 5.9, bài học 6), và buổi thử đo thời gian thao tác chứ không đo hạn mức: một lần 429 giữa lượt khám sẽ làm
- * bẩn số đo. Hạn mức cho phòng khám thật là việc của T-QUOTA.
+ * Điểm FHIR mỗi phút cho phòng khám buổi-thử (mặc định của Medplum: mỗi-user 50.000; tổng-project 500.000 = 10× mỗi-user).
+ * Nạp các lượt khám cũ tốn khoảng 2.500 điểm mỗi lượt (kế hoạch, mục 5.9, bài học 6), và buổi thử đo thời gian thao tác chứ không
+ * đo hạn mức: một lần 429 giữa lượt khám sẽ làm bẩn số đo. Buổi thử dùng một tài khoản máy duy nhất, nên — như phòng khám e2e-cycles —
+ * trần tổng-project mặc định (500.000 = 10× mỗi-user) là nút thắt; vì vậy đặt CẢ HAI `userFhirQuota` và `totalFhirQuota` = 1.000.000
+ * cho nhất quán với e2e-clinic.ts (T-QUOTA). Đây là bump theo-project có chủ đích, KHÔNG tắt hạn mức toàn cục. Hạn mức cho phòng khám
+ * thật ở M1 vẫn là việc của T-QUOTA.
  */
-const USER_FHIR_QUOTA = 500_000;
+const FHIR_QUOTA = 1_000_000;
 
 const sha256Base64 = (text: string) => createHash('sha256').update(text).digest('base64');
 const pad3 = (n: number) => String(n).padStart(3, '0');
@@ -54,7 +57,10 @@ async function create(): Promise<TenantsFile> {
   const admin = await adminClient();
   const tenant = await createTenantProject(admin, SLUG, CLINIC_NAME);
   const project = await admin.readResource('Project', tenant.projectId);
-  await admin.updateResource<Project>({ ...project, systemSetting: [...(project.systemSetting ?? []), { name: 'userFhirQuota', valueInteger: USER_FHIR_QUOTA }] });
+  await admin.updateResource<Project>({
+    ...project,
+    systemSetting: [...(project.systemSetting ?? []), { name: 'userFhirQuota', valueInteger: FHIR_QUOTA }, { name: 'totalFhirQuota', valueInteger: FHIR_QUOTA }],
+  });
   const medplum = await tenantClient(MEDPLUM_URL, tenant);
   const users: TenantsFile['users'] = [];
   for (const u of USERS) {

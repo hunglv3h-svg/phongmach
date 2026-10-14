@@ -324,6 +324,103 @@ describe('máy chủ từ chối (OFF-7)', () => {
   });
 });
 
+describe('đánh dấu đã xử lý một mục kẹt (resolveByUser, N3)', () => {
+  /** Dựng một chuỗi offline rồi để `open` bị 409 (người khác đã mở): mục `open` xung đột, `complete`+`printed` bị giữ. */
+  async function conflicted() {
+    const store = await openStore();
+    const e = engine(store);
+    const chain = offlineChain('Nguyễn Văn An');
+    bff.fault(/\/open$/, { status: 409, body: { error: 'taken', message: 'Hồ sơ đang do BS. B khám' } });
+    await e.enqueue(chain.all);
+    await e.run();
+    expect((await statuses(e))[chain.open.id]).toBe('conflict');
+    return { store, e, chain };
+  }
+
+  it('mục xung đột KHÔNG tự biến mất khi không có thao tác người dùng: nhiều lượt gửi, thời gian trôi, vẫn còn và vẫn attention', async () => {
+    const { e, chain } = await conflicted();
+    const before = e.state.attention;
+    expect(before).toBe(3); // mục xung đột + hai mục bị giữ
+    // Không ai bấm gì: gửi lại nhiều lần, cho thời gian trôi — mục xung đột vẫn nguyên, vẫn tính attention.
+    for (let i = 0; i < 3; i++) {
+      await e.syncNow();
+      clock.advance(120_000);
+      await e.idle();
+    }
+    expect((await statuses(e))[chain.open.id]).toBe('conflict');
+    expect(e.state.attention).toBe(3);
+    expect(e.state.pending).toBe(3);
+    expect(bff.completions.size).toBe(0);
+  });
+
+  it('đánh dấu đã xử lý mục xung đột: mục thành resolved, rời khỏi số đếm/attention, mục bị giữ được tính lại; KHÔNG gửi gì lên máy chủ', async () => {
+    const { e, chain } = await conflicted();
+    const sentBefore = bff.requests.length;
+    await e.resolveByUser(chain.open.id);
+
+    const st = await statuses(e);
+    expect(st[chain.open.id]).toBe('resolved');
+    // Mục bị giữ được tính lại: `open` đã kết thúc (resolved) nên không còn giữ; `complete` nay chờ gửi (hoặc được gửi).
+    expect(st[chain.complete.id]).not.toBe('held');
+    expect(e.state.attention).toBe(0);
+    // Máy chủ KHÔNG nhận thêm gì vì việc đánh dấu đã xử lý (không gửi `open`, không ghi đè).
+    const openSent = bff.requests.slice(sentBefore).filter((r) => r.path.endsWith('/open'));
+    expect(openSent).toHaveLength(0);
+    expect(bff.completions.size).toBe(0);
+    // Bản ghi vẫn còn trên máy (để tra cứu / in lại), chỉ đổi trạng thái; payload và lỗi gần nhất giữ nguyên.
+    const kept = (await e.ops()).find((o) => o.id === chain.open.id)!;
+    expect(kept.body.payload).toEqual(chain.open.payload);
+    expect(kept.body.error).toMatchObject({ status: 409, code: 'taken' });
+  });
+
+  it('bộ máy KHÔNG bao giờ tự gửi mục resolved, kể cả khi "Đồng bộ ngay" và thời gian trôi', async () => {
+    const { e, chain } = await conflicted();
+    await e.resolveByUser(chain.open.id);
+    const sentBefore = bff.requests.length;
+    await e.syncNow();
+    clock.advance(120_000);
+    await e.idle();
+    expect(bff.requests.slice(sentBefore).filter((r) => r.path.endsWith('/open'))).toHaveLength(0);
+    expect((await statuses(e))[chain.open.id]).toBe('resolved');
+  });
+
+  it('đánh dấu đã xử lý mục lỗi dữ liệu (error): rời số đếm, không gửi lại', async () => {
+    const store = await openStore();
+    const e = engine(store);
+    const op = patientOp();
+    bff.fault(/POST \/api\/patients/, { status: 400, body: { error: 'invalid-name', message: 'Thiếu họ tên' } });
+    await e.enqueue([op]);
+    await e.run();
+    expect((await statuses(e))[op.id]).toBe('error');
+    await e.resolveByUser(op.id);
+    expect((await statuses(e))[op.id]).toBe('resolved');
+    expect(e.state.pending).toBe(0);
+    expect(e.state.attention).toBe(0);
+    const sentBefore = bff.requests.length;
+    await e.syncNow();
+    expect(bff.requests.length).toBe(sentBefore);
+  });
+
+  it('CHỈ áp dụng cho conflict/error: từ chối pending, retry, rules, done; mục bị giữ (held) cũng không đóng được (đóng mục gốc)', async () => {
+    const { e, chain } = await conflicted();
+    // held: `complete` đang bị giữ bởi `open` xung đột — không đóng trực tiếp được.
+    await expect(e.resolveByUser(chain.complete.id)).rejects.toThrow(/xung đột hoặc lỗi/);
+    expect((await statuses(e))[chain.complete.id]).not.toBe('resolved');
+
+    // pending / retry / rules / done ở một kho khác.
+    const store2 = await openStore({ tenant: 'noi', userId: 'doc2' });
+    const e2 = engine(store2, { owner: { tenant: 'noi', userId: 'doc2' }, session: () => ({ token: 'tok-doc', tenant: 'noi', userId: 'doc2' }) });
+    const pending = patientOp('Zq Chờ');
+    online = false;
+    await e2.enqueue([pending]);
+    await e2.run();
+    expect((await statuses(e2))[pending.id]).toBe('pending');
+    await expect(e2.resolveByUser(pending.id)).rejects.toThrow();
+    // mục không tồn tại
+    await expect(e2.resolveByUser('không-có')).rejects.toThrow(/không còn/);
+  });
+});
+
 describe('chỉ gửi mục của chính người đang đăng nhập (OFF-6)', () => {
   it('phiên của người khác: không gửi mục nào của kho này, kể cả khi bộ máy cũ còn chạy', async () => {
     const store = await openStore();

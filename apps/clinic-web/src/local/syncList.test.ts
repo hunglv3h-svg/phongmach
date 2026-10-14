@@ -160,6 +160,18 @@ describe('dựng dòng danh sách chờ đồng bộ (hàm thuần)', () => {
     }
   });
 
+  it('mục đã đánh dấu đã xử lý (resolved) rời khỏi danh sách như mục đã xong; mục bị nó giữ thôi bị giữ', () => {
+    // open xung đột đã được người dùng đóng (resolved) → complete/printed không còn bị giữ.
+    const c = visitChain({ status: 'resolved' }, { error: { status: 409, code: 'taken', message: 'Hồ sơ đang do BS. B khám' } });
+    const rows = buildSyncRows(data(c.all), ctx());
+    // Mục resolved không hiện; các mục còn lại không ở trạng thái held nữa.
+    expect(rows.find((r) => r.id === c.open.id)).toBeUndefined();
+    expect(rows.every((r) => r.status !== 'held')).toBe(true);
+    expect(rows.map((r) => r.kind)).toEqual(['complete', 'printed', 'printed']);
+    // Không mục nào trong danh sách tính là "cần xử lý" nữa.
+    expect(rows.some((r) => r.attention)).toBe(false);
+  });
+
   it('mất mạng hoặc hết phiên: mục chờ ghi rõ đang chờ gì, kèm số lần đã gửi chưa được', () => {
     const fresh = op('patient', { tmpId: 'tmp-a', input: { clientUuid: 'a', fullName: 'Zq A' } });
     const failed = op('patient', { tmpId: 'tmp-b', input: { clientUuid: 'b', fullName: 'Zq B' } }, { status: 'retry', attempts: 3, nextAt: T0 + 8000 }, { error: { status: 0, code: 'network', message: 'Không kết nối được máy chủ' } });
@@ -569,7 +581,9 @@ describe('danh sách dựng từ hàng đợi thật', () => {
     const ids = before.map((r) => r.id).sort();
 
     const a = actions();
-    expect(Object.keys(a).sort()).toEqual(['acknowledge', 'reprint', 'syncNow']);
+    expect(Object.keys(a).sort()).toEqual(['acknowledge', 'markHandled', 'reprint', 'syncNow']);
+    // Các thao tác TỰ ĐỘNG / không-chủ-đích (đồng bộ ngay, xác nhận thiếu lý do, in lại) KHÔNG bao giờ làm mục rời danh sách.
+    // (markHandled là hành động CÓ CHỦ ĐÍCH riêng, kiểm ở bài dưới — không gọi ở đây.)
     for (const row of before) {
       await a.syncNow();
       await a.acknowledge(row, {}).catch(() => undefined);
@@ -589,11 +603,49 @@ describe('danh sách dựng từ hàng đợi thật', () => {
     expect(bff.requests.filter((r) => r.path.endsWith('/complete'))).toHaveLength(1);
   });
 
+  it('đánh dấu đã xử lý (markHandled) từ danh sách: mục xung đột/lỗi rời danh sách, mục bị giữ thôi bị giữ; KHÔNG gửi gì lên máy chủ', async () => {
+    const conflictItem = await serverVisit('Zq Xung Đột', 5);
+    const conflict = offlineVisitOps(conflictItem);
+    await keepSigned(conflict, 'Zq Xung Đột');
+    const bad: NewOp = { id: crypto.randomUUID(), kind: 'patient', payload: { tmpId: newTmpId(), input: { clientUuid: 'bad', fullName: 'Zq Sai Số' } } };
+    bff.fault(new RegExp(`${conflictItem.id}/open$`), { status: 409, body: { error: 'taken', message: 'Hồ sơ đang do BS. B khám' } });
+    bff.fault(/POST \/api\/patients/, { status: 400, body: { error: 'invalid-name', message: 'Thiếu họ tên' } });
+    await engine.enqueue([conflict.open, conflict.complete, conflict.printed, bad]);
+    await engine.run();
+
+    const a = actions();
+    const before = await rows();
+    expect(before.map((r) => r.status).sort()).toEqual(['conflict', 'error', 'held', 'held']);
+    const sentBefore = bff.requests.length;
+
+    // Mục bị GIỮ không đóng trực tiếp được: phải đóng mục gốc. Chặn ngay ở lớp danh sách (thông điệp theo ngôn ngữ của dòng/trạng
+    // thái) TRƯỚC khi chạm bộ máy — gỡ guard của `syncActions` thì engine ném thông điệp khác, bài này đỏ.
+    await expect(a.markHandled(await rowOf(conflict.complete.id))).rejects.toThrow('đóng mục gốc gây giữ');
+    // Đóng mục gốc xung đột và mục lỗi dữ liệu.
+    await a.markHandled(await rowOf(conflict.open.id));
+    await a.markHandled(await rowOf(bad.id));
+    await engine.idle();
+
+    const after = await rows();
+    // Mục xung đột và mục lỗi rời danh sách; không mục nào còn ở trạng thái "bị giữ" bởi mục xung đột đã đóng.
+    expect(after.find((r) => r.id === conflict.open.id)).toBeUndefined();
+    expect(after.find((r) => r.id === bad.id)).toBeUndefined();
+    expect(after.every((r) => r.status !== 'held')).toBe(true);
+    // Máy chủ KHÔNG nhận gì thêm vì việc đánh dấu đã xử lý (không gửi lại mục xung đột/lỗi, không ghi đè).
+    expect(bff.requests.slice(sentBefore).filter((r) => r.path.endsWith('/open'))).toHaveLength(0);
+    expect(bff.requests.slice(sentBefore).filter((r) => r.path === '/api/patients')).toHaveLength(0);
+    expect(bff.completions.size).toBe(0);
+  });
+
   it('mã của danh sách không nhắc tới việc bỏ mục (`discard`): danh sách chỉ nhận `SyncListActions`, không nhận bộ máy đồng bộ', () => {
     for (const [name, source] of Object.entries({ syncActionsSource, syncListSource, useSyncOverviewSource, syncPanelSource, syncBarSource })) {
       expect(source.length, name).toBeGreaterThan(500);
       expect(/\.discard\s*\(|\bdelete:\s*true|store\.commit\(/.test(source), `${name} không được bỏ mục hay ghi thẳng vào kho`).toBe(false);
     }
+    // "Đánh dấu đã xử lý" cũng KHÔNG ghi thẳng vào kho từ lớp danh sách: nó ủy quyền xuống bộ máy (`client.engine.resolveByUser`),
+    // nơi có guard trạng thái. Component SyncPanel chỉ gọi qua `SyncListActions.markHandled`, không chạm bộ máy trực tiếp.
+    expect(syncActionsSource).toContain('client.engine.resolveByUser');
+    expect(/engine\.resolveByUser|\.resolveByUser\s*\(/.test(syncPanelSource), 'SyncPanel không được gọi thẳng resolveByUser').toBe(false);
     // Khung ứng dụng chỉ gọi bộ máy qua `syncListActions` và nút "Chờ đồng bộ" của hộp thoại đăng xuất.
     expect(shellSource).toContain('syncListActions(client)');
     expect(/\.discard\s*\(/.test(shellSource)).toBe(false);

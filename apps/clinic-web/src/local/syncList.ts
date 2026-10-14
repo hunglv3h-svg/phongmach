@@ -7,7 +7,7 @@ import { pad3, vnClock } from '../format';
 import type { LocalQueueItem, SignedOffline } from './cache';
 import { depState } from './deps';
 import type { AnyOp, Op, OpDisplay } from './ops';
-import type { OpKind, OpStatus } from './store';
+import { isTerminal, type OpKind, type OpStatus } from './store';
 import type { SyncState } from './sync';
 
 /** Những gì danh sách cần, đọc từ kho trên máy mỗi khi hàng đợi thay đổi (`sync.version`). */
@@ -181,7 +181,8 @@ export function buildSyncRows(data: SyncData, ctx: ViewContext): SyncRow[] {
     return op ? labelOf(op, whoOf.get(id)!) : 'mục trước';
   };
 
-  return displayOrder(data.ops.filter((o) => o.meta.status !== 'done')).map((op): SyncRow => {
+  // Mục đã kết thúc (máy chủ đã nhận `done`, hoặc người dùng đã đánh dấu đã xử lý `resolved`) không nằm trong danh sách chờ đồng bộ.
+  return displayOrder(data.ops.filter((o) => !isTerminal(o.meta.status))).map((op): SyncRow => {
       const who = whoOf.get(op.id)!;
       const { status: stored, attempts, nextAt } = op.meta;
       const err = op.body.error;
