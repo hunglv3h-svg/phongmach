@@ -1,0 +1,24 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    {
+      "label": "Date header through proxy/build unverified",
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "detail": "A-1 relies on the error-response Date header reaching the browser through the Vite proxy and the production build; unit tests mock it via FakeBff, e2e could not run. If it does not arrive in a real build, every retrying case fails closed to 'CHƯA in' (degrades to A-2 for that case, still satisfies invariant K). The design itself marked this 'chưa đo'. Measure on an environment where the Medplum stack stands up before the 13/11 demo."
+    },
+    {
+      "label": "Residual case 3 (401 store-close race) unmeasured",
+      "severity": "non-blocking",
+      "confidence": "likely",
+      "detail": "The design flags that a 401 at sign time could close the local store before promotion finishes writing; the e2e offline-conflict case meant to measure it was written but not executed. Not a regression introduced by this fix, but unconfirmed."
+    },
+    {
+      "label": "e2e suite not executed",
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "detail": "pnpm e2e:cycles could not run because the shared Medplum stack needs openssl (absent) to seed RSA keys and .env, and stack:up uses Bash redirection that breaks under PowerShell. The three e2e edits pass node --check but are unexecuted. Reported honestly as not-passing. Run the 100-cycle (seed 558698034) and 20-cycle 429 scenarios where the stack is available. The user accepted this outcome."
+    }
+  ],
+  "reviewDoc": "d:\\My Documents D\\UNIGIS\\PM\\phongmach\\.agents\\tasks\\phongmach-fix-off8-sign-print-2026-10-03\\review.md"
+}

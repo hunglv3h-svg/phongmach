@@ -1,0 +1,303 @@
+$ vitest run src/local/client.test.ts src/local/sync.test.ts
+
+ RUN  v5.0.3 D:/My Documents D/UNIGIS/PM/phongmach/.worktrees/off8-sign-print/apps/clinic-web
+
+stderr | src/local/sync.test.ts > OFF-8: chuyß╗ân mß╗Ñc ch╞░a dß╗⌐t ─æiß╗âm trong l├║c giß╗» kh├│a, C1 ─æß║⌐y mß╗Ñc tr╞░ß╗¢c, h├áng r├áo ng├áy > hai tab c├╣ng mß╗ƒ: mß╗Ñc gß╗¡i ngay lß╗ùi tß║ím (503) ─æ╞░ß╗úc chuyß╗ân trong l├║c giß╗» kh├│a, tab kia kh├┤ng gß╗¡i bß║ún c┼⌐
+Another connection wants to delete database 'phongmach:noi:doc'. Closing db now to resume the delete request.
+
+ Γ¥» src/local/sync.test.ts (26 tests | 5 failed) 494ms
+   Γ¥» OFF-8: chuyß╗ân mß╗Ñc ch╞░a dß╗⌐t ─æiß╗âm trong l├║c giß╗» kh├│a, C1 ─æß║⌐y mß╗Ñc tr╞░ß╗¢c, h├áng r├áo ng├áy (6)
+     ├ù phi├¬n kh├┤ng phß║úi chß╗º kho (paused:owner): mß╗Ñc gß╗¡i ngay vß║½n ─æ╞░ß╗úc chuyß╗ân sang dß║íng ngoß║íi tuyß║┐n trong l├║c giß╗» kh├│a 12ms
+     ├ù phi├¬n hß║┐t hß║ín (401) ─æ├║ng l├║c gß╗¡i ngay: mß╗Ñc ─æ╞░ß╗úc chuyß╗ân sang dß║íng ngoß║íi tuyß║┐n (kß║┐t quß║ú offline), kh├┤ng chß╗¥ ─æ─âng nhß║¡p lß║íi mß╗¢i c├│ ─æ╞ín 4ms
+     ├ù hai tab c├╣ng mß╗ƒ: mß╗Ñc gß╗¡i ngay lß╗ùi tß║ím (503) ─æ╞░ß╗úc chuyß╗ân trong l├║c giß╗» kh├│a, tab kia kh├┤ng gß╗¡i bß║ún c┼⌐ 6ms
+     ├ù C1: mß╗Ñc tr╞░ß╗¢c (qua mß╗ìi bß║¡c) cß╗ºa mß╗Ñc ─æang chß╗¥ kß║┐t quß║ú bß╗Å qua nextAt trong l╞░ß╗út gß╗¡i ─æ├│, nh╞░ng kh├┤ng ─æß║⌐y mß╗Ñc cß╗ºa l╞░ß╗út kh├ím kh├íc 8ms
+     ├ù h├áng r├áo ng├áy: mß╗Ñc ─æ├ú tß╗¢i m├íy chß╗º (503) chß╗ë promote khi serverDate c├╣ng ng├áy VN vß╗¢i giß╗¥ k├╜; kh├íc ng├áy th├¼ kh├┤ng promote 4ms
+ Γ¥» src/local/client.test.ts (19 tests | 9 failed) 553ms
+   Γ¥» OFF-8: k├╜ l├║c c├│ mß║íng m├á m├íy chß╗º ch╞░a nhß║¡n ngay vß║½n phß║úi in (hoß║╖c b├ío r├╡ "CH╞»A in") (9)
+     ├ù `waiting`: mß╗Ñc mß╗ƒ hß╗ô s╞í ─æang `retry` ΓåÆ C1 ─æß║⌐y mß╗Ñc tr╞░ß╗¢c ngay, m├íy chß╗º ─æ├ú hß╗ôi th├¼ k├╜ ─æi ─æ╞░ß╗¥ng c├│ mß║íng, kh├┤ng cß║ºn bß║Ñm lß║íi 18ms
+     ├ù `waiting` m├á mß╗Ñc tr╞░ß╗¢c lß║íi lß╗ùi tiß║┐p: chuyß╗ân sang k├╜ khi mß║Ñt mß║íng, in ─æ├║ng mß╗Öt lß║ºn; ─æß╗ông bß╗Ö xong ─æ├║ng mß╗Öt ho├án tß║Ñt v├á mß╗Öt d├▓ng in 9ms
+     ├ù `offline` m├á ch╞░a chuyß╗ân sang dß║íng ngoß║íi tuyß║┐n: mß║íng vß╗½a c├│ lß║íi, lß║ºn gß╗¡i lß║íi mß╗Ñc tr╞░ß╗¢c lß╗ùi mß║íng ─æ├║ng l├║c k├╜ ΓåÆ chuyß╗ân sang k├╜ khi mß║Ñt mß║íng, in ─æ├║ng mß╗Öt lß║ºn 140ms
+     ├ù `retrying`: y├¬u cß║ºu ho├án tß║Ñt gß║╖p 503, server c├╣ng ng├áy ΓåÆ chuyß╗ân sang k├╜ khi mß║Ñt mß║íng, in ─æ├║ng mß╗Öt lß║ºn, giß╗¥ k├╜ = giß╗¥ bß║Ñm, 2 y├¬u cß║ºu c├╣ng clientUuid 9ms
+     ├ù `retrying` h├áng r├áo ng├áy ΓÇö server KH├üC ng├áy: KH├öNG chuyß╗ân, KH├öNG in, b├ío "CH╞»A in"; mß╗Ñc giß╗» nguy├¬n dß║íng c├│ mß║íng v├á vß║½n tß╗▒ gß╗¡i 11ms
+     ├ù `retrying` h├áng r├áo ng├áy ΓÇö phß║ún hß╗ôi lß╗ùi KH├öNG c├│ Date: KH├öNG chuyß╗ân, KH├öNG in, b├ío "CH╞»A in"; mß╗Ñc giß╗» nguy├¬n dß║íng c├│ mß║íng 7ms
+     ├ù `paused`: phi├¬n hß║┐t hß║ín (401) ─æ├║ng l├║c k├╜ ΓåÆ chuyß╗ân sang k├╜ khi mß║Ñt mß║íng (ch╞░a tß╗¢i m├íy chß╗º), in ─æ├║ng mß╗Öt lß║ºn; ─æ─âng nhß║¡p lß║íi th├¼ m├íy tß╗▒ gß╗¡i 9ms
+     ├ù `held`: mß╗Ñc mß╗ƒ hß╗ô s╞í ─æ├ú bß╗ï m├íy chß╗º tß╗½ chß╗æi (409) ΓåÆ chuyß╗ân sang k├╜ khi mß║Ñt mß║íng, in ─æ├║ng mß╗Öt lß║ºn; ─æ╞ín bß╗ï giß╗» in Lß║áI ─æ╞░ß╗úc tß╗½ danh s├ích chß╗¥ ─æß╗ông bß╗Ö 7ms
+     ├ù nh├ính mß║Ñt mß║íng chß╗ïu C├ÖNG h├áng r├áo ng├áy: 503 kh├íc ng├áy rß╗ôi mß║Ñt mß║íng, k├╜ lß║íi ΓåÆ KH├öNG chuyß╗ân, KH├öNG in, b├ío "CH╞»A in" (kh├┤ng tß╗▒ ├╜ ─æß╗òi giß╗¥ k├╜ cß╗ºa mß╗Ñc ─æ├ú tß╗¢i m├íy chß╗º) 12ms
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ» Failed Tests 14 ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»
+
+ FAIL  src/local/client.test.ts > OFF-8: k├╜ l├║c c├│ mß║íng m├á m├íy chß╗º ch╞░a nhß║¡n ngay vß║½n phß║úi in (hoß║╖c b├ío r├╡ "CH╞»A in") > `waiting`: mß╗Ñc mß╗ƒ hß╗ô s╞í ─æang `retry` ΓåÆ C1 ─æß║⌐y mß╗Ñc tr╞░ß╗¢c ngay, m├íy chß╗º ─æ├ú hß╗ôi th├¼ k├╜ ─æi ─æ╞░ß╗¥ng c├│ mß║íng, kh├┤ng cß║ºn bß║Ñm lß║íi
+AssertionError: expected 'failed' to be 'online' // Object.is equality
+
+Expected: "online"
+Received: "failed"
+
+ Γ¥» src/local/client.test.ts:244:22
+    242|     const out = await client.complete({ visit: opened.context.visit, pΓÇª
+    243|     // C1: d├╣ mß╗Ñc mß╗ƒ hß╗ô s╞í c├▓n 3 gi├óy mß╗¢i tß╗¢i hß║ín gß╗¡i lß║íi, n├│ ─æ╞░ß╗úc ─æß║⌐yΓÇª
+    244|     expect(out.kind).toBe('online');
+       |                      ^
+    245|     expect(printed).toEqual([]); // in qua m├íy chß╗º (─æ╞░ß╗¥ng c├│ mß║íng), khΓÇª
+    246|     expect(serverStatus(item)).toBe('done');
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[1/14]ΓÄ»
+
+ FAIL  src/local/client.test.ts > OFF-8: k├╜ l├║c c├│ mß║íng m├á m├íy chß╗º ch╞░a nhß║¡n ngay vß║½n phß║úi in (hoß║╖c b├ío r├╡ "CH╞»A in") > `waiting` m├á mß╗Ñc tr╞░ß╗¢c lß║íi lß╗ùi tiß║┐p: chuyß╗ân sang k├╜ khi mß║Ñt mß║íng, in ─æ├║ng mß╗Öt lß║ºn; ─æß╗ông bß╗Ö xong ─æ├║ng mß╗Öt ho├án tß║Ñt v├á mß╗Öt d├▓ng in
+AssertionError: expected 'failed' to be 'offline' // Object.is equality
+
+Expected: "offline"
+Received: "failed"
+
+ Γ¥» src/local/client.test.ts:262:22
+    260|
+    261|     const out = await client.complete({ visit: opened.context.visit, pΓÇª
+    262|     expect(out.kind).toBe('offline');
+       |                      ^
+    263|     await expectSignedOffline(draft, opened);
+    264|
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[2/14]ΓÄ»
+
+ FAIL  src/local/client.test.ts > OFF-8: k├╜ l├║c c├│ mß║íng m├á m├íy chß╗º ch╞░a nhß║¡n ngay vß║½n phß║úi in (hoß║╖c b├ío r├╡ "CH╞»A in") > `offline` m├á ch╞░a chuyß╗ân sang dß║íng ngoß║íi tuyß║┐n: mß║íng vß╗½a c├│ lß║íi, lß║ºn gß╗¡i lß║íi mß╗Ñc tr╞░ß╗¢c lß╗ùi mß║íng ─æ├║ng l├║c k├╜ ΓåÆ chuyß╗ân sang k├╜ khi mß║Ñt mß║íng, in ─æ├║ng mß╗Öt lß║ºn
+AssertionError: expected 'failed' to be 'offline' // Object.is equality
+
+Expected: "offline"
+Received: "failed"
+
+ Γ¥» src/local/client.test.ts:294:34
+    292|     release();
+    293|
+    294|     expect((await signing).kind).toBe('offline');
+       |                                  ^
+    295|     await expectSignedOffline(draft, opened);
+    296|
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[3/14]ΓÄ»
+
+ FAIL  src/local/client.test.ts > OFF-8: k├╜ l├║c c├│ mß║íng m├á m├íy chß╗º ch╞░a nhß║¡n ngay vß║½n phß║úi in (hoß║╖c b├ío r├╡ "CH╞»A in") > `retrying`: y├¬u cß║ºu ho├án tß║Ñt gß║╖p 503, server c├╣ng ng├áy ΓåÆ chuyß╗ân sang k├╜ khi mß║Ñt mß║íng, in ─æ├║ng mß╗Öt lß║ºn, giß╗¥ k├╜ = giß╗¥ bß║Ñm, 2 y├¬u cß║ºu c├╣ng clientUuid
+AssertionError: expected 'failed' to be 'offline' // Object.is equality
+
+Expected: "offline"
+Received: "failed"
+
+ Γ¥» src/local/client.test.ts:312:22
+    310|
+    311|     const out = await client.complete({ visit: opened.context.visit, pΓÇª
+    312|     expect(out.kind).toBe('offline');
+       |                      ^
+    313|     const op = await expectSignedOffline(draft, { openedAt: draft.openΓÇª
+    314|     expect(op.meta.attempts).toBe(1); // ─æ├ú tß╗¢i m├íy chß╗º ─æ├║ng mß╗Öt lß║ºn (ΓÇª
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[4/14]ΓÄ»
+
+ FAIL  src/local/client.test.ts > OFF-8: k├╜ l├║c c├│ mß║íng m├á m├íy chß╗º ch╞░a nhß║¡n ngay vß║½n phß║úi in (hoß║╖c b├ío r├╡ "CH╞»A in") > `retrying` h├áng r├áo ng├áy ΓÇö server KH├üC ng├áy: KH├öNG chuyß╗ân, KH├öNG in, b├ío "CH╞»A in"; mß╗Ñc giß╗» nguy├¬n dß║íng c├│ mß║íng v├á vß║½n tß╗▒ gß╗¡i
+AssertionError: expected { kind: 'failed', ΓÇª(1) } to match object { kind: 'failed', ΓÇª(1) }
+
+- Expected
++ Received
+
+  {
+    "kind": "failed",
+-   "message": StringContaining "CH╞»A in",
++   "message": "L╞░u ch╞░a trß╗ìn vß║╣n, h├úy bß║Ñm lß║íi: dß╗» liß╗çu sß║╜ kh├┤ng bß╗ï tr├╣ng. ─É├ú giß╗» tr├¬n m├íy, m├íy sß║╜ tß╗▒ gß╗¡i lß║íi; ─æ╞ín sß║╜ kh├┤ng bß╗ï l╞░u tr├╣ng.",
+  }
+
+ Γ¥» src/local/client.test.ts:332:17
+    330|
+    331|     const out = await client.complete({ visit: opened.context.visit, pΓÇª
+    332|     expect(out).toMatchObject({ kind: 'failed', message: expect.stringΓÇª
+       |                 ^
+    333|     expect(printed).toEqual([]);
+    334|     const op = (await completeOp(draft.clientUuid))!;
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[5/14]ΓÄ»
+
+ FAIL  src/local/client.test.ts > OFF-8: k├╜ l├║c c├│ mß║íng m├á m├íy chß╗º ch╞░a nhß║¡n ngay vß║½n phß║úi in (hoß║╖c b├ío r├╡ "CH╞»A in") > `retrying` h├áng r├áo ng├áy ΓÇö phß║ún hß╗ôi lß╗ùi KH├öNG c├│ Date: KH├öNG chuyß╗ân, KH├öNG in, b├ío "CH╞»A in"; mß╗Ñc giß╗» nguy├¬n dß║íng c├│ mß║íng
+AssertionError: expected { kind: 'failed', ΓÇª(1) } to match object { kind: 'failed', ΓÇª(1) }
+
+- Expected
++ Received
+
+  {
+    "kind": "failed",
+-   "message": StringContaining "CH╞»A in",
++   "message": "L╞░u ch╞░a trß╗ìn vß║╣n, h├úy bß║Ñm lß║íi: dß╗» liß╗çu sß║╜ kh├┤ng bß╗ï tr├╣ng. ─É├ú giß╗» tr├¬n m├íy, m├íy sß║╜ tß╗▒ gß╗¡i lß║íi; ─æ╞ín sß║╜ kh├┤ng bß╗ï l╞░u tr├╣ng.",
+  }
+
+ Γ¥» src/local/client.test.ts:354:17
+    352|
+    353|     const out = await client.complete({ visit: opened.context.visit, pΓÇª
+    354|     expect(out).toMatchObject({ kind: 'failed', message: expect.stringΓÇª
+       |                 ^
+    355|     expect(printed).toEqual([]);
+    356|     const op = (await completeOp(draft.clientUuid))!;
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[6/14]ΓÄ»
+
+ FAIL  src/local/client.test.ts > OFF-8: k├╜ l├║c c├│ mß║íng m├á m├íy chß╗º ch╞░a nhß║¡n ngay vß║½n phß║úi in (hoß║╖c b├ío r├╡ "CH╞»A in") > `paused`: phi├¬n hß║┐t hß║ín (401) ─æ├║ng l├║c k├╜ ΓåÆ chuyß╗ân sang k├╜ khi mß║Ñt mß║íng (ch╞░a tß╗¢i m├íy chß╗º), in ─æ├║ng mß╗Öt lß║ºn; ─æ─âng nhß║¡p lß║íi th├¼ m├íy tß╗▒ gß╗¡i
+AssertionError: expected 'failed' to be 'offline' // Object.is equality
+
+Expected: "offline"
+Received: "failed"
+
+ Γ¥» src/local/client.test.ts:370:22
+    368|
+    369|     const out = await client.complete({ visit: opened.context.visit, pΓÇª
+    370|     expect(out.kind).toBe('offline');
+       |                      ^
+    371|     await expectSignedOffline(draft, { openedAt: draft.openedAt! });
+    372|     expect(engine.state.paused).toBe('unauthorized');
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[7/14]ΓÄ»
+
+ FAIL  src/local/client.test.ts > OFF-8: k├╜ l├║c c├│ mß║íng m├á m├íy chß╗º ch╞░a nhß║¡n ngay vß║½n phß║úi in (hoß║╖c b├ío r├╡ "CH╞»A in") > `held`: mß╗Ñc mß╗ƒ hß╗ô s╞í ─æ├ú bß╗ï m├íy chß╗º tß╗½ chß╗æi (409) ΓåÆ chuyß╗ân sang k├╜ khi mß║Ñt mß║íng, in ─æ├║ng mß╗Öt lß║ºn; ─æ╞ín bß╗ï giß╗» in Lß║áI ─æ╞░ß╗úc tß╗½ danh s├ích chß╗¥ ─æß╗ông bß╗Ö
+AssertionError: expected 'failed' to be 'offline' // Object.is equality
+
+Expected: "offline"
+Received: "failed"
+
+ Γ¥» src/local/client.test.ts:398:22
+    396|     const input = { visit: opened.context.visit, patient: opened.conteΓÇª
+    397|     const out = await client.complete(input);
+    398|     expect(out.kind).toBe('offline');
+       |                      ^
+    399|     const op = await expectSignedOffline(draft, opened);
+    400|
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[8/14]ΓÄ»
+
+ FAIL  src/local/client.test.ts > OFF-8: k├╜ l├║c c├│ mß║íng m├á m├íy chß╗º ch╞░a nhß║¡n ngay vß║½n phß║úi in (hoß║╖c b├ío r├╡ "CH╞»A in") > nh├ính mß║Ñt mß║íng chß╗ïu C├ÖNG h├áng r├áo ng├áy: 503 kh├íc ng├áy rß╗ôi mß║Ñt mß║íng, k├╜ lß║íi ΓåÆ KH├öNG chuyß╗ân, KH├öNG in, b├ío "CH╞»A in" (kh├┤ng tß╗▒ ├╜ ─æß╗òi giß╗¥ k├╜ cß╗ºa mß╗Ñc ─æ├ú tß╗¢i m├íy chß╗º)
+AssertionError: expected { kind: 'offline', ΓÇª(2) } to match object { kind: 'failed', ΓÇª(1) }
+(6 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "kind": "failed",
+-   "message": StringContaining "CH╞»A in",
++   "kind": "offline",
+  }
+
+ Γ¥» src/local/client.test.ts:423:17
+    421|     clock.advance(1000);
+    422|     const out = await client.complete(input);
+    423|     expect(out).toMatchObject({ kind: 'failed', message: expect.stringΓÇª
+       |                 ^
+    424|     expect(printed).toEqual([]);
+    425|     const op = (await completeOp(draft.clientUuid))!;
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[9/14]ΓÄ»
+
+ FAIL  src/local/sync.test.ts > OFF-8: chuyß╗ân mß╗Ñc ch╞░a dß╗⌐t ─æiß╗âm trong l├║c giß╗» kh├│a, C1 ─æß║⌐y mß╗Ñc tr╞░ß╗¢c, h├áng r├áo ng├áy > phi├¬n kh├┤ng phß║úi chß╗º kho (paused:owner): mß╗Ñc gß╗¡i ngay vß║½n ─æ╞░ß╗úc chuyß╗ân sang dß║íng ngoß║íi tuyß║┐n trong l├║c giß╗» kh├│a
+AssertionError: expected { kind: 'paused' } to deeply equal { kind: 'offline' }
+
+- Expected
++ Received
+
+  {
+-   "kind": "offline",
++   "kind": "paused",
+  }
+
+ Γ¥» src/local/sync.test.ts:450:17
+    448|     await e.enqueue([op]);
+    449|     const out = await e.submit(op.id, promote);
+    450|     expect(out).toEqual({ kind: 'offline' });
+       |                 ^
+    451|     expect(e.state.paused).toBe('owner');
+    452|     const saved = (await e.ops()).find((o) => o.id === op.id)!;
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[10/14]ΓÄ»
+
+ FAIL  src/local/sync.test.ts > OFF-8: chuyß╗ân mß╗Ñc ch╞░a dß╗⌐t ─æiß╗âm trong l├║c giß╗» kh├│a, C1 ─æß║⌐y mß╗Ñc tr╞░ß╗¢c, h├áng r├áo ng├áy > phi├¬n hß║┐t hß║ín (401) ─æ├║ng l├║c gß╗¡i ngay: mß╗Ñc ─æ╞░ß╗úc chuyß╗ân sang dß║íng ngoß║íi tuyß║┐n (kß║┐t quß║ú offline), kh├┤ng chß╗¥ ─æ─âng nhß║¡p lß║íi mß╗¢i c├│ ─æ╞ín
+AssertionError: expected { kind: 'waiting' } to deeply equal { kind: 'offline' }
+
+- Expected
++ Received
+
+  {
+-   "kind": "offline",
++   "kind": "waiting",
+  }
+
+ Γ¥» src/local/sync.test.ts:467:17
+    465|     await e.enqueue([op]);
+    466|     const out = await e.submit(op.id, promote);
+    467|     expect(out).toEqual({ kind: 'offline' });
+       |                 ^
+    468|     const saved = (await e.ops()).find((o) => o.id === op.id)!;
+    469|     expect((saved.body.payload as { rxTmpId?: string }).rxTmpId).toBeDΓÇª
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[11/14]ΓÄ»
+
+ FAIL  src/local/sync.test.ts > OFF-8: chuyß╗ân mß╗Ñc ch╞░a dß╗⌐t ─æiß╗âm trong l├║c giß╗» kh├│a, C1 ─æß║⌐y mß╗Ñc tr╞░ß╗¢c, h├áng r├áo ng├áy > hai tab c├╣ng mß╗ƒ: mß╗Ñc gß╗¡i ngay lß╗ùi tß║ím (503) ─æ╞░ß╗úc chuyß╗ân trong l├║c giß╗» kh├│a, tab kia kh├┤ng gß╗¡i bß║ún c┼⌐
+AssertionError: expected { kind: 'waiting' } to deeply equal { kind: 'offline' }
+
+- Expected
++ Received
+
+  {
+-   "kind": "offline",
++   "kind": "waiting",
+  }
+
+ Γ¥» src/local/sync.test.ts:485:17
+    483|     const out = await ea.submit(op.id, promote);
+    484|     // C├╣ng ng├áy: ─æ╞░ß╗úc chuyß╗ân sang dß║íng ngoß║íi tuyß║┐n ngay, tab A giß╗» khΓÇª
+    485|     expect(out).toEqual({ kind: 'offline' });
+       |                 ^
+    486|     const saved = (await ea.ops()).find((o) => o.id === op.id)!;
+    487|     expect((saved.body.payload as { rxTmpId?: string }).rxTmpId).toBeDΓÇª
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[12/14]ΓÄ»
+
+ FAIL  src/local/sync.test.ts > OFF-8: chuyß╗ân mß╗Ñc ch╞░a dß╗⌐t ─æiß╗âm trong l├║c giß╗» kh├│a, C1 ─æß║⌐y mß╗Ñc tr╞░ß╗¢c, h├áng r├áo ng├áy > C1: mß╗Ñc tr╞░ß╗¢c (qua mß╗ìi bß║¡c) cß╗ºa mß╗Ñc ─æang chß╗¥ kß║┐t quß║ú bß╗Å qua nextAt trong l╞░ß╗út gß╗¡i ─æ├│, nh╞░ng kh├┤ng ─æß║⌐y mß╗Ñc cß╗ºa l╞░ß╗út kh├ím kh├íc
+AssertionError: expected 'waiting' to be 'done' // Object.is equality
+
+Expected: "done"
+Received: "waiting"
+
+ Γ¥» src/local/sync.test.ts:512:22
+    510|     const out = await e.submit(chain.complete.id);
+    511|     // Mß╗Ñc tr╞░ß╗¢c cß╗ºa focus ─æ├ú ─æ╞░ß╗úc ─æß║⌐y v├á gß╗¡i; cß║ú chuß╗ùi A xong, compleΓÇª
+    512|     expect(out.kind).toBe('done');
+       |                      ^
+    513|     // `other` kh├┤ng ─æ╞░ß╗úc ─æß║⌐y: vß║½n retry, kh├┤ng c├│ y├¬u cß║ºu mß╗¢i cho n├│ ΓÇª
+    514|     expect((await statuses(e))[other.id]).toBe('retry');
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[13/14]ΓÄ»
+
+ FAIL  src/local/sync.test.ts > OFF-8: chuyß╗ân mß╗Ñc ch╞░a dß╗⌐t ─æiß╗âm trong l├║c giß╗» kh├│a, C1 ─æß║⌐y mß╗Ñc tr╞░ß╗¢c, h├áng r├áo ng├áy > h├áng r├áo ng├áy: mß╗Ñc ─æ├ú tß╗¢i m├íy chß╗º (503) chß╗ë promote khi serverDate c├╣ng ng├áy VN vß╗¢i giß╗¥ k├╜; kh├íc ng├áy th├¼ kh├┤ng promote
+AssertionError: expected { kind: 'waiting' } to deeply equal { kind: 'offline' }
+
+- Expected
++ Received
+
+  {
+-   "kind": "offline",
++   "kind": "waiting",
+  }
+
+ Γ¥» src/local/sync.test.ts:548:46
+    546|       bff.fault(/complete$/, { status: 503, body: { error: 'incompleteΓÇª
+    547|       await e.enqueue([op]);
+    548|       expect(await e.submit(op.id, promote)).toEqual({ kind: 'offline'ΓÇª
+       |                                              ^
+    549|       expect(((await e.ops()).find((o) => o.id === op.id)!.body.payloaΓÇª
+    550|     }
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[14/14]ΓÄ»
+
+
+ Test Files  2 failed (2)
+      Tests  14 failed | 31 passed (45)
+   Start at  22:30:38
+   Duration  1.69s (tests 39%, import 33%, transform 28%, worker 1%)
+
+[ELIFECYCLE] Test failed. See above for more details.
+Error: ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL
+
+  ├ù "pnpm recursive run" failed in D:\My Documents
+  Γöé D\UNIGIS\PM\phongmach\.worktrees\off8-sign-print\apps\clinic-web
+

@@ -1,0 +1,15 @@
+{
+  "url": "https://github.com/hunglv3h-svg/phongmach/pull/20",
+  "number": 20,
+  "title": "fix(m0-2): sua ba loi tiem an lam do e2e:cycles",
+  "branch": "fix/m0-2-cycles-sign-blocked",
+  "baseRefName": "main",
+  "headRefName": "fix/m0-2-cycles-sign-blocked",
+  "state": "OPEN",
+  "isDraft": false,
+  "repository": "hunglv3h-svg/phongmach",
+  "reused": false,
+  "headCommit": "8847519",
+  "merged": false,
+  "note": "KHONG merge — chi chu du an duoc merge."
+}

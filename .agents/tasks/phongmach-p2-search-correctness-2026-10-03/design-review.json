@@ -1,0 +1,30 @@
+{
+  "verdict": "CHANGES_REQUESTED",
+  "findings": [
+    {
+      "id": 1,
+      "severity": "MEDIUM",
+      "title": "hasMore for name / name+number counts only the keyed (_tag) population, but the displayed set includes legacy un-keyed records via the prefix query; on un-backfilled data the hint silently never shows",
+      "where": "Quyết định 1 (hasMore đếm trên _tag AND) and Quyết định 2 nhánh name/name+number (this.count(exact)); services/bff/src/medplum.ts searchPatients name branch",
+      "problem": "The displayed name results merge the exact _tag-AND set with a name-prefix set whose purpose is to surface pre-M0-3 records that have no meta.tag search keys. The count query runs on _tag AND only, so when keys are not backfilled, more than 20 people can be displayed via prefix while total <= limit, making hasMore=false and the required Vietnamese hint never appears. This is the same silent-failure class the design closed for Bundle.total, reappearing on un-keyed data. The plan doc's 'Còn lại, chưa làm' explicitly notes existing patients need a one-time backfill that has not run on the shared dev stack, and the prerequisite integration test seeds only keyed records (buildPatient), so it will not catch this.",
+      "fix": "Pick and state one: (a) document backfilled keys as an explicit precondition of hasMore accuracy (same status as the Bundle.total precondition), and add a legacy (no meta.tag) record to the prerequisite integration test to pin the documented behavior; or (b) keep the exact count but also set hasMore from the prefix arm that is already fetched with _count=limit+1: hasMore = totalExact > limit || byPrefix.length > limit, so the signal is not silently hidden when the displayed set overflows on legacy data (no extra query)."
+    },
+    {
+      "id": 2,
+      "severity": "NIT",
+      "title": "Existing searchLocal callers in cache.test.ts break on the return-type change; design lists the file but not the specific helper",
+      "where": "Danh sách tệp chạm (cache.test.ts); Quyết định 1 Kiểm thử; apps/clinic-web/src/local/cache.test.ts line 14",
+      "problem": "cache.test.ts has `const names = (q) => searchLocal(q, CACHE).map((p) => p.fullName)` which every name/phone assertion flows through; changing searchLocal to return { results, hasMore } breaks .map here. typecheck catches it, but the design does not name this helper.",
+      "fix": "Add to the test notes: update the `names` helper to `searchLocal(q, CACHE).results`."
+    },
+    {
+      "id": 3,
+      "severity": "NIT",
+      "title": "Offline name+number hasMore counts a prefix-matched population while BFF counts the exact-keyed population; divergent but harmless (hint suppressed offline)",
+      "where": "Quyết định 2 Offline (hasMore = found.length > limit) + Quyết định 3 searchLocal nhánh name+number (name matched by startsWith prefix)",
+      "problem": "The single hasMore field carries exact-keyed semantics online and prefix semantics offline for name+number. The UI guard (!search.local && kind !== 'name+number') suppresses the hint in both cases so it never reaches the user, but the semantic divergence is unstated.",
+      "fix": "Add one sentence noting offline hasMore for name+number is prefix-based, never displayed (guard suppresses on both local and name+number), so the divergence is intentional and inert."
+    }
+  ],
+  "reviewDoc": "d:\\My Documents D\\UNIGIS\\PM\\phongmach\\.agents\\tasks\\phongmach-p2-search-correctness-2026-10-03\\design-review.md"
+}

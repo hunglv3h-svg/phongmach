@@ -1,0 +1,28 @@
+{
+  "pr": 17,
+  "url": "https://github.com/hunglv3h-svg/phongmach/pull/17",
+  "nhanh": "feat/docker-demo-off8-search-p2",
+  "trangThaiPR": "MERGED",
+  "mergedAt": "2026-10-12T12:55:51Z",
+  "headSha": "c5940bad6325020b1e4e643ae94044c25eec888e",
+  "mergeCommit": "96a22ad372f9e42d1ee987f434fc81804a0029c0",
+  "ketLuan": "CI xanh cả 3 job trên headSha; PR đã được merge. Không có bình luận/review mới, không có check đỏ => không cần sửa gì.",
+  "checks": [
+    { "ten": "Kiểu, kiểm thử đơn vị, build", "ketQua": "success" },
+    { "ten": "Kiểm thử tích hợp với Medplum thật", "ketQua": "success" },
+    { "ten": "Giao diện đầu-cuối (Chromium) trên Medplum thật", "ketQua": "success" }
+  ],
+  "hanhDong": {
+    "suaCode": false,
+    "commit": false,
+    "push": false,
+    "traLoiBinhLuan": false,
+    "rerunCI": false
+  },
+  "lenhDaChay": [
+    "gh pr view 17 --repo hunglv3h-svg/phongmach --json state,mergedAt,mergeCommit,headRefName,headRefOid",
+    "gh pr checks 17 --repo hunglv3h-svg/phongmach",
+    "gh api repos/hunglv3h-svg/phongmach/commits/c5940bad6325020b1e4e643ae94044c25eec888e/check-runs"
+  ],
+  "ghiChu": "Watcher báo state=MERGED, passingCheckCount=3, pendingCheckCount=0, newFailedChecks=[], backlog.remaining=0. Đã xác nhận lại bằng gh: cả 3 check-run đều success. Không chạm stack Medplum, không chạm worktree nào."
+}
