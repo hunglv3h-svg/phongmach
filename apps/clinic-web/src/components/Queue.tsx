@@ -19,6 +19,8 @@ export function Queue({ auth, onOpenVisit }: { auth: AuthState; onOpenVisit: (op
   const now = useNow(15_000);
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState<string>();
+  // Lượt đang chờ xác nhận hủy (giữ cả dòng để hộp thoại gọi đúng tên và số). Hủy là thao tác phá hủy nên phải xác nhận trước.
+  const [pendingCancel, setPendingCancel] = useState<LocalQueueItem>();
   const clinical = user.role !== 'assistant';
 
   // Gộp với thao tác chưa đồng bộ trên máy, mỗi khi máy chủ trả hàng chờ mới hoặc hàng đợi đồng bộ thay đổi.
@@ -91,8 +93,8 @@ export function Queue({ auth, onOpenVisit }: { auth: AuthState; onOpenVisit: (op
             </button>
           )}
           {i.status === 'waiting' && (
-            // Hủy lượt: cần mạng (N4); lượt cấp lúc mất mạng chưa lên máy chủ thì chưa hủy được.
-            <button className="ghost" disabled={busy === i.id || !online || !!local?.tentative} title={!online ? NEED_NETWORK : local?.tentative ? 'Chưa đồng bộ' : undefined} onClick={() => void act(i.id, async () => void (await api.cancelVisit(token, i.id)))} data-testid="cancel">Hủy</button>
+            // Hủy lượt: cần mạng (N4); lượt cấp lúc mất mạng chưa lên máy chủ thì chưa hủy được. Bấm chỉ MỞ hộp thoại xác nhận; chỉ khi xác nhận mới thực sự hủy.
+            <button className="ghost" disabled={busy === i.id || !online || !!local?.tentative} title={!online ? NEED_NETWORK : local?.tentative ? 'Chưa đồng bộ' : undefined} onClick={() => setPendingCancel(i)} data-testid="cancel">Hủy</button>
           )}
         </div>
       </li>
@@ -101,6 +103,28 @@ export function Queue({ auth, onOpenVisit }: { auth: AuthState; onOpenVisit: (op
 
   return (
     <main className="page">
+      {pendingCancel && (
+        <div className="dialog-backdrop">
+          <section className="card dialog" role="alertdialog" aria-labelledby="cancel-visit-title" data-testid="cancel-visit-dialog">
+            <h2 id="cancel-visit-title">Hủy lượt khám?</h2>
+            <p>Hủy lượt của {pendingCancel.patientName} số {pad3(pendingCancel.number)}?</p>
+            <div className="actions">
+              <button className="secondary" autoFocus onClick={() => setPendingCancel(undefined)} data-testid="cancel-visit-dismiss">Giữ lại</button>
+              <button
+                className="ghost"
+                onClick={() => {
+                  const id = pendingCancel.id;
+                  setPendingCancel(undefined);
+                  void act(id, async () => void (await api.cancelVisit(token, id)));
+                }}
+                data-testid="cancel-visit-confirm"
+              >
+                Hủy lượt
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
       <div className="page-head">
         <h1>Hàng chờ hôm nay{server.data ? <small> · {server.data.day.split('-').reverse().join('/')}</small> : null}</h1>
         <button className="secondary" onClick={server.reload}>Làm mới</button>

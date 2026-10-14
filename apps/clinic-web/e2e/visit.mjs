@@ -143,6 +143,42 @@ try {
   await shot('10-queue-assistant');
   ok(`hàng chờ: số ${binhNumber} (đã hẹn) đứng trước số ${anNumber} (thường); phụ tá không có nút gọi vào khám`);
 
+  // Hủy lượt là thao tác phá hủy: bấm "Hủy" chỉ MỞ hộp thoại xác nhận, chưa hủy; chỉ khi bấm xác nhận mới thực sự hủy.
+  // Dùng một lượt bỏ đi (cấp số lần nữa cho An) để không đụng vào hai dòng An/Bình mà phần bác sĩ phía sau còn cần đang chờ.
+  await openPatient('nguyen van an', 'Nguyễn Văn An');
+  const throwawayNumber = Number(await checkIn('Hủy thử')); // thông báo hiện số đã đệm 0; data-number là số thô
+  await page.getByTestId('tab-queue').click();
+  // queue-row mang data-number dạng số thô (không đệm 0); lọc theo đúng dòng số bỏ đi.
+  const throwRow = page.locator(`[data-testid="queue-row"][data-number="${throwawayNumber}"]`).filter({ hasText: 'Nguyễn Văn An' }).first();
+  await throwRow.waitFor();
+  // Id lượt bỏ đi lấy từ máy chủ qua API (dòng hàng chờ không phơi id ra DOM).
+  const throwawayVisit = (await api('GET', '/api/queue')).json.items.find((x) => x.number === throwawayNumber && x.patientName === 'Nguyễn Văn An');
+  assert.ok(throwawayVisit, `tìm được lượt bỏ đi số ${throwawayNumber} trên máy chủ`);
+  const throwId = throwawayVisit.id;
+  // 1) Bấm "Hủy": hộp thoại xác nhận mở ra, nêu đúng tên và số; CHƯA hủy.
+  await throwRow.getByTestId('cancel').click();
+  const cancelDialog = page.getByTestId('cancel-visit-dialog');
+  await cancelDialog.waitFor();
+  assert.match(await cancelDialog.innerText(), /Nguyễn Văn An/, 'hộp thoại nêu tên bệnh nhân');
+  assert.match(await cancelDialog.innerText(), new RegExp(`số 0*${throwawayNumber}\\b`), 'hộp thoại nêu số lượt (đã đệm 0)');
+  assert.equal((await api('GET', '/api/queue')).json.items.find((x) => x.id === throwId)?.status, 'waiting', 'bấm "Hủy" KHÔNG được hủy ngay khi hộp thoại còn mở');
+  // 2) Bấm "Giữ lại": hộp thoại đóng, lượt vẫn đang chờ.
+  await cancelDialog.getByTestId('cancel-visit-dismiss').click();
+  await cancelDialog.waitFor({ state: 'detached' });
+  assert.equal((await api('GET', '/api/queue')).json.items.find((x) => x.id === throwId)?.status, 'waiting', 'bỏ qua xác nhận: lượt vẫn đang chờ');
+  // 3) Mở lại rồi bấm xác nhận: lúc này mới thực sự hủy.
+  await throwRow.getByTestId('cancel').click();
+  await cancelDialog.waitFor();
+  await cancelDialog.getByTestId('cancel-visit-confirm').click();
+  await cancelDialog.waitFor({ state: 'detached' });
+  await page.locator(`[data-testid="queue-row"][data-number="${throwawayNumber}"]`).filter({ hasText: 'Đã hủy' }).first().waitFor();
+  assert.equal((await api('GET', '/api/queue')).json.items.find((x) => x.id === throwId)?.status, 'cancelled', 'xác nhận mới thực sự hủy lượt');
+  await shot('10b-cancel-confirm');
+  ok('hủy lượt: bấm "Hủy" mở hộp thoại xác nhận và CHƯA hủy; "Giữ lại" không hủy; xác nhận mới thực sự hủy');
+  // An/Bình gốc phải còn đang chờ cho phần bác sĩ phía sau.
+  const stillWaiting = (await api('GET', '/api/queue')).json.items.filter((x) => x.status === 'waiting').map((x) => x.patientName);
+  assert.ok(stillWaiting.includes('Nguyễn Văn An') && stillWaiting.includes('Trần Thị Bình'), 'hai lượt An/Bình gốc vẫn đang chờ sau khi hủy lượt bỏ đi');
+
   await page.getByTestId('tab-display').click();
   await page.getByTestId('display-cell').first().waitFor();
   const board = await page.getByTestId('display').innerText();
