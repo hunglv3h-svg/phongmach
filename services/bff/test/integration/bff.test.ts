@@ -40,7 +40,7 @@ beforeAll(async () => {
     ],
   });
   const sessions = new SessionService('i'.repeat(40), 60);
-  app = buildApp({ tenants, stores: new MedplumTenants(MEDPLUM_URL, tenants.tenants).store, audit, sessions, logLevel: 'silent' });
+  app = buildApp({ mode: 'demo', tenants, stores: new MedplumTenants(MEDPLUM_URL, tenants.tenants).store, audit, sessions, logLevel: 'silent' });
   for (const [tenant, user] of [['a', 'a-owner'], ['a', 'a-assistant'], ['b', 'b-owner']] as const) {
     tokens[user] = (await app.inject({ method: 'POST', url: '/api/session', payload: { tenant, userId: user } })).json().token;
   }
