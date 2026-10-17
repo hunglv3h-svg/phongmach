@@ -1,7 +1,7 @@
 # PHONGMACH
 
 Phần mềm quản lý phòng mạch tư nhân (Việt Nam). Kế hoạch triển khai: [`docs/ke-hoach-trien-khai.md`](docs/ke-hoach-trien-khai.md).
-Đang ở **M0-S3**: phần ngoại tuyến đã xong (mất mạng vẫn tiếp đón, khám, ký, in trên từng máy; có mạng lại thì tự đồng bộ, không mất, không trùng), làm trên nền M0-S1 và M0-S2 (tiếp đón, hàng chờ, khám một trang, kê đơn, in, liên thông mô phỏng). Nút "Gửi đơn qua Zalo" là mô phỏng: chỉ hiện bản xem trước tin nhắn, không gửi. Phiên thử với 3 bác sĩ (tiêu chí M0-1) đã chuẩn bị xong, **chưa đo**: xem [`docs/phien-thu-bac-si.md`](docs/phien-thu-bac-si.md). Còn lại tới M0: buổi thử thật với bác sĩ, kịch bản trình diễn và bản dự phòng (kế hoạch, mục 5.9). MVP trình nhà đầu tư dự kiến 13/11/2026.
+Trạng thái ngày 17/10/2026 (`main` = `ae1f908`, CI xanh): **chức năng M0 đã đủ** — tiếp đón, hàng chờ, khám một trang, kê đơn có quy tắc, in A5 có QR, liên thông mô phỏng, ngoại tuyến trên từng máy (mất mạng vẫn tiếp đón, khám, ký, in; có mạng lại thì tự đồng bộ, không mất, không trùng), cách ly phòng khám và nhật ký truy cập. Ký số, cổng đơn thuốc quốc gia và nút "Gửi đơn qua Zalo" là **mô phỏng có nhãn**. Đã có **xác thực nhân viên thật** (mật khẩu + TOTP, `AUTH_MODE=real`; T-IDP) bên cạnh chế độ demo. Bài 20 chu kỳ ngắt mạng (M0-2) và bản 100 chu kỳ (T6) đã chạy xanh. Phiên thử với 3 bác sĩ (tiêu chí M0-1) đã chuẩn bị xong, **chưa đo**: xem [`docs/phien-thu-bac-si.md`](docs/phien-thu-bac-si.md). Còn lại tới M0: hai lỗi đã biết của hàng đợi đồng bộ (mục "Giới hạn"), buổi thử thật với bác sĩ, và diễn tập trình diễn với máy dự phòng (M0-6, đang treo theo quyết định chủ dự án). Việc theo từng phiên: [`docs/prompts/README.md`](docs/prompts/README.md); bảng chức năng: [`trang-thai-chuc-nang.md`](trang-thai-chuc-nang.md). MVP trình nhà đầu tư dự kiến 13/11/2026.
 
 ## Cấu trúc
 
@@ -75,7 +75,7 @@ docker compose -p phongmach-demo -f infra/demo/docker-compose.yml up -d --build
 
 Lệnh này dựng hai thứ trong project **riêng** `phongmach-demo`:
 
-- `seed`: nạp dữ liệu demo rồi thoát (chạy một lần, `restart: no`, `SEED_PATIENTS=20`). Chạy lại được: tạo có điều kiện theo UUID xác định nên không trùng. Ghi `/demo/.demo-tenants.json` vào named volume dùng chung `demo-tenants`.
+- `seed`: nạp dữ liệu demo rồi thoát (chạy một lần, `restart: no`). Mặc định 300 bệnh nhân mỗi phòng khám, kèm lượt khám cũ và hàng chờ của hôm nay (mỗi phòng 6 ca: đang khám, đang chờ, đã xong); đặt `SEED_PATIENTS=50` trước lệnh để dựng nhanh. Chạy lại được: tạo có điều kiện theo UUID xác định nên không trùng. Ghi `/demo/.demo-tenants.json` vào named volume dùng chung `demo-tenants`.
 - `web`: nginx phục vụ giao diện tĩnh **gộp** cả BFF (chạy trong cùng container, nghe `127.0.0.1:8110`), đọc `.demo-tenants.json` từ cùng volume. Web chỉ chạy sau khi `seed` xong (`depends_on … service_completed_successfully`).
 
 Giao diện ở **http://localhost:8081** (dùng cổng **8081** vì 8080 trên máy đang bận). Mở trang này để trình diễn; đi qua kịch bản ở mục ["Đi qua kịch bản trình diễn"](#đi-qua-kịch-bản-trình-diễn).
@@ -99,7 +99,7 @@ docker compose -p phongmach-demo -f infra/demo/docker-compose.yml down -v       
 
 > **Cảnh báo:** chỉ dùng `down`/`down -v` cho project `phongmach-demo`. **TUYỆT ĐỐI KHÔNG** chạy `down -v` (hay `down`) trên project `phongmach-medplum`: sẽ mất dữ liệu seed của backend đang chạy. Lệnh demo ở trên không recreate và không đụng tới các container Medplum.
 
-Dữ liệu demo (`.demo-tenants.json`, chứa bí mật tài khoản máy Medplum) do `seed` tự sinh vào volume `demo-tenants` tại `/demo/.demo-tenants.json`; không nằm trên máy chủ host và không commit. Idempotent với `SEED_PATIENTS=20`.
+Dữ liệu demo (`.demo-tenants.json`, chứa bí mật tài khoản máy Medplum) do `seed` tự sinh vào volume `demo-tenants` tại `/demo/.demo-tenants.json`; không nằm trên máy chủ host và không commit. Nhật ký truy cập của bản demo nằm cùng volume (`/demo/audit.ndjson`) nên còn nguyên qua các lần `up --build`.
 
 **Nối Medplum.** Mặc định các container demo nối tới Medplum đang chạy qua `host.docker.internal:8103` (đã truyền `extra_hosts: host.docker.internal:host-gateway`). Đã kiểm chứng seed và BFF đăng nhập được qua địa chỉ này (dù Medplum đặt issuer/audience là `localhost`). Nếu trên máy khác việc đăng nhập qua `host.docker.internal` không chạy, phương án dự phòng: gắn compose demo vào network external của Medplum và trỏ `MEDPLUM_URL` tới tên service nội bộ — **chỉ** dùng network có sẵn, **không** định nghĩa lại service Medplum (để không recreate backend). Thêm vào `infra/demo/docker-compose.yml`:
 
@@ -136,7 +136,7 @@ networks:
 pnpm typecheck
 pnpm test                                       # đơn vị: danh mục, quy tắc, mô hình, clinical, BFF, web (không cần Medplum)
 pnpm --filter @phongmach/bff test:integration   # BFF với Medplum thật (cần stack đang chạy)
-pnpm e2e                                        # Chromium thật, 13 + 25 + 14 + 12 bước (hai bài cuối ngắt mạng thật, bài cuối dùng hai máy); cần stack + seed + BFF + web đang chạy
+pnpm e2e                                        # Chromium thật, 13 + 26 + 16 + 14 bước (hai bài cuối ngắt mạng thật, bài cuối dùng hai máy); cần stack + seed + BFF + web đang chạy
 pnpm e2e:cycles                                 # M0-2: 20 chu kỳ ngắt và khôi phục mạng, đếm 0 mất, 0 trùng; chỉ cần stack đang chạy (tự dựng phần còn lại)
 pnpm trial:rehearsal                            # diễn tập kỹ thuật của phiên thử M0-1 trên một phòng khám diễn tập mới; chỉ cần stack đang chạy
 ```
@@ -185,10 +185,10 @@ pnpm trial:rehearsal              # diễn tập: hai bác sĩ thử đi trọn 
   - Khi mất mạng chỉ tìm được người trong hàng chờ hôm nay, hồ sơ đã mở trong ngày và bệnh nhân tạo trên máy đó; không lưu toàn bộ danh sách bệnh nhân. Tìm bằng CCCD chỉ ra bệnh nhân tạo trên máy đó.
   - Làm được khi mất mạng: tìm, tạo bệnh nhân, cấp số (số tạm), gọi vào khám, khám, ký hoặc kết thúc khám, in, in lại. Cần mạng: hủy lượt, sửa dị ứng và tiền sử, bổ sung CCCD, liên thông, thời gian khám, nhật ký truy cập.
   - Đơn ký khi mất mạng dùng chữ ký mô phỏng như khi có mạng, chưa lên cổng cho tới khi đồng bộ; **chưa có** chờ ký số và gửi cổng ở mức đầy đủ. Giá trị pháp lý của đơn in khi chưa liên thông là câu hỏi mở (kế hoạch, Q3).
-  - Xung đột (người khác đã mở hoặc kết thúc lượt khám đó trong lúc máy mất mạng) chỉ được **phát hiện và báo**: bản khám giữ trên máy và in lại được, nhưng chưa có cách đưa nó lên máy chủ. Đơn bị quy tắc của máy chủ chặn hẳn khi đồng bộ cũng vậy: chỉ còn cách liên hệ bệnh nhân và kê lại. Không có nút xóa hay hủy mục chưa đồng bộ.
+  - Xung đột (người khác đã mở hoặc kết thúc lượt khám đó trong lúc máy mất mạng) được **phát hiện, báo và xử lý tay**: bản khám giữ trên máy và in lại được, nhưng chưa có cách đưa nó lên máy chủ. Đơn bị quy tắc của máy chủ chặn hẳn khi đồng bộ cũng vậy: chỉ còn cách liên hệ bệnh nhân và kê lại. Sau khi xử lý ngoài phần mềm, người dùng bấm "Đánh dấu đã xử lý" (xác nhận hai bước) để mục rời danh sách "cần xử lý"; nút này không gửi gì lên máy chủ và không ghi đè. Không có nút xóa hay hủy mục còn đang chờ gửi.
   - Đóng tab trong lúc mất mạng thì mất phiên đăng nhập; dữ liệu trên máy còn nguyên nhưng phải có mạng mới đăng nhập lại được.
   - Khi mất mạng kiểu "Wi-Fi còn nhưng máy chủ không tới được" (trình duyệt không phát sự kiện `online`/`offline`), ứng dụng tự thăm dò `GET /api/health` mỗi ~12 giây và tự quay lại "Có mạng" khi máy chủ hồi, kể cả khi hàng đợi rỗng; nút "Thử kết nối lại" (trong danh sách Chờ đồng bộ) luôn bấm được để thử ngay.
-  - Lỗi đã biết, chưa sửa trên `main`: hàng chờ có lúc hiện hai dòng cho một lượt khám sau khi mất phản hồi ở "cấp số"; mục "thử lại" có thể nằm chờ thêm tới 30 giây. Không lỗi nào làm mất hay trùng bản ghi trên máy chủ.
+  - Lỗi đã biết, chưa sửa trên `main` (kiểm 17/10/2026): hàng chờ có lúc hiện hai dòng cho một lượt khám sau khi mất phản hồi ở "cấp số"; mục "thử lại" có thể nằm chờ thêm tới 30 giây. Cả hai đã có bản sửa từ 03–04/10 (PR #9 và #7) nhưng các PR đó được merge vào nhánh của lát 5 thay vì `main`, nên bản sửa chưa có trên `main`. Không lỗi nào làm mất hay trùng bản ghi trên máy chủ.
   - **CCCD khi mở hồ sơ bằng bản dự phòng:** khi mất mạng và máy chưa có tóm tắt bệnh nhân, bác sĩ đối chiếu CCCD trên giấy tờ rồi xác nhận kèm lý do (quy tắc `cccd-unknown`, cùng nguyên tắc "không coi 'không biết' là 'không có'" như `allergy-unknown`); máy chủ vẫn chạy lại quy tắc `no-cccd` khi đồng bộ. Nếu bệnh nhân thật sự chưa có CCCD, đơn vẫn ký và in được trên máy khi mất mạng, nhưng **bị máy chủ từ chối 422 lúc đồng bộ** và nằm lại trong danh sách "cần xử lý" (kèm tờ đơn đã in) — cùng lớp với đơn 422 ở trên.
   - **Tiêu chí M0-2** (`pnpm e2e:cycles`, 20 chu kỳ, 0 mất, 0 trùng) phụ thuộc hạt giống ngẫu nhiên mỗi lần chạy; đã lộ và sửa ba lỗi tiềm ẩn (quy tắc `no-cccd` chặn ký qua bản dự phòng; người vừa tiếp đón khi mất mạng mất khỏi ô tìm khi có mạng lại; dòng hàng chờ bị dựng lại lúc bấm nút mở hồ sơ). Chi tiết và điều kiện "đạt bền vững": `docs/ke-hoach-trien-khai.md`, mục 5 (phần nói lại 12/10/2026). **T6 đầy đủ (`E2E_CYCLES=100`) đã chạy xanh 100/100 chu kỳ, 0 mất, 0 trùng, 0 kết quả 429** sau khi T-QUOTA nâng hạn mức phòng khám thử (hạt giống 3495038889; mức 80 cũng xanh).
   - Mới thử bằng kiểm thử tự động trên Chromium không giao diện (máy dev và CI); chưa thử trên máy tính bảng, trên trình duyệt khác, và chưa có bác sĩ thật dùng.
@@ -197,8 +197,8 @@ pnpm trial:rehearsal              # diễn tập: hai bác sĩ thử đi trọn 
 - **Nhiều lời ghi tới cùng lúc** (kế hoạch, F13): Medplum có thể từ chối một lời tạo có điều kiện vì xung đột giao dịch (409 mã 40001). BFF tự thử lại có giới hạn (3 lần, chờ ngẫu nhiên) và ghi một dòng log mỗi lần; hết lượt thì trả 503 kèm `retry: true`, giao diện tự gửi lại cùng `clientUuid` nên không tạo bản ghi trùng. Chưa thử với nhiều bản BFF chạy song song.
 - **Tìm bệnh nhân** (kế hoạch, mục 2, "Tìm bệnh nhân qua BFF"): người khớp đúng từng từ của tên, và người có số điện thoại kết thúc bằng đoạn số đã gõ, được tìm theo khóa riêng ghi trong `meta.tag` lúc tạo và sửa hồ sơ, rồi xếp lên đầu. Còn lại:
   - Bệnh nhân tạo trước bản này chưa có khóa: vẫn tìm ra như trước, nhưng ở phòng khám lớn không chắc nằm trong 20 kết quả đầu. Ghi bổ sung một lần bằng `pnpm --filter @phongmach/bff backfill:search-keys` (`pnpm seed` cũng tự làm cho hai phòng khám demo).
-  - Khi hơn 20 người cùng khớp (ở 20.000 bệnh nhân: mọi truy vấn một từ, khoảng 40% truy vấn họ + tên), giao diện hiện 20 người, không theo thứ tự cố định, và **chưa báo là còn người khác**; phụ tá phải gõ thêm. Chưa gõ lẫn được tên và số trong một lần tìm.
-  - Tìm khi mất mạng (trong hồ sơ trên máy) vẫn xếp theo tên, chưa đưa người khớp đúng từ lên đầu; bộ đệm trên máy chỉ có vài chục hồ sơ.
+  - Khi hơn 20 người cùng khớp (ở 20.000 bệnh nhân: mọi truy vấn một từ, khoảng 40% truy vấn họ + tên), giao diện hiện 20 người theo thứ tự cố định và nhắc "còn người trùng tên, gõ thêm năm sinh hoặc 4 số cuối". Gõ lẫn được tên và số trong một lần tìm (`an 5678`: tên "an" và số điện thoại kết thúc bằng 5678). Hai việc này (P2, PR #17) mới qua kiểm thử đơn vị và tích hợp, chưa đo lại trên 20.000 bệnh nhân.
+  - Tìm theo tên khi mất mạng (trong hồ sơ trên máy) vẫn xếp theo tên, chưa đưa người khớp đúng từ lên đầu, và không có câu nhắc "còn người trùng tên"; bộ đệm trên máy chỉ có vài chục hồ sơ.
 - Nhật ký truy cập ghi vào file cục bộ (`services/bff/.data/`); chuyển ra kho bất biến ở M1 (T-AUD).
 - Service worker của PWA chỉ lưu vỏ ứng dụng, **không** lưu phản hồi API (có dữ liệu bệnh nhân). Dữ liệu dùng khi mất mạng nằm trong kho mã hóa nói trên.
 - `services/bff/.demo-tenants.json` chứa bí mật của các tài khoản máy Medplum; đã nằm trong `.gitignore`, không commit.
