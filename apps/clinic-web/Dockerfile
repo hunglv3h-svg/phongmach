@@ -46,7 +46,7 @@ COPY apps/clinic-web/docker/nginx.conf /etc/nginx/nginx.conf
 COPY apps/clinic-web/docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-ENV DEMO_AUTH=1 \
+ENV AUTH_MODE=demo \
     HOST=127.0.0.1 \
     PORT=8110
 

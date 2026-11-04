@@ -22,7 +22,7 @@ RUN pnpm install --frozen-lockfile
 
 ENV HOST=127.0.0.1 \
     PORT=8110 \
-    DEMO_AUTH=1
+    AUTH_MODE=demo
 
 # scripts.start = "tsx src/server.ts"
 CMD ["pnpm", "--filter", "@phongmach/bff", "start"]

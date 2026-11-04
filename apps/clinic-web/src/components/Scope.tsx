@@ -9,6 +9,7 @@ const REAL = [
   'Đăng nhập nhân viên bằng mật khẩu (băm Argon2id) và xác thực hai bước TOTP bắt buộc cho chủ phòng khám và bác sĩ; vòng đời phiên có cấp, gia hạn (refresh xoay một lần) và thu hồi; tenant lấy từ phiên đã ký, không từ tham số request',
   'Ngoại tuyến trên từng máy: mất mạng vẫn tìm trong hồ sơ đã có trên máy, tạo bệnh nhân, cấp số tạm, gọi vào khám, khám, ký (chữ ký vẫn là mô phỏng) và in đơn có nhãn "ký khi mất mạng"; có mạng lại thì tự đồng bộ, không mất, không trùng (kiểm thử tự động 100 chu kỳ ngắt và khôi phục mạng)',
   'Dữ liệu trên máy (bản nháp, hàng đợi đồng bộ, bộ đệm hồ sơ) được mã hóa; thao tác bị máy chủ từ chối khi đồng bộ (xung đột, quy tắc kê đơn) luôn được báo, không tự bỏ, không ghi đè; bác sĩ xem được lý do, in lại tờ đơn đã lưu, và đánh dấu "đã xử lý" để mục rời danh sách (không gửi lên máy chủ, không ghi đè dữ liệu máy chủ)',
+  'Chọn chủ đề giao diện Sáng / Tối ở góc trên bên phải; lựa chọn được nhớ trên từng máy (tùy chọn hiển thị, không phải dữ liệu bệnh nhân)',
 ];
 const SIMULATED = [
   'Chữ ký số: băm nội dung đơn và gắn nhãn, chưa gọi nhà cung cấp ký số (T1)',

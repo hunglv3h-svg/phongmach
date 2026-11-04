@@ -38,7 +38,7 @@ services:
       seed:
         condition: service_completed_successfully
     environment:
-      DEMO_AUTH: "1"
+      AUTH_MODE: demo
       HOST: 127.0.0.1
       PORT: "8110"
       MEDPLUM_URL: http://host.docker.internal:8103

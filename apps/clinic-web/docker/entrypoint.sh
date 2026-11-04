@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Khởi động BFF (tsx, nghe 127.0.0.1:8110) rồi nginx trong CÙNG container.
-# BFF đọc env HOST/PORT/MEDPLUM_URL/TENANTS_FILE/DEMO_AUTH do compose truyền.
+# BFF đọc env HOST/PORT/MEDPLUM_URL/TENANTS_FILE/AUTH_MODE do compose truyền.
 set -euo pipefail
 
 cd /app

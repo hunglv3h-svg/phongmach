@@ -1445,6 +1445,22 @@ const pad2 = (n: number): string => String(n).padStart(2, '0');
 const outcomeId = (err: unknown): string | undefined => (err instanceof OperationOutcomeError ? err.outcome.id : undefined);
 
 /**
+ * Docker khởi động lại thì `phongmach-demo` và `phongmach-medplum` lên CÙNG LÚC: seed gọi Medplum khi máy chủ
+ * chưa nghe cổng, chết với `fetch failed`, và `web` (chờ seed thoát 0) không bao giờ lên. Chờ `/healthcheck`
+ * trả 200 trước khi đăng nhập; quá 3 phút thì báo lỗi rõ thay vì treo.
+ */
+async function waitForMedplum(): Promise<void> {
+  const until = Date.now() + 180_000;
+  for (let said = false; ; said = true) {
+    const ok = await fetch(`${MEDPLUM_URL}/healthcheck`).then((r) => r.ok, () => false);
+    if (ok) return;
+    if (Date.now() > until) throw new Error(`Medplum ở ${MEDPLUM_URL} chưa trả lời sau 3 phút. Stack Medplum đã chạy chưa?`);
+    if (!said) console.log(`Chờ Medplum ở ${MEDPLUM_URL} sẵn sàng…`);
+    await sleep(2000);
+  }
+}
+
+/**
  * Chờ hạn mức FHIR rồi thử lại. Hai thứ được bắt: 429 ném ra ngoài (`too-many-requests`) và `BusyError`
  * (giành số hết lượt). Một lượt khám ≈ 2.500 điểm ghi, hạn mức ~50.000 điểm/phút/tài khoản máy, nên 429
  * ở giai đoạn lượt khám là chuyện thường trực chứ không phải ngoại lệ — thử lại KHÔNG chờ sẽ nằm trọn
@@ -1796,6 +1812,7 @@ async function main() {
     return;
   }
 
+  await waitForMedplum();
   const startedAll = Date.now();
   const reused = await reuseExisting();
   const file = reused ?? (await createTenants());

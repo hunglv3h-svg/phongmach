@@ -6,6 +6,16 @@
     <meta name="theme-color" content="#0f766e" />
     <link rel="icon" href="/icons/icon-192.png" />
     <title>Phòng mạch – bản trình diễn</title>
+    <script>
+      // Đặt chủ đề trước khi vẽ để tránh "nháy" sai màu. Hook React (theme.ts) tiếp quản sau.
+      // Chỉ hai chế độ: 'light' thì sáng, mọi giá trị khác (vắng, cũ 'system') đều về tối.
+      (function () {
+        try {
+          var t = localStorage.getItem('phongmach.theme') === 'light' ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-theme', t);
+        } catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
