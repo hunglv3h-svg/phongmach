@@ -36,7 +36,7 @@ pnpm install
 pnpm stack:up                 # PostgreSQL 16, Redis 7, Medplum 5.2.0; lần đầu mất khoảng 1 phút
 pnpm seed                     # 2 phòng khám demo, mỗi phòng 400 bệnh nhân giả (mất vài phút vì hạn mức mặc định của Medplum),
                               # kèm dị ứng, tiền sử và vài lượt khám cũ có đơn; SEED_PATIENTS=5 để nạp nhanh
-DEMO_AUTH=1 pnpm dev:bff      # BFF ở http://127.0.0.1:8110 (cổng đơn thuốc quốc gia MÔ PHỎNG, hộp thư đi chạy nền)
+AUTH_MODE=demo pnpm dev:bff   # BFF ở http://127.0.0.1:8110 (chế độ demo, có nhãn; cổng đơn thuốc MÔ PHỎNG, hộp thư đi chạy nền)
 pnpm dev:web                  # giao diện ở http://127.0.0.1:5173
 ```
 
@@ -80,7 +80,7 @@ Lệnh này dựng hai thứ trong project **riêng** `phongmach-demo`:
 
 Giao diện ở **http://localhost:8081** (dùng cổng **8081** vì 8080 trên máy đang bận). Mở trang này để trình diễn; đi qua kịch bản ở mục ["Đi qua kịch bản trình diễn"](#đi-qua-kịch-bản-trình-diễn).
 
-Tài khoản/phòng khám demo (chọn phòng khám rồi chọn người dùng; chưa có mật khẩu vì `DEMO_AUTH=1`):
+Tài khoản/phòng khám demo (chọn phòng khám rồi chọn người dùng; chế độ demo `AUTH_MODE=demo` không có mật khẩu). Đường THẬT (`AUTH_MODE=real`) đăng nhập bằng mật khẩu + TOTP, xem mục "Xác thực nhân viên" dưới đây:
 
 | Phòng khám (tenant) | Người dùng |
 |---|---|
@@ -172,7 +172,10 @@ pnpm trial:rehearsal              # diễn tập: hai bác sĩ thử đi trọn 
 
 ## Giới hạn của bản hiện tại
 
-- **Chưa có xác thực thật** (T-IDP). BFF chỉ chạy khi đặt `DEMO_AUTH=1`, chỉ lắng nghe trên localhost, và chỉ nên dùng với dữ liệu giả.
+- **Xác thực nhân viên THẬT** (T-IDP, đóng A8/F2 theo Phương án B — IdP tối giản nhúng trong BFF, ranh giới OIDC-ready). BFF có hai chế độ loại trừ nhau, chọn bằng biến `AUTH_MODE` **không có mặc định** (thiếu/sai ⇒ không khởi động, không bao giờ mở ra mạng):
+  - `AUTH_MODE=real`: đăng nhập bằng **mật khẩu** (băm Argon2id) + **TOTP bắt buộc** cho chủ phòng khám và bác sĩ (có cổng buộc-đăng-ký); vòng đời phiên gồm **access token ~15 phút** và **refresh ~7 ngày xoay-một-lần** (phát hiện dùng lại ⇒ thu hồi phiên); thu hồi `sid` có hiệu lực tức thì trên **mọi** route (gồm route đọc). Tenant luôn lấy từ phiên đã ký, không từ tham số request. Nhân viên nhiều phòng khám chọn phòng khám sau khi xác thực (chỉ trong danh sách đã ký). Chủ phòng khám tạo nhân viên và gán vai trò/tenant qua route quản trị. Kho phiên/refresh là SQLite (`node:sqlite`) cạnh BFF (`SESSION_STORE_URL`), consume refresh nguyên tử; M1 chuyển Redis. Được phép bind host ngoài localhost.
+  - `AUTH_MODE=demo`: chế độ diễn tập có nhãn — chọn người dùng demo không mật khẩu, chỉ localhost, dữ liệu giả (thay `DEMO_AUTH=1` cũ). Dùng cho `infra/dev-up.sh`, `trial:*`, e2e.
+  - Còn **mô phỏng-có-nhãn** ở M0: OTP qua SMS và "thiết bị tin cậy" (bộ nối giả, cùng giao diện bộ nối thật); TOTP là MFA thật.
 - **Mô phỏng**: chữ ký số (băm nội dung, chưa gọi nhà cung cấp), cổng đơn thuốc quốc gia (bộ nối giả có nút chèn lỗi) và nút "Gửi đơn qua Zalo" (chỉ hiện bản xem trước tin nhắn, không gửi, không gọi mạng). Mọi nơi hiển thị đều có nhãn.
 - Tin Zalo xem trước chỉ có tên phòng khám, tên bệnh nhân, mã đơn, ngày kê, số nhận đã che (`091****678`) và chỗ cho đường dẫn xem đơn (M1); **không** có thuốc hay chẩn đoán. Gửi thật (ZNS) cần bệnh nhân đồng ý, mẫu tin được duyệt và ý kiến pháp chế (kế hoạch, T-ZALO, T-CONSENT). Nội dung tin dựng bằng hàm thuần `zaloPrescriptionMessage` (`packages/clinical/src/zalo.ts`) để M1 dùng lại.
 - Danh mục ICD-10, thuốc và đơn mẫu là **tập con minh họa**, chưa được cố vấn y khoa duyệt, không dùng lâm sàng.
@@ -189,7 +192,7 @@ pnpm trial:rehearsal              # diễn tập: hai bác sĩ thử đi trọn 
   - **CCCD khi mở hồ sơ bằng bản dự phòng:** khi mất mạng và máy chưa có tóm tắt bệnh nhân, bác sĩ đối chiếu CCCD trên giấy tờ rồi xác nhận kèm lý do (quy tắc `cccd-unknown`, cùng nguyên tắc "không coi 'không biết' là 'không có'" như `allergy-unknown`); máy chủ vẫn chạy lại quy tắc `no-cccd` khi đồng bộ. Nếu bệnh nhân thật sự chưa có CCCD, đơn vẫn ký và in được trên máy khi mất mạng, nhưng **bị máy chủ từ chối 422 lúc đồng bộ** và nằm lại trong danh sách "cần xử lý" (kèm tờ đơn đã in) — cùng lớp với đơn 422 ở trên.
   - **Tiêu chí M0-2** (`pnpm e2e:cycles`, 20 chu kỳ, 0 mất, 0 trùng) phụ thuộc hạt giống ngẫu nhiên mỗi lần chạy; đã lộ và sửa ba lỗi tiềm ẩn (quy tắc `no-cccd` chặn ký qua bản dự phòng; người vừa tiếp đón khi mất mạng mất khỏi ô tìm khi có mạng lại; dòng hàng chờ bị dựng lại lúc bấm nút mở hồ sơ). Chi tiết và điều kiện "đạt bền vững": `docs/ke-hoach-trien-khai.md`, mục 5 (phần nói lại 12/10/2026). **T6 đầy đủ (`E2E_CYCLES=100`) đã chạy xanh 100/100 chu kỳ, 0 mất, 0 trùng, 0 kết quả 429** sau khi T-QUOTA nâng hạn mức phòng khám thử (hạt giống 3495038889; mức 80 cũng xanh).
   - Mới thử bằng kiểm thử tự động trên Chromium không giao diện (máy dev và CI); chưa thử trên máy tính bảng, trên trình duyệt khác, và chưa có bác sĩ thật dùng.
-- Dữ liệu trên máy (bản nháp lượt khám, hàng đợi đồng bộ, bộ đệm hồ sơ, đơn ký khi mất mạng) lưu trong IndexedDB, mã hóa AES-GCM, mỗi người dùng một kho. Đăng xuất xóa cả kho lẫn khóa, trừ khi còn mục chưa đồng bộ: khi đó kho đã mã hóa được giữ lại để lần đăng nhập sau của đúng người đó gửi tiếp. Khóa nằm cùng máy với dữ liệu và không có mã PIN, nên **chưa** bảo vệ được trước người dùng chung trình duyệt hay người lấy được ổ đĩa (kế hoạch, OFF-5); cần xác thực thật (T-IDP).
+- Dữ liệu trên máy (bản nháp lượt khám, hàng đợi đồng bộ, bộ đệm hồ sơ, đơn ký khi mất mạng) lưu trong IndexedDB, mã hóa AES-GCM, mỗi người dùng một kho. Đăng xuất xóa cả kho lẫn khóa, trừ khi còn mục chưa đồng bộ: khi đó kho đã mã hóa được giữ lại để lần đăng nhập sau của đúng người đó gửi tiếp. Khóa nằm cùng máy với dữ liệu và không có mã PIN, nên **chưa** bảo vệ được trước người dùng chung trình duyệt hay người lấy được ổ đĩa (kế hoạch, OFF-5). Khóa kho **cố ý không** dẫn xuất từ mật khẩu để mất mạng vẫn mở được kho (khám/ký/in offline); mã PIN kho vẫn là việc M1 — xác thực nhân viên thật (T-IDP) đã xong nhưng không thay thế mã PIN kho.
 - **Medplum không hoàn tác `transaction` khi một mục lỗi** (xem kế hoạch, F11): việc hoàn tất lượt khám được ghi theo từng bước chạy lại được, không dựa vào hoàn tác. Đóng lượt khám là một lời ghi riêng, gửi sau cùng, chỉ khi mọi bản ghi của lượt khám đã có.
 - **Nhiều lời ghi tới cùng lúc** (kế hoạch, F13): Medplum có thể từ chối một lời tạo có điều kiện vì xung đột giao dịch (409 mã 40001). BFF tự thử lại có giới hạn (3 lần, chờ ngẫu nhiên) và ghi một dòng log mỗi lần; hết lượt thì trả 503 kèm `retry: true`, giao diện tự gửi lại cùng `clientUuid` nên không tạo bản ghi trùng. Chưa thử với nhiều bản BFF chạy song song.
 - **Tìm bệnh nhân** (kế hoạch, mục 2, "Tìm bệnh nhân qua BFF"): người khớp đúng từng từ của tên, và người có số điện thoại kết thúc bằng đoạn số đã gõ, được tìm theo khóa riêng ghi trong `meta.tag` lúc tạo và sửa hồ sơ, rồi xếp lên đầu. Còn lại:

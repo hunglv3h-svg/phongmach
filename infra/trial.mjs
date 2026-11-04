@@ -106,7 +106,7 @@ run('tạo hoặc dùng lại phòng khám thử', ['trial', 'setup']);
 if (process.env.TRIAL_SKIP_BUILD === '1') say('bỏ qua build (TRIAL_SKIP_BUILD=1): dùng apps/clinic-web/dist đang có');
 else run('build giao diện', ['--filter', '@phongmach/clinic-web', 'build']);
 
-const bff = launch('bff', BFF_DIR, ['--import', 'tsx', 'src/server.ts'], { DEMO_AUTH: '1', PORT: String(BFF_PORT), TENANTS_FILE: join(WORK, 'tenants.json'), AUDIT_FILE: join(WORK, 'audit.ndjson') });
+const bff = launch('bff', BFF_DIR, ['--import', 'tsx', 'src/server.ts'], { AUTH_MODE: 'demo', DEMO_AUTH: '1', PORT: String(BFF_PORT), TENANTS_FILE: join(WORK, 'tenants.json'), AUDIT_FILE: join(WORK, 'audit.ndjson') });
 const web = launch('web', WEB_DIR, [join('node_modules', 'vite', 'bin', 'vite.js'), 'preview', '--host', '127.0.0.1', '--port', String(WEB_PORT), '--strictPort'], { BFF_URL: BFF });
 await ready(`${BFF}/api/health`, bff, 'BFF của phiên thử');
 await ready(`${WEB}/`, web, 'bản build của giao diện');

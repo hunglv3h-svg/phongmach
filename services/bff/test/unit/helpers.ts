@@ -277,6 +277,7 @@ export function makeApp(options: { audit?: AuditSink; logStream?: Writable; simu
   const audit = options.audit ?? new MemoryAuditSink();
   const sessions = new SessionService('x'.repeat(40), 60);
   const app = buildApp({
+    mode: 'demo',
     tenants: tenantsFile,
     stores: factory,
     audit,

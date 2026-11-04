@@ -461,7 +461,7 @@ async function startBff() {
   const child = spawn(process.execPath, ['--import', 'tsx', 'src/server.ts'], {
     cwd: BFF_DIR,
     stdio: ['ignore', fd, fd],
-    env: { ...process.env, DEMO_AUTH: '1', PORT: String(BFF_PORT), MEDPLUM_URL: BASE, TENANTS_FILE, AUDIT_FILE: audit, SESSION_SECRET: randomBytes(32).toString('hex') },
+    env: { ...process.env, AUTH_MODE: 'demo', DEMO_AUTH: '1', PORT: String(BFF_PORT), MEDPLUM_URL: BASE, TENANTS_FILE, AUDIT_FILE: audit, SESSION_SECRET: randomBytes(32).toString('hex') },
   });
   closeSync(fd);
   for (let i = 0; i < 120; i++) {

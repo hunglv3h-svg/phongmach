@@ -432,6 +432,13 @@ try {
   assert.equal(offlineReal.length, 1, `khối "Đã làm thật" phải có đúng một dòng ngoại tuyến, thực tế ${offlineReal.length}`);
   for (const part of [/mất mạng vẫn/, /cấp số tạm/, /khám/, /in đơn/, /đồng bộ/, /không mất, không trùng/]) assert.match(offlineReal[0], part, 'dòng ngoại tuyến ở "Đã làm thật" phải nói đúng cái đã làm');
   assert.ok(real.some((t) => /trên máy/.test(t) && /mã hóa/.test(t)), 'khối "Đã làm thật" phải nói dữ liệu trên máy được mã hóa');
+  // T-IDP: đăng nhập nhân viên bằng mật khẩu + TOTP là THẬT; không còn ở nhóm "mô phỏng".
+  const loginReal = real.filter((t) => /đăng nhập/i.test(t) && /mật khẩu/i.test(t));
+  assert.equal(loginReal.length, 1, `khối "Đã làm thật" phải có đúng một dòng đăng nhập, thực tế ${loginReal.length}`);
+  for (const part of [/mật khẩu/, /TOTP|hai bước/, /thu hồi/, /tenant lấy từ phiên|phiên đã ký/]) assert.match(loginReal[0], part, 'dòng đăng nhập ở "Đã làm thật" phải nói đúng cái đã làm');
+  assert.ok(!simulated.some((t) => /đăng nhập/i.test(t) && /chưa có mật khẩu/i.test(t)), 'không còn dòng "đăng nhập chưa có mật khẩu" ở nhóm mô phỏng');
+  // OTP qua SMS / thiết bị tin cậy vẫn mô phỏng ở M0 (TOTP thật): phải có nhãn riêng.
+  assert.ok(simulated.some((t) => /OTP/i.test(t) && /SMS|tin nhắn/i.test(t)), 'OTP qua SMS còn mô phỏng phải có dòng nhãn riêng ở "Mô phỏng"');
   assert.ok(!simulated.some((t) => /ngoại tuyến/i.test(t)), 'ngoại tuyến không phải phần mô phỏng');
   // Khối "Chưa làm" chỉ được nhắc tới ngoại tuyến để nêu phần còn thiếu, và phải nêu đủ các phần đó.
   const offlineMissing = missing.filter((t) => /ngoại tuyến/i.test(t));
