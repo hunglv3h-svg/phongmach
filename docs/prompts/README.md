@@ -34,7 +34,9 @@ Sổ theo dõi các phiên làm việc với agent (Claude Code trước đây, 
 | ✅ | T-QUOTA: nâng hạn mức FHIR theo project; T6 100 chu kỳ chạy xanh | #25 | `af7d800`, `8625b95` |
 | ✅ | Xử lý tay mục offline "cần xử lý" (xung đột/lỗi dữ liệu) | #25 | `36490c8`, `488323f` |
 | ✅ | Tracker chức năng: xác minh sâu, chuyển ra gốc, script .docx, hook nhắc | #24 | `51a8527`, `52c0054` |
-| ✅ | T-OUTBOX: đối soát idempotent đơn đã ký thiếu Task gửi (A2/F11), nút "Quét đối soát" | — | `ac109ae` (HEAD) |
+| ✅ | T-OUTBOX: đối soát idempotent đơn đã ký thiếu Task gửi (A2/F11), nút "Quét đối soát" | — | `ac109ae` |
+| ✅ | T-IDP: xác thực nhân viên thật (mật khẩu Argon2id + TOTP, phiên xoay vòng), `AUTH_MODE` thay `DEMO_AUTH=1` | #26 | `a79cae1`, `82aa76b` |
+| ✅ | Demo Docker cổng 8081: chờ Medplum sẵn sàng trước khi seed; `AUTH_MODE=demo` cho ảnh demo | #28 | `ab22fd3`, `b9c03ba` |
 
 > Ngoài git: migrate môi trường Claude Code → Kiro (steering file, đồng bộ git về origin/main, giữ mockup ở nhánh `ui-mockups`, dọn 6 worktree). Không nằm trong lịch sử commit sản phẩm.
 
@@ -46,9 +48,14 @@ Sổ theo dõi các phiên làm việc với agent (Claude Code trước đây, 
 > trước đây ở đây đã merge — chuyển lên bảng "Đã chạy". Chưa có việc code M0 nào mở; việc M0
 > còn lại nằm ở mục "Cần con người / treo lại" bên dưới.
 >
-> Khi mở M1, hạng mục nền không phụ thuộc nguồn ngoài đáng làm trước là **T-IDP** (xác thực
-> nhân viên thật, bỏ `DEMO_AUTH`). Các mục nối hệ thật khác (T-RX cổng, T-SIGN ký số, T-ZALO,
-> T-PAY) chờ tài liệu API / sandbox / pháp chế.
+> **Từ 11/11/2026: danh sách đủ mọi việc còn lại, prompt chép-dán và cột đánh DONE nằm ở
+> `docs/ke-hoach-trien-khai.md` mục 11** (bản Word: `docs/ke-hoach-trien-khai.docx`). Sổ này giữ lịch sử
+> các phiên đã chạy; đoạn dưới đây chỉ còn để tham khảo.
+>
+> T-IDP (xác thực nhân viên thật) đã xong ở #26. Khi mở M1, nhóm việc không phụ thuộc nguồn ngoài
+> đáng làm trước là **lõi vận hành phòng khám** theo quy trình v1.1: T-PRICE, T-STOCK, T-CASH, T-ORDER
+> (`ke-hoach-trien-khai.md` mục 6.4). **Chưa viết prompt**: chờ chủ phòng khám góp ý QT11 và trả lời
+> Q19–Q24. Các mục nối hệ thật (T-RX cổng, T-SIGN ký số, T-ZALO, T-PAY) chờ tài liệu API / sandbox / pháp chế.
 
 ---
 
