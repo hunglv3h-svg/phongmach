@@ -1,0 +1,85 @@
+$ E2E_URL=http://localhost:4173 pnpm e2e
+$ pnpm --filter @phongmach/clinic-web e2e && pnpm --filter @phongmach/clinic-web e2e:visit && pnpm --filter @phongmach/clinic-web e2e:offline && pnpm --filter @phongmach/clinic-web e2e:conflict
+$ node e2e/smoke.mjs
+✓  1. đăng nhập demo: hiện biểu ngữ "bản trình diễn" và hai phòng khám
+✓  2. phụ tá đăng nhập, không thấy mục "Nhật ký truy cập"
+✓  3. gõ "nguyen van an" ra cả "Nguyễn Văn An" và "Nguyễn Văn Ân" (620 ms kể cả 13 phím gõ cách 20 ms)
+✓  4. gõ "5678" hiểu là 4 số cuối; 4 kết quả, số kết thúc bằng 5678 xếp trước
+✓  5. chuột nằm yên trên hàng 3, ArrowDown + Enter vẫn mở đúng hàng 2; CCCD đã che
+✓  6. bấm Enter khi kết quả mới chưa về: không mở nhầm hồ sơ cũ; kết quả cũ bị mờ và vô hiệu hóa
+✓  7. số điện thoại sai bị chặn ngay trên máy, có thông báo tiếng Việt
+✓  8. tạo bệnh nhân mới (bấm đúp), mở hồ sơ ngay
+✓  9. tìm bằng tên không dấu thấy đúng 1 bệnh nhân vừa tạo (không trùng)
+✓ 10. chủ phòng khám xem nhật ký: có đăng nhập, tìm, mở hồ sơ, tạo; không lộ nội dung tìm kiếm
+✓ 11. phòng khám Nhi tìm tên và số điện thoại của bệnh nhân bên Nội: 0 kết quả
+✓ 12. máy tính bảng dọc 768×1024: không cuộn ngang
+✓ 13. không có lỗi nào trong console của trình duyệt
+
+Đạt 13/13. Ảnh chụp: D:\My Documents D\UNIGIS\PM\phongmach\.worktrees\lat5-retry-queue-one-row\apps\clinic-web\e2e\screenshots\
+$ node e2e/visit.mjs
+✓  1. phụ tá tìm "nguyen van an", thấy dị ứng Penicillin đã ghi, cấp số 031
+✓  2. hàng chờ: số 032 (đã hẹn) đứng trước số 031 (thường); phụ tá không có nút gọi vào khám
+✓  3. hủy lượt: bấm "Hủy" mở hộp thoại xác nhận và CHƯA hủy; "Giữ lại" không hủy; xác nhận mới thực sự hủy
+✓  4. màn hình chờ chỉ hiện số thứ tự và chữ cái đầu (N.V.A), không có họ tên
+✓  5. bác sĩ gọi vào khám: đồng hồ chạy, thấy dị ứng, tiền sử, các lượt khám cũ; lý do khám điền sẵn
+✓  6. gõ tắt "viem hong" chọn bằng bàn phím ra J02.9; sinh hiệu sai (chữ) bị đánh dấu, dấu phẩy "38,5" được hiểu
+✓  7. bản nháp lưu trong IndexedDB đã mã hóa: đọc thẳng kho không thấy triệu chứng, chẩn đoán, tên; sessionStorage không còn bản nháp
+✓  8. tải lại trang giữa chừng: "Tiếp tục khám" khôi phục bản nháp (triệu chứng, chẩn đoán)
+✓  9. đơn mẫu viêm họng: cảnh báo dị ứng penicillin và trùng paracetamol; nút "Ký & In" bị khóa cho đến khi xác nhận
+✓ 10. nhập lý do vẫn kê (lý do 2 ký tự không đủ) thì mở khóa "Ký & In"
+✓ 11. ký & in (bấm đúp): đúng 1 lượt khám mới, mã đơn PM-261111-B22ACF, phiên khám 3 giây, lý do xác nhận được lưu
+✓ 12. in A5: có mã QR (SVG), mã đơn, nhãn mô phỏng; xuất PDF đúng 1 trang khổ A5
+✓ 13. "Gửi đơn qua Zalo" (mô phỏng): nhãn "không có tin nhắn nào được gửi", số 091****678, không thuốc hay chẩn đoán; không phát sinh yêu cầu mạng nào (0 yêu cầu trong lúc mở, đều là việc nền)
+✓ 14. mất mạng, "In lại đơn": in từ dữ liệu trên máy, giống từng ký tự bản BFF (trừ dòng liên thông), PDF đúng 1 trang A5
+✓ 15. liên thông: đơn tự chuyển "Đã ký" → "Đã gửi" kèm mã quốc gia (cổng mô phỏng)
+✓ 16. mở "Liên thông": bảng điều khiển có nhãn MÔ PHỎNG; chèn lỗi "Mất kết nối cổng"
+✓ 17. "Kê lại đơn này" một nút: điền thuốc (cetirizin 14 ngày), chẩn đoán J30.4; không cảnh báo; ký được ngay
+✓ 18. cổng mất kết nối: đơn đã ký vẫn lưu, hiện "Chờ gửi lại" kèm lý do (không mất đơn)
+✓ 19. "Đơn chưa gửi được" liệt kê đơn; bật lại cổng thì đơn TỰ gửi được (không bấm gì), danh sách trống
+✓ 20. bác sĩ đăng xuất: kho trên máy (bản nháp và khóa) bị xóa
+✓ 21. chủ phòng khám xem thời gian khám theo bác sĩ (p50/p90 so với mục tiêu 60/120 giây)
+✓ 22. nhật ký truy cập có đủ hành động mới (cấp số, mở hồ sơ, ký đơn, in, gửi cổng, chỉnh cổng) và không chứa tên bệnh nhân, thuốc, chẩn đoán
+✓ 23. cách ly: Nhi không thấy hàng chờ của Nội; cổng mô phỏng của Nhi độc lập với Nội
+✓ 24. trang "Phạm vi": ngoại tuyến nằm ở "Đã làm thật", Zalo (chỉ xem trước) ở "Mô phỏng", phần còn thiếu của chúng ở "Chưa làm ở M0"; dải nhãn khớp với trang (tiêu chí M0-5)
+✓ 25. máy tính bảng ngang 1024×768: màn hình khám không cuộn ngang
+✓ 26. không có lỗi nào trong console của trình duyệt
+
+Đạt 26/26. Ảnh chụp: D:\My Documents D\UNIGIS\PM\phongmach\.worktrees\lat5-retry-queue-one-row\apps\clinic-web\e2e\screenshots\
+$ node e2e/offline-sign.mjs
+✓  1. tự thoát "Mất mạng" khi hết mục chờ: cắt /api ở tầng mạng (không sự kiện trình duyệt), bỏ chặn, thăm dò /api/health đưa về "Có mạng" trong ~30s
+✓  2. có mạng: cấp số 35 cho Nguyễn Văn An; máy đã nạp trước hàng chờ và hồ sơ (bộ đệm mã hóa)
+✓  3. mất mạng: tìm "nguyen van an" trong bộ đệm ("Mất mạng: chỉ tìm trong 1 hồ sơ trên máy này"), mở hồ sơ từ máy, vẫn thấy dị ứng Penicillin
+✓  4. mất mạng: tạo "Zq Ngoại Tuyến dirhu" và cấp số 036 (tạm); tìm lại được bằng CCCD trong bộ đệm
+✓  5. hàng chờ và màn hình chờ khi mất mạng: gộp ảnh chụp với lượt cấp trên máy, số có nhãn "tạm"; nút "Hủy" bị khóa (cần mạng)
+✓  6. gọi vào khám khi mất mạng: máy không có dị ứng của người mới nên đòi xác nhận "allergy-unknown"; tiền sử "chưa tải"
+✓  7. ký khi mất mạng: mã PM-261111-H5ETDR sinh ở máy, trang in có nhãn "KÝ KHI MẤT MẠNG", xuất PDF đúng 1 trang A5
+✓  8. đọc thẳng IndexedDB: 6 mục chờ và bộ đệm, không có tên, số điện thoại, CCCD, triệu chứng, thuốc ở dạng rõ
+✓  9. mất mạng: "Gửi đơn qua Zalo" (mô phỏng) vẫn mở bản xem trước từ dữ liệu trên máy, số đã che, không thuốc hay chẩn đoán, 0 yêu cầu mạng; Esc đóng
+✓ 10. có mạng lại: tự đồng bộ hết; máy chủ có đúng 1 bệnh nhân, 1 lượt khám, 1 đơn mã PM-261111-H5ETDR, giữ số 36
+✓ 11. mất phản hồi khi ký (máy chủ đã ghi): in từ máy, gửi lại cùng UUID, máy chủ vẫn chỉ có 1 lượt khám mới, mã PM-261111-T3XK94 trùng
+✓ 12. 503 lúc ký (OFF-8): in một tờ A5 từ máy, không im lặng; tự gửi lại, máy chủ có đúng 1 lượt khám mới, mã PM-261111-EHTBAD trùng
+✓ 13. ba lần in đều gọi print() khi không còn yêu cầu IndexedDB nào đang dở (hàng rào in)
+✓ 14. mất phản hồi khi cấp số, hàng chờ của máy chủ về trước khi mục cấp số gửi lại (3 lần gửi): hàng chờ hiện một dòng; "Tiếp tục khám" mở lại đúng bản nháp khám dở; máy chủ có 1 lượt khám, 1 đơn PM-261111-BFW1VT
+✓ 15. đăng xuất khi còn mục chờ: hỏi "Chờ đồng bộ" / "Đăng xuất, giữ dữ liệu", không có nút hủy; màn hình đăng nhập báo số mục; đăng nhập lại thì tự gửi
+✓ 16. hết mục chờ: đăng xuất xóa kho và khóa như trước
+✓ 17. không có lỗi nào trong console của trình duyệt (ngoài lỗi tải do cố ý ngắt mạng)
+
+Đạt 17/17. Ảnh chụp: D:\My Documents D\UNIGIS\PM\phongmach\.worktrees\lat5-retry-queue-one-row\apps\clinic-web\e2e\screenshots\
+$ node e2e/offline-conflict.mjs
+✓  1. máy bác sĩ mất mạng: mở lượt 039 đã nạp trước (có dữ liệu dị ứng), ký và in đơn PM-261111-38W29Q từ máy
+✓  2. máy kia (chủ phòng khám, có mạng) gọi cùng lượt đó vào khám trong lúc bác sĩ mất mạng
+✓  3. bác sĩ có mạng lại: thông báo xung đột đúng câu của OFF-7, kèm số lượt khám và tên người đã mở; màn hình kết quả ghi "bị giữ"
+✓  4. danh sách chờ đồng bộ: mục mở hồ sơ "xung đột" (kèm lỗi 409 của máy chủ), mục ký và ghi nhận in "bị giữ vì mục mở hồ sơ"; không có nút xóa hay hủy
+✓  5. "Đồng bộ ngay" không gửi lại mục xung đột; in lại từ máy vẫn được (nhãn "KÝ KHI MẤT MẠNG"); máy chủ không nhận lần hoàn tất nào của bác sĩ
+✓  6. màn hình chờ không hiện thông báo có họ tên; tắt thông báo không tắt được huy hiệu "4 cần xử lý"; tải lại trang các mục vẫn còn; IndexedDB không có tên bệnh nhân, thuốc hay thông điệp lỗi ở dạng rõ
+✓  7. hết phiên (401): màn hình đăng nhập báo "Phiên đã hết hạn: đăng nhập lại để đồng bộ 4 mục" và "Máy này còn 4 mục…"; đăng nhập lại thì các mục còn nguyên
+✓  8. đánh dấu "đã xử lý" (xác nhận hai nhịp, có Hủy): mục xung đột rời danh sách, lượt khám vẫn do chủ phòng khám giữ, máy chủ không có đơn của bác sĩ (N3, không ghi đè)
+✓  9. máy bác sĩ (kho mới) mất mạng: ký đơn PM-261111-HT79XZ có amoxicillin cho người chưa ghi nhận dị ứng
+✓ 10. phụ tá ở máy kia ghi dị ứng Penicillin cho bệnh nhân đó trong lúc bác sĩ mất mạng
+✓ 11. bác sĩ có mạng lại: máy chủ từ chối (422); thông báo và danh sách hiện cảnh báo dị ứng Penicillin của máy chủ, ghi rõ "đơn đã in: liên hệ bệnh nhân"; kho vẫn không có dạng rõ
+✓ 12. ghi lý do rồi "Xác nhận và gửi lại": đúng 2 yêu cầu cùng clientUuid; máy chủ có đúng 1 lượt khám, đơn PM-261111-HT79XZ lưu kèm lý do; danh sách và huy hiệu về 0
+✓ 13. 401 đúng lúc ký (OFF-8, Rủi ro còn lại 3): bộ máy chuyển sang ký khi mất mạng và in từ máy, không im lặng bỏ qua
+✓ 14. không có lỗi nào trong console của hai máy (ngoài lỗi tải do cố ý ngắt mạng và các phản hồi 409, 422, 401 được chờ đợi)
+
+Đạt 14/14. Ảnh chụp: D:\My Documents D\UNIGIS\PM\phongmach\.worktrees\lat5-retry-queue-one-row\apps\clinic-web\e2e\screenshots\
+[exit 0]
