@@ -37,7 +37,7 @@ Sổ theo dõi các phiên làm việc với agent (Claude Code trước đây, 
 | ✅ | T-OUTBOX: đối soát idempotent đơn đã ký thiếu Task gửi (A2/F11), nút "Quét đối soát" | — | `ac109ae` |
 | ✅ | T-IDP: xác thực nhân viên thật (mật khẩu Argon2id + TOTP, phiên xoay vòng), `AUTH_MODE` thay `DEMO_AUTH=1` | #26 | `a79cae1`, `82aa76b` |
 | ✅ | Demo Docker cổng 8081: chờ Medplum sẵn sàng trước khi seed; `AUTH_MODE=demo` cho ảnh demo | #28 | `ab22fd3`, `b9c03ba` |
-| 🔍 | M0-S3.5c: đưa hai bản sửa của lát 5 về `main` (mục "thử lại" gửi ngay sau lượt đang chạy; hàng chờ một dòng cho một lượt khám, khớp theo `clientUuid`). Chờ duyệt: đổi thành ✅ khi PR merge | #PRNUM | `a8096d7`, `7461db6`, `bacb88a` |
+| 🔍 | M0-S3.5c: đưa hai bản sửa của lát 5 về `main` (mục "thử lại" gửi ngay sau lượt đang chạy; hàng chờ một dòng cho một lượt khám, khớp theo `clientUuid`). Chờ duyệt: đổi thành ✅ khi PR merge | #30 | `a8096d7`, `7461db6`, `bacb88a` |
 
 > Ngoài git: migrate môi trường Claude Code → Kiro (steering file, đồng bộ git về origin/main, giữ mockup ở nhánh `ui-mockups`, dọn 6 worktree). Không nằm trong lịch sử commit sản phẩm.
 
