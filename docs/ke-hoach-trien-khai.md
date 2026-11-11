@@ -1,10 +1,11 @@
 # Kế hoạch triển khai chi tiết — PHONGMACH
 
-Cập nhật 17/10/2026 (lần 9: trạng thái sau PR #16 đến #26, mục 5.9, đoạn "Từ 04/10 đến 17/10/2026"; lần 8: sửa tính đúng của tìm kiếm, M0-3 đạt, mục 2; lần 7: chuẩn bị phiên thử với bác sĩ, mục 5.9; lần 6: đo M0-3 qua BFF, mục 2). Dựa trên ba nguồn:
+Cập nhật 11/11/2026 (lần 11: thêm mục 11, bảng theo dõi mọi việc còn lại và prompt cho từng việc; bản Word `docs/ke-hoach-trien-khai.docx` sinh từ tệp này; lần 10, 04/11: đối chiếu tài liệu quy trình phòng khám v1.1 với ứng dụng, lộ trình bổ sung cho M1, mục 6.4; lần 9, 17/10: trạng thái sau PR #16 đến #26, mục 5.9, đoạn "Từ 04/10 đến 17/10/2026"; lần 8: sửa tính đúng của tìm kiếm, M0-3 đạt, mục 2). Dựa trên bốn nguồn:
 
 1. Báo cáo "Quản lý Phòng mạch Việt Nam" v2.0 (29/09/2026), viết cho nhà đầu tư.
 2. Tài liệu nội bộ "Phân tích – Kế hoạch triển khai SaaS Quản lý Phòng mạch" v1.0 (29/09/2026, 34 trang), viết tắt **TL34**.
 3. Kết quả cài và thử backend Medplum 5.2.0 trong `infra/medplum/`.
+4. Tài liệu "Mô tả quy trình phần mềm quản lý phòng mạch tư" bản thảo v1.1 (21/10/2026), gửi chủ phòng khám góp ý, viết tắt **QT11** (tệp `Quy-trinh-phong-mach-PHONGMACH-v1.1.docx`, nằm ngoài kho mã).
 
 **Quyết định của chủ dự án (02/10/2026):** làm sớm và cắt phạm vi; nhiệm vụ là ra MVP nhanh để nhà đầu tư được thuyết phục hơn.
 Hệ quả: mục 5 và 6 được viết lại quanh hai cột mốc MVP, **M0 (13/11/2026, trình nhà đầu tư)** và **M1 (31/03/2027, pilot)**.
@@ -1222,6 +1223,8 @@ Giữ nguyên các mục bắt buộc: tiếp đón, khám, kê đơn, ký số,
 
 Các mục trên cộng lại khoảng 1,5–2 sprint theo ước lượng thô của tôi; PO ước lượng lại khi chia nhỏ backlog ở M0-S1. Nếu M0-S2 trượt, cắt thêm theo thứ tự: ảnh đính kèm, ký phiếu khám, chuyên khoa thứ hai.
 
+Đề xuất đổi danh sách cắt theo quy trình phòng khám v1.1: xem mục 6.4 (chưa chốt, Q23).
+
 ### 6.3 Lịch 9 sprint M1
 
 Bắt đầu 16/11, **chỉ khi quyết định "đi" ngày 13/11**. M1 dùng lại ứng dụng M0, nên nền móng, tiếp đón, khám và kê đơn online đã có; thời gian dồn vào kết nối thật, ngoại tuyến đầy đủ, thu tiền và cứng hóa.
@@ -1243,6 +1246,64 @@ Giả định nghỉ Tết **06–14/02/2027** (xác nhận lịch nghỉ chính
 Ánh xạ với TL34 E.3: S1–S2 (nền móng) ≈ M0-S1; S3–S6 (tiếp đón, khám) ≈ M0-S2, M0-S3 và M1 S4; S7–S8 (kê đơn, ký số, cổng) ≈ M0-S2 (online, mô phỏng) và M1 S2–S3; S9 (thu phí) ≈ M1 S6; S10 (cứng hóa) ≈ M1 S7; S11–S12 (pilot) ≈ M1 S8–S9.
 
 Điểm phụ thuộc quan trọng nhất: **tài liệu API và sandbox của cổng đơn thuốc (TL34 Q1, hạn tuần 3)**. Nếu chưa có khi S2 bắt đầu, giữ cổng mô phỏng sau cùng giao diện và dời bộ nối thật; đây là rủi ro lịch lớn nhất của M1.
+
+### 6.4 Đối chiếu quy trình phòng khám v1.1 (QT11) và lộ trình bổ sung (04/11/2026)
+
+QT11 mô tả quy trình 10 bước với 3 vai trò (chủ phòng khám, lễ tân, bác sĩ), gửi chủ một phòng khám cụ thể đọc và góp ý trước khi xây tiếp. Bảng dưới đối chiếu từng bước với mã nguồn tại commit `2bd557f`.
+
+Kết luận: phần lâm sàng lõi (tiếp đón → khám → kê đơn → in) đã có, và đơn in ra đã **không ghi tiền** đúng như QT11 muốn. Nhưng khoảng một nửa quy trình (chỉ định và thủ thuật, kho và giá, thu tiền tại quầy, lịch hẹn, sổ khám, doanh thu) **chưa có trong lịch M1 (mục 6.3) lẫn danh mục công việc (mục 8)**. Các việc này không phụ thuộc bên ngoài (cổng, ký số, Zalo), nên hợp để làm trong lúc chờ tài liệu cổng đơn thuốc, rủi ro lịch lớn nhất của M1.
+
+#### Đối chiếu từng bước [Đã đọc mã]
+
+| Bước trong QT11 | Ứng dụng hiện có | Còn thiếu | Việc |
+|---|---|---|---|
+| Bệnh nhân đến (trực tiếp, hoặc đặt qua mạng/Zalo/web) | Đến trực tiếp: tìm, tạo bệnh nhân, cấp số; cờ ưu tiên "đã hẹn" do lễ tân chọn tay | Lịch hẹn thật; đặt lịch trực tuyến (Giai đoạn 2) | T-APPT |
+| ① Tiếp đón: gọi tên, lập phiếu khám, **thu tiền khám**, chuyển cho bác sĩ | Gọi số, màn hình chờ, hàng chờ dùng chung | **Thu tiền khám** (M1 chỉ có QR tự xác nhận ở S6) | T-CASH |
+| ② Bác sĩ khám, dùng chung dữ liệu với ① | Có: hàng chờ → mở hồ sơ, không nhập lại | — | — |
+| Bệnh lý: hỏi, nghe kể, quan sát | Có: lý do khám, triệu chứng, sinh hiệu | Ảnh đính kèm (M1 S4); là phần chính nếu phòng khám làm nội soi | T-RESULT |
+| ③ Chỉ định, **in phiếu chỉ định**, kèm vật tư | Chưa có | Danh mục dịch vụ, phiếu chỉ định, vật tư của từng chỉ định | T-ORDER |
+| Thực hiện + lập sổ | Chưa có | Ghi nhận thực hiện, sổ thủ thuật, phiếu kết quả | T-ORDER, T-RESULT |
+| ④ Đơn thuốc chỉ in, không ghi tiền; đồng bộ sang CSDL độc lập | Kê đơn, quy tắc, in A5 có QR **không ghi giá** (`packages/print`); liên thông cổng (mô phỏng) | In đơn có giá cho khách; chỉ kê thuốc có trong kho (danh mục thuốc hiện là minh họa) | T-PHARM, T-RXSTOCK |
+| ⑤ Hẹn tái khám | Một phần: ô "Tái khám sau N ngày" in trên đơn (`followUpDays`) | Ngày giờ hẹn thật, danh sách đến hẹn | T-APPT |
+| Ghi / trích sổ khám | Một phần: lịch sử khám của từng bệnh nhân | Sổ khám theo ngày, xuất Excel hoặc in | T-BOOK |
+| Dịch vụ sau khám: nhắc hẹn, tổng hợp doanh thu | Chưa có (cả hai đang hoãn sang Giai đoạn 2, mục 6.2) | Danh sách cần nhắc; doanh thu theo lượt khám | T-APPT, T-BOOK |
+| Kho và giá: giá nhập, giá bán, tồn; **chỉ chủ phòng khám nhập giá** | Chưa có | Toàn bộ | T-PRICE, T-STOCK |
+| Ba vai trò | Có `owner` / `doctor` / `assistant` (phụ tá, tức lễ tân); xác thực thật đã xong (T-IDP) | Quyền "chỉ chủ phòng khám nhập giá" khi có kho | T-PRICE |
+
+#### Chỗ cần làm rõ trong QT11 [Đề xuất]
+
+Gửi kèm khi xin chủ phòng khám góp ý (thêm vào mục "Câu hỏi còn mở" của QT11):
+
+1. **Thiếu bước chẩn đoán, và kết quả không quay lại bác sĩ.** Sơ đồ đi thẳng từ "Thực hiện" sang "Đơn thuốc". Ứng dụng đã bắt buộc có chẩn đoán trước khi ký đơn (quy tắc `no-diagnosis`, `packages/rules`). Đề xuất: thực hiện → có kết quả → bác sĩ đọc kết quả → chẩn đoán → đơn thuốc.
+2. **Sơ đồ là một đường thẳng**, trong khi phần lớn lượt khám chỉ là khám → đơn. Nếu phần mềm bắt đi đủ mọi bước thì hỏng lời hứa "khám xong trong một phút". Đề xuất ghi rõ chỉ định, thủ thuật, đơn thuốc, hẹn tái khám đều là nhánh **có thể bỏ qua**.
+3. **Không có bước thu tiền chỉ định, thủ thuật, vật tư.** QT11 chỉ thu tiền khám ở ①, nhưng doanh thu lại cộng cả các khoản này. Đề xuất thêm bước "thanh toán cuối lượt" ở quầy lễ tân, và ghi rõ ai đặt giá tiền khám, giá dịch vụ (Q22).
+4. **Kho thuốc thuộc ai.** In đơn có giá bằng "công cụ khác" từ "CSDL độc lập" thường là vì quầy thuốc hoặc nhà thuốc là một đơn vị riêng [Phân tích, cần chủ phòng khám xác nhận]. Câu trả lời quyết định phạm vi kho và việc đồng bộ (Q19).
+5. **"Chỉ kê thuốc đã nhập kho" quá cứng**: hết hàng, hoặc bệnh nhân mua nơi khác, thì bác sĩ không kê được. Đề xuất: cảnh báo, và cho đánh dấu "mua ngoài" (Q21). Kho quản lý theo biệt dược, lô, hạn dùng, còn đơn kê theo hoạt chất, nên cần liên kết hai bên.
+6. **Kho cần ít nhất lô và hạn dùng**, có thể thêm nhà cung cấp, kiểm kê, hủy hàng hỏng. Hỏi phòng khám đang thực sự dùng những gì.
+7. **Ký số và liên thông cổng đơn thuốc quốc gia không có trong QT11**, dù bắt buộc và là điểm bán hàng chính. Bước ④ nên ghi: bác sĩ ký, đơn đi hai nơi (cổng quốc gia và chỗ in đơn có giá).
+8. **Chuyên khoa.** Ví dụ "phiếu kết quả nội soi tai mũi họng" cho thấy đây có thể là phòng khám tai mũi họng, còn ứng dụng làm nội tổng quát và nhi (Q15). Lấy ảnh từ máy nội soi là việc tích hợp thiết bị thật (Q20).
+9. **Nhắc hẹn qua Facebook**: đề xuất bỏ, vì Messenger hạn chế nhắn cho người đã quá 24 giờ không nhắn lại [Phân tích, chưa kiểm điều khoản hiện hành]. Bắt đầu bằng danh sách "đến hẹn ngày mai" để nhân viên gọi hoặc nhắn tay, sau đó mới làm ZNS.
+10. **Hai câu hỏi mở của QT11**, đề xuất trả lời: phiếu chỉ định (in **trước** khi làm) và phiếu kết quả (in **sau** khi làm) là hai giấy khác nhau, in cả hai. Doanh thu của phần mềm này gồm tiền khám, thủ thuật, vật tư; tiền thuốc để dòng riêng, lấy từ phía quầy thuốc nếu được.
+
+#### Lộ trình bổ sung [Đề xuất]
+
+| Đợt | Thời gian | Việc | Điều kiện |
+|---|---|---|---|
+| Trước M0 | đến 13/11 | **Không thêm chức năng.** Gửi lại QT11 kèm 10 điểm trên và Q19–Q22; lấy bảng góp ý ở mục 5 của QT11 | — |
+| M1 S1–S3 | 16/11–27/12 | Lõi vận hành phòng khám: bảng giá do chủ phòng khám nhập (T-PRICE); kho: nhập hàng có giá nhập, lô, hạn dùng, tồn, xuất (T-STOCK); thu tiền tại quầy và sổ thu ngày (T-CASH); chỉ định → phiếu chỉ định → thực hiện → sổ thủ thuật, tự xuất vật tư (T-ORDER) | Chạy song song việc đã lịch ở S1 (T-TEN, T-IAC, T-CONSENT); lấp chỗ S2–S3 nếu tài liệu cổng chưa có |
+| M1 S4–S6 | 28/12–05/02 | Phiếu kết quả có ảnh (T-RESULT, gộp với "ảnh đính kèm" ở S4); kê đơn gắn kho (T-RXSTOCK); đơn có giá cho khách (T-PHARM); lịch hẹn và danh sách đến hẹn (T-APPT), ZNS nhắc hẹn đi chung T-ZALO ở S6; sổ khám theo ngày và doanh thu đơn giản (T-BOOK) | T-PHARM và phần thuốc của T-STOCK chờ Q19; lấy ảnh nội soi chờ Q20 |
+| M1 S7–S9 | 15/02–31/03 | Như mục 6.3; phòng khám của QT11 vào pilot đợt 1 nếu họ đồng ý | — |
+
+**Cách làm T-PHARM gọn nhất** [Đề xuất]: nếu quầy thuốc chưa dùng phần mềm nào, không dựng CSDL độc lập và việc đồng bộ, mà thêm vai trò "quầy thuốc" ngay trong ứng dụng: đọc đơn đã ký và giá bán trong kho, in đơn có giá. Chỉ xây đồng bộ khi nhà thuốc đã dùng phần mềm riêng.
+
+**Kho không lưu trên FHIR** [Đề xuất, cần kiến trúc sư chốt, Q24]: FHIR R4 không có tài nguyên tồn kho (`InventoryItem` chỉ có từ R5) [Phân tích, chưa thử trên server], và transaction của Medplum không nguyên tử (F11), trong khi trừ tồn phải nguyên tử. Đề xuất: sổ nhập/xuất kho là bảng quan hệ trong PostgreSQL do BFF quản lý; FHIR chỉ giữ dữ kiện lâm sàng (chỉ định, thủ thuật, đơn). Đã có tiền lệ dữ liệu cạnh BFF: kho phiên của T-IDP (SQLite). BFF vẫn là lớp duy nhất gọi Medplum.
+
+**Năng lực** [Phân tích, ước lượng thô theo thang cỡ mục 8]: chín việc mới cộng lại khoảng 13–23 tuần-người, chồng lên M1 vốn đã thiếu khoảng 1,5 sprint (mục 6.1). PO quy ra sprint theo quân số. Phải chọn một trong hai:
+
+- (a) Đổi danh sách cắt: hoãn thêm sang Giai đoạn 2 mẫu khám tự thiết kế, ký phiếu khám, ZNS gửi đơn (giữ nút xem trước); đưa lên M1 doanh thu đơn giản và danh sách nhắc hẹn gọi tay.
+- (b) Dời pilot.
+
+Đề xuất (a): đây là yêu cầu của một phòng khám sắp dùng thật, còn các mục bị hoãn chưa phòng khám nào đòi. PO chốt (Q23).
 
 ---
 
@@ -1287,7 +1348,7 @@ Mục "Mới" là việc phát sinh từ thử nghiệm hoặc từ quyết đ�
 | T-RX | Bộ nối Cổng Đơn thuốc QG | Sinh mã đơn, gửi, thử lại, theo dõi; bộ nối thay được (QĐ 1867/QĐ-BYT). M0 dùng cổng mô phỏng (T-SIM) | XL | 0 (spike), 1 | |
 | T-SIGN | Ký số từ xa | Ký 1 đơn và ký lô; USB cho máy bàn; đo thời gian | L | 0 (spike), 1 | |
 | T-OFF | Ngoại tuyến | T-OFF-0: spike; T-OFF-1: khung + outbox + idempotency + thử ngắt mạng tự động (M0, phạm vi mục 5.2); T-OFF-2: mức tối thiểu hoàn chỉnh gồm chờ ký (M1); T-OFF-3: đầy đủ (Giai đoạn 2) | XL | 0 (spike), M0, 1–2 | |
-| T-PAY | Thanh toán QR | payOS/Casso hoặc tương đương; tự xác nhận; sổ thu | M | 1 | |
+| T-PAY | Thanh toán QR | payOS/Casso hoặc tương đương; tự xác nhận; ghi vào sổ thu của T-CASH | M | 1 | |
 | T-ZALO | Zalo ZNS | Gửi đơn; (GĐ2) nhắc lịch; theo dõi chi phí tin | M | 1 | |
 | T-INV | Hóa đơn điện tử | Theo NĐ 70/2025; bảng kê cho kế toán | L | 2 | |
 | T-EMR | Bệnh án điện tử + khóa sau ký | Mới có lịch sử phiên bản [Đã đo]; "khóa sau ký" phải thiết kế (chính sách truy cập + bằng chứng ký) | L | 1 (tinh gọn), 2 | |
@@ -1299,6 +1360,15 @@ Mục "Mới" là việc phát sinh từ thử nghiệm hoặc từ quyết đ�
 | T-IAC | Hạ tầng dạng mã | Dựng lại trong < 1 giờ (cam kết báo cáo). M0: staging | L | M0, 1 | |
 | T-COST | Mô hình chi phí | Một mô hình duy nhất, từ số đo; giải quyết 15/25/60 triệu | S | 0 | |
 | T-LEGAL | Hồ sơ mẫu cho phòng khám | DPIA, quy chế, hợp đồng, DPA; bảo hiểm trách nhiệm; quy trình sự cố 72 giờ | L | 0–2 | |
+| T-PRICE | Bảng giá của phòng khám | Danh mục dịch vụ (tiền khám, thủ thuật, xét nghiệm), thuốc, vật tư kèm giá; **chỉ `owner` nhập và sửa giá** (QT11 mục 4); lưu lịch sử đổi giá. Mục 6.4 | S | 1 | ✓ |
+| T-STOCK | Kho thuốc và vật tư | Phiếu nhập (giá nhập, lô, hạn dùng, nhà cung cấp), tồn, phiếu xuất, kiểm kê; trừ tồn nguyên tử. Lưu bảng quan hệ do BFF quản lý, không lưu trên FHIR (mục 6.4, Q24). Phần thuốc chờ Q19 | M | 1 | ✓ |
+| T-CASH | Thu tiền tại quầy | Phiếu thu tiền khám lúc tiếp đón, và tiền chỉ định, thủ thuật, vật tư cuối lượt; tiền mặt hoặc chuyển khoản nhập tay; sổ thu ngày (tách khỏi T-PAY). Mục 6.4, Q22 | M | 1 | ✓ |
+| T-ORDER | Chỉ định và thủ thuật | Chỉ định xét nghiệm, chiếu chụp, thủ thuật (`ServiceRequest`); in phiếu chỉ định; ghi nhận thực hiện (`Procedure`); sổ thủ thuật; tự xuất vật tư theo chỉ định (T-STOCK). Mục 6.4 | L | 1 | ✓ |
+| T-RESULT | Phiếu kết quả | Nhập kết quả, in phiếu kết quả có ảnh (gộp với "ảnh đính kèm" ở M1 S4); lấy ảnh từ máy nội soi là phần riêng, chờ Q20 | M | 1 | ✓ |
+| T-RXSTOCK | Kê đơn gắn kho | Chọn thuốc từ kho; liên kết hoạt chất với mặt hàng trong kho; cảnh báo hết hàng; đánh dấu "mua ngoài" (Q21) | S | 1 | ✓ |
+| T-PHARM | Đơn có giá cho khách | Vai trò "quầy thuốc" trong ứng dụng in đơn có giá từ kho; hoặc đồng bộ sang phần mềm nhà thuốc nếu đã có (Q19). Cỡ S nếu làm trong ứng dụng, L nếu tích hợp phần mềm khác | S–L | 1 | ✓ |
+| T-APPT | Lịch hẹn | Hẹn ngày giờ thật từ "tái khám sau N ngày"; danh sách đến hẹn để gọi hoặc nhắn tay; ZNS nhắc hẹn đi chung T-ZALO | S | 1 | ✓ |
+| T-BOOK | Sổ khám và doanh thu | Sổ khám theo ngày, xuất Excel hoặc in; doanh thu theo lượt: tiền khám, thủ thuật, vật tư (tiền thuốc để dòng riêng, QT11 câu hỏi mở 1) | S–M | 1 | ✓ |
 
 ### 6 trụ cột: cam kết và nơi kiểm chứng
 
@@ -1335,6 +1405,12 @@ Mục "Mới" là việc phát sinh từ thử nghiệm hoặc từ quyết đ�
 | Q16 | M0 chạy ở đâu khi trình diễn: hạ tầng nhà cung cấp trong nước (đề xuất, nếu có tài khoản thử từ tuần 2) hay máy cục bộ? | Nhà đầu tư thấy "dữ liệu trong nước" chạy thật; gắn với Q10. Cũng quyết định buổi thử với bác sĩ (M0-1) chạy ở đâu: bản M0 chỉ nghe trên localhost, nên máy cục bộ nghĩa là ba bác sĩ lần lượt trên một máy |
 | Q17 | Đồng hồ của M0-1 tính đến lúc ký hay lúc in? | Kế hoạch (mục 5.3) và màn hình "Thời gian khám" ghi "từ mở hồ sơ đến in đơn"; mã đo đến lúc máy chủ nhận yêu cầu ký. Phần chênh (dựng trang in, hộp thoại in, máy in) hiện không được đo; buổi thử chỉ có số bấm tay của 3 ca mỗi bác sĩ |
 | Q18 | Ngưỡng 60/120 giây của M0-1 áp cho từng bác sĩ hay cho số gộp của ba người? Ai là cố vấn y khoa duyệt bộ ca của buổi thử, và hạn nào? | Hai cách tính có thể cho kết luận khác nhau; bản xuất ghi cả hai. Bộ ca hiện là dữ liệu minh họa chưa duyệt, không nên đưa cho bác sĩ trước khi duyệt |
+| Q19 | Kho thuốc thuộc phòng khám hay thuộc quầy thuốc/nhà thuốc riêng? "Công cụ in đơn có giá" và "CSDL độc lập" trong QT11 đã có sẵn (phần mềm nhà thuốc đang dùng) hay phải xây? Bên nào trừ tồn khi bán thuốc? | Quyết định cỡ T-PHARM (S nếu làm trong ứng dụng, L nếu tích hợp phần mềm khác) và phạm vi T-STOCK. Bệnh nhân không mua đủ đơn mà trừ tồn theo đơn thì tồn kho sai |
+| Q20 | Phòng khám của QT11 thuộc chuyên khoa nào (ví dụ trong QT11 là nội soi tai mũi họng)? Có cần lấy ảnh hoặc video thẳng từ máy nội soi? | M0 làm nội tổng quát và nhi (Q15); chuyên khoa khác cần danh mục, mẫu phiếu riêng; lấy ảnh từ thiết bị là tích hợp phần cứng |
+| Q21 | Kê thuốc chưa có trong kho: chặn hẳn (như QT11 viết) hay cảnh báo và cho đánh dấu "mua ngoài"? | Chặn hẳn làm bác sĩ không kê được khi hết hàng; ảnh hưởng an toàn điều trị và tốc độ kê đơn |
+| Q22 | Ai thu tiền chỉ định, thủ thuật, vật tư, và lúc nào (một lần cuối lượt hay từng lần)? Ai đặt giá tiền khám và giá dịch vụ? | QT11 chỉ có thu tiền khám ở bước ①, nhưng doanh thu lại cộng cả các khoản này (T-CASH, T-PRICE) |
+| Q23 | Đổi danh sách cắt M1 theo mục 6.4 (đưa kho, chỉ định, thu tiền tại quầy, doanh thu đơn giản vào M1; hoãn mẫu khám tự thiết kế, ký phiếu khám, ZNS gửi đơn) hay dời pilot? | M1 đã thiếu khoảng 1,5 sprint; chín việc mới thêm khoảng 13–23 tuần-người |
+| Q24 | Lưu kho, bảng giá và sổ thu ở bảng quan hệ do BFF quản lý (đề xuất) hay trên FHIR? | FHIR R4 không có tài nguyên tồn kho; transaction của Medplum không nguyên tử (F11) trong khi trừ tồn và đánh số phiếu thu phải nguyên tử. Đổi lại, bảng ngoài Medplum không có cách ly Project sẵn: mọi truy vấn phải lọc theo phòng khám (mục 11.2 điểm 5) |
 
 ---
 
@@ -1356,3 +1432,1410 @@ Mục "Mới" là việc phát sinh từ thử nghiệm hoặc từ quyết đ�
 | Chia năng lực giữa M0 và kiểm chứng làm cả hai chậm | Trung bình–cao | Hai luồng phân công riêng (mục 5.3), không rút người của nhau; cắt thêm M0 nếu M0-S2 trượt |
 | Tài liệu API cổng quốc gia đến muộn (TL34 Q1, hạn tuần 3) | Cao | Cổng mô phỏng sau giao diện chuẩn (T-SIM); bộ nối thật bắt đầu khi có tài liệu; T1 phản ánh tình trạng này |
 | M0 trông hoàn thiện hơn thực tế, kéo kỳ vọng về thời gian ra pilot | Trung bình | Trình bày M0 cùng danh sách cắt và lịch M1 (mục 6) |
+| Quy trình phòng khám thật (QT11) cần nhiều hơn lịch M1: kho, chỉ định, thu tiền, doanh thu | Cao | Chốt Q19–Q23 trước S1; làm phần không phụ thuộc bên ngoài trong lúc chờ tài liệu cổng (mục 6.4) |
+
+---
+
+## 11. Theo dõi công việc và prompt cho từng việc (11/11/2026)
+
+Mục này gom **mọi việc còn phải làm** (từ mục 5.9, 6, 6.4, 7, 8 và PR #27) vào một bảng; mỗi việc có trạng thái và một prompt chép-dán được. Việc đã xong trước 11/11 xem bảng "Đã chạy" ở `docs/prompts/README.md`.
+
+### 11.1 Cách dùng
+
+1. Chọn một việc **⏳** ở bảng 11.3. Việc **🚧** chưa chạy được: giải quyết thứ ghi ở cột "Chặn bởi" trước (thường là một câu hỏi ở mục 9 hoặc một việc khác phải xong trước).
+2. Mở một phiên agent mới (Kiro hoặc Claude Code) ở thư mục dự án, chép **nguyên khối prompt** của việc đó ở 11.4 và dán vào. Prompt nào cũng trỏ về "Quy ước chung" ở 11.2, nên không cần dán thêm gì.
+3. Agent làm xong thì mở PR, tự đổi trạng thái việc thành **🔍 Chờ duyệt** và ghi số PR. Agent **không** tự đánh DONE.
+4. Bạn duyệt và merge PR, rồi đánh **✅ DONE**: trong tệp `docs/ke-hoach-trien-khai.md`, sửa ô "Trạng thái" của việc đó thành `✅ DONE`, ghi ngày vào ô "Ngày DONE", rồi chạy `python scripts/md-to-docx.py docs/ke-hoach-trien-khai.md` để sinh lại bản Word. Hoặc nói với agent: "đánh DONE việc T-XXX, PR #n".
+5. Bản Word `docs/ke-hoach-trien-khai.docx` được **sinh từ** tệp .md. Sửa thẳng trong Word sẽ mất ở lần sinh lại; muốn sửa nội dung thì sửa tệp .md.
+
+Ký hiệu trạng thái:
+
+| Ký hiệu | Nghĩa |
+|---|---|
+| ⏳ | Chưa chạy, chạy được ngay |
+| 🚧 | Bị chặn: chờ thứ ghi ở cột "Chặn bởi" |
+| 🔧 | Đang làm (đã có phiên agent) |
+| 🔍 | Chờ duyệt: đã có PR, chờ chủ dự án duyệt và merge |
+| ✅ DONE | Chủ dự án đã duyệt và merge |
+| 👤 | Việc của người (không code), không có prompt |
+| ⏸ | Treo theo quyết định chủ dự án |
+| 📝 | Chưa viết prompt: chi tiết hóa ở cuối giai đoạn trước (mục 7) |
+
+### 11.2 Quy ước chung cho mọi prompt
+
+Agent đọc mục này trước khi làm bất kỳ việc nào ở 11.4.
+
+1. **Nhánh.** Tạo nhánh mới từ `origin/main`, tên `feat/<mã-việc>` hoặc `fix/<mã-việc>` (chữ thường). Trước đó kiểm việc này có dựa trên PR nào chưa vào `main` không: PR ghi MERGED chưa chắc đã vào `main` (kiểm bằng `git merge-base --is-ancestor <commit> origin/main`). Xem cả các worktree ở `.worktrees/` có nhánh chưa đẩy nào sửa cùng tệp không. Việc phụ thuộc chưa merge thì xếp chồng lên nhánh của nó và ghi rõ ở đầu PR.
+2. **Đầu vào.** Thiếu bất kỳ thứ gì ở mục "Đầu vào cần có trước" của prompt: dừng, báo chủ dự án, **không tự bịa** (nhất là tài liệu API, quy định pháp luật, danh mục y khoa, giá).
+3. **Kiểm thử trước.** Sửa lỗi: viết kiểm thử tái hiện, chạy cho thấy ĐỎ trên `main`, giữ đầu ra, rồi mới sửa. Chức năng mới: kiểm thử đơn vị cho hàm thuần, kiểm thử tích hợp trên Medplum thật cho đường đi qua BFF, một bài e2e cho luồng chính trên màn hình.
+4. **Đột biến.** Mỗi chốt chặn về an toàn dữ liệu (cách ly phòng khám, phân quyền, không mất, không trùng, không lộ dữ liệu cá nhân) phải có ít nhất một bài ĐỎ khi gỡ chốt đó. Ghi danh sách đột biến và bài đỏ tương ứng vào mô tả PR (đếm số bài thật sự chạy).
+5. **Bất biến của dự án**, không được phá: web không import `@medplum/*`, chỉ BFF gọi Medplum; tenant lấy từ phiên đã ký, không lấy từ tham số; nhật ký truy cập ghi trước khi trả dữ liệu và không chứa dữ liệu cá nhân; ghi nhiều bản ghi phải chạy lại được (`clientUuid` + `ifNoneExist`) và không dựa vào transaction của Medplum (F11); phần mô phỏng phải có nhãn trên màn hình và nằm đúng nhóm ở trang "Phạm vi" (`apps/clinic-web/src/components/Scope.tsx`). Bảng dữ liệu ngoài Medplum (kho, sổ thu…) không có cách ly Project sẵn: mọi bảng có cột phòng khám và mọi truy vấn lọc theo phòng khám lấy từ phiên.
+6. **Lệnh phải xanh:** `pnpm typecheck`, `pnpm test`, `pnpm --filter @phongmach/bff test:integration`, `pnpm e2e` (với `E2E_URL` do `infra/dev-up.sh` in ra). Đụng ngoại tuyến hoặc đồng bộ thì thêm `pnpm e2e:cycles`, ghi hạt giống của mọi lần chạy. Chạy bằng Git Bash.
+7. **Tài liệu.** Cập nhật dòng tương ứng ở `trang-thai-chuc-nang.md`; đổi thiết kế thì cập nhật mục liên quan của kế hoạch này; đổi cách chạy thì cập nhật `README.md`.
+8. **Tracker.** Ở bảng 11.3 của `docs/ke-hoach-trien-khai.md`: đổi trạng thái việc thành `🔍 Chờ duyệt`, ghi số PR. **Không** đánh `✅ DONE`. Rồi chạy `python scripts/md-to-docx.py docs/ke-hoach-trien-khai.md trang-thai-chuc-nang.md` và commit cả hai tệp .docx.
+9. **Dừng và hỏi** khi: phải đổi lược đồ IndexedDB, đổi ý nghĩa `clientUuid`, thêm phụ thuộc mới đáng kể, hoặc thấy thiết kế trong prompt không khớp với mã hiện tại.
+10. **Mô tả PR** (tiếng Việt): đã làm gì, đầu ra ĐỎ trước khi sửa (nếu là sửa lỗi), danh sách đột biến, lệnh đã chạy và kết quả, việc chưa làm hoặc làm khác prompt và vì sao.
+
+### 11.3 Bảng theo dõi
+
+| Mã | Việc | Đợt | Chặn bởi | Trạng thái | PR | Ngày DONE |
+|---|---|---|---|---|---|---|
+| M0-S3.5c | Đưa hai bản sửa của lát 5 (PR #7, #9) về `main` | M0 | — | ⏳ | | |
+| QT11-V12 | Soạn quy trình phòng khám v1.2 gửi chủ phòng khám | M0 | — | 🔍 Chờ duyệt | `D:\My Documents D\UNIGIS\PM\Quy-trinh-phong-mach-PHONGMACH-v1.2.docx` | |
+| M0-1 | Phiên thử 3 bác sĩ thật, đo p50/p90 | M0 | Cần 3 bác sĩ | 👤 | | |
+| M0-6 | Diễn tập trình diễn, bản dự phòng | M0 | Chủ dự án bỏ treo | ⏸ | | |
+| GO-1311 | Họp đi/không đi 13/11, gói bằng chứng T1–T10 | M0 | — | 👤 | | |
+| CHOT-Q | Chốt Q19–Q24 với chủ phòng khám và PO | Trước M1-S1 | QT11-V12 | 👤 | | |
+| Q-ROW | Chữa gốc chuyện dòng hàng chờ bị dựng lại liên tục | M1-S1 | — | ⏳ | | |
+| T6-40 | Đo vế "đồng bộ 40 ca ≤ 60 giây" của T6 | M1-S1 | — | ⏳ | | |
+| T-SEC0 | Vô hiệu tài khoản mặc định, quản lý bí mật | M1-S1 | — | ⏳ | | |
+| T-EGR | Kiểm soát kết nối ra ngoài (egress) | M1-S1 | — | ⏳ | | |
+| T-TEN | Cấp phòng khám đầy đủ | M1-S1 | — | ⏳ | | |
+| T-IDEM-2a | Phần nhỏ còn lại sau PR #14 (429, "Mất mạng" khi 5xx, log) | M1-S1 | — | ⏳ | | |
+| T-IAC | Hạ tầng dạng mã, staging dựng lại < 1 giờ | M1-S1 | Q10, Q16 | 🚧 | | |
+| T-CONSENT | Đồng ý xử lý dữ liệu, xuất/xóa theo yêu cầu | M1-S1 | T-LEGAL (văn bản đồng ý) | 🚧 | | |
+| T-MIG | Nhập dữ liệu từ Excel và phần mềm cũ | M1-S1 → S5 | Tệp mẫu của phòng khám pilot | 🚧 | | |
+| T-PRICE | Bảng giá của phòng khám (chỉ chủ nhập giá) | M1-S1 | Q22, Q24 | 🚧 | | |
+| T-STOCK | Kho thuốc và vật tư | M1-S1 → S2 | Q19, Q24, T-PRICE | 🚧 | | |
+| T-CASH | Thu tiền tại quầy, sổ thu ngày | M1-S2 | Q22, Q24, T-PRICE | 🚧 | | |
+| T-ORDER | Chỉ định, phiếu chỉ định, thực hiện, sổ thủ thuật | M1-S2 → S3 | T-PRICE, T-STOCK | 🚧 | | |
+| T-IDEM-2b | Bộ quét lượt khám đã đóng mà thiếu bản ghi | M1-S2 | — | ⏳ | | |
+| T-QUOTA-2 | Hạn mức: phần M1 | M1-S2 | — | ⏳ | | |
+| T-RX | Bộ nối thật cổng đơn thuốc quốc gia | M1-S2 → S3 | Tài liệu API + sandbox cổng (TL34 Q1), Q3 | 🚧 | | |
+| T-SIGN | Ký số từ xa thật | M1-S2 → S3 | Tài khoản sandbox ký số, Q5 | 🚧 | | |
+| T-RESULT | Phiếu kết quả có ảnh | M1-S4 | T-ORDER, Q20 | 🚧 | | |
+| T-CAT | Danh mục ICD-10, thuốc từ nguồn chính thức | M1-S4 | Nguồn chính thức + giấy phép | 🚧 | | |
+| T-RULE-2 | Quy tắc kê đơn theo TT 26/2025 đầy đủ | M1-S4 | Danh sách quy tắc đã duyệt | 🚧 | | |
+| T-PRINT-2 | Mẫu đơn in theo TT 26/2025 | M1-S4 | Mẫu đơn chuẩn | 🚧 | | |
+| T-EXAM | Mẫu khám theo chuyên khoa, ký phiếu khám | M1-S4 | Q23, Q20 | 🚧 | | |
+| T-RXSTOCK | Kê đơn gắn kho, "mua ngoài" | M1-S4 | T-STOCK, Q21 | 🚧 | | |
+| T-OFF-2 | Ngoại tuyến mức tối thiểu hoàn chỉnh | M1-S5 | T-SIGN, T-RX, Q3 | 🚧 | | |
+| T-AUD | Nhật ký truy cập bất biến ngoài Medplum | M1-S5 | Q13 | 🚧 | | |
+| OFF-PIN | Mã PIN cho kho trên máy | M1-S5 | — | ⏳ | | |
+| T-PHARM | Đơn có giá cho khách (quầy thuốc) | M1-S5 | Q19, T-STOCK | 🚧 | | |
+| T-APPT | Lịch hẹn và danh sách đến hẹn | M1-S5 | — | ⏳ | | |
+| T-BOOK | Sổ khám theo ngày và doanh thu | M1-S5 | T-CASH | 🚧 | | |
+| T-PAY | Thanh toán QR tự xác nhận | M1-S6 | T-CASH, tài khoản payOS/Casso | 🚧 | | |
+| T-ZALO | Gửi ZNS thật (đơn thuốc, nhắc hẹn) | M1-S6 | T-CONSENT, Zalo OA + mẫu ZNS, pháp chế (5.9 l) | 🚧 | | |
+| T-IDP-2 | IdP tách rời, OTP SMS thật, kho phiên dùng chung | M1 | Quyết định có tách IdP ở M1 không | 🚧 | | |
+| T-OBS | Quan sát, cảnh báo, số đo KPI pilot | M1 | — | ⏳ | | |
+| T-FHIR | Hồ sơ FHIR và định danh chuẩn | M1, trước pilot | Q9 | 🚧 | | |
+| T-ENC | Mã hóa cấp trường, chỉ số mù | M1 | Q6 | 🚧 | | |
+| T-UPG | Chính sách phiên bản, diễn tập nâng cấp | M1 | Q12 | 🚧 | | |
+| T-COST | Mô hình chi phí từ số đo | M1 | Báo giá nhà cung cấp (Q10) | 🚧 | | |
+| T-LEGAL | DPIA, DPA, quy chế, hợp đồng, quy trình sự cố | M1-S7 | Luật sư | 👤 | | |
+| T-OFFB | Rời tenant, xóa thật (T7) | M1-S7 | — | ⏳ | | |
+| T-HARDEN | Cứng hóa trước pilot | M1-S7 | Phần lớn việc M1 đã merge | 🚧 | | |
+| ONBOARD | Tài liệu cài đặt và onboarding pilot | M1-S7 | T-TEN | 🚧 | | |
+| PILOT-1 | Pilot đợt 1: 5 phòng mạch | M1-S8 | T-HARDEN | 👤 | | |
+| PILOT-2 | Pilot đợt 2: 15–20 phòng, chạy song song phần mềm cũ | M1-S9 | PILOT-1 | 👤 | | |
+| T-EMR | Bệnh án điện tử đầy đủ, khóa sau ký | GĐ2 (bản tinh gọn: Q4) | Q4, Q5 | 🚧 | | |
+| T-INV | Hóa đơn điện tử | GĐ2 | Nhà cung cấp hóa đơn điện tử | 🚧 | | |
+| T-OFF-3 | Ngoại tuyến đầy đủ, hai máy thấy nhau | GĐ2 | T-OFF-2 | 🚧 | | |
+| T-HA | Chạy nhiều bản Medplum và BFF | GĐ2 | T-IAC | 🚧 | | |
+| T-DR | Sao lưu liên tục, vùng dự phòng (T3) | GĐ2 | T-IAC | 🚧 | | |
+| T-CAP | Công suất nhiều node (T2, T8) | GĐ2 | T-IAC | 🚧 | | |
+| MULTI-SITE | Nhiều cơ sở, phân quyền chi tiết | GĐ2 | Yêu cầu từ khách hàng thật | 🚧 | | |
+| BOOK-ONLINE | Đặt lịch qua Zalo/web, kịch bản chăm sóc | GĐ2 | T-ZALO, T-APPT | 🚧 | | |
+| SELF-ONBOARD | Onboarding tự phục vụ dưới 30 phút | GĐ2 | T-TEN, T-MIG | 🚧 | | |
+| PENTEST | Kiểm tra bảo mật độc lập | GĐ2 | Thuê đơn vị ngoài | 👤 | | |
+| VNEID | Sổ sức khỏe điện tử / VNeID | GĐ3 | Hướng dẫn kỹ thuật (TL34 Q5) | 📝 | | |
+| NHA-THUOC | Nhà thuốc trực thuộc | GĐ3 | Kết quả T-PHARM | 📝 | | |
+| CK-SAU | Chuyên khoa sâu | GĐ3 | — | 📝 | | |
+| TELE | Khám từ xa | GĐ3 | — | 📝 | | |
+| AI | Trợ lý AI | GĐ3 | — | 📝 | | |
+| DDI | Tương tác thuốc đầy đủ | GĐ3 | Nguồn dữ liệu có bản quyền | 📝 | | |
+| ISO27001 | Chứng nhận ISO 27001 | GĐ3 | — | 📝 | | |
+| API-MO | API mở cho đối tác | GĐ3 | — | 📝 | | |
+
+### 11.4 Prompt từng việc
+
+Việc 👤 và 📝 không có prompt. Việc GĐ2 có prompt **bản nháp**: rà lại khi mở Giai đoạn 2, vì mã và quyết định sẽ đổi trong M1.
+
+#### Trước buổi trình diễn 13/11 (M0)
+
+##### M0-S3.5c — Đưa hai bản sửa của lát 5 về main
+
+Prompt lấy nguyên văn từ PR #27 (đang mở), thêm dòng đầu.
+
+```text
+[M0-S3.5c] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Hai lỗi đã biết cuối cùng trên `main` (README mục "Giới hạn"; docs/ke-hoach-trien-khai.md mục
+5.9, giới hạn (a)) đã có bản sửa từ 03–04/10, nhưng bản sửa nằm ở nhánh
+`claude/m0-s3-5-network-cycles-098118`, chưa vào `main`. Làm lại hai bản sửa đó trên `main`
+hiện tại:
+1. Mục "thử lại" hết thời gian chờ đúng lúc một lượt gửi đang chạy phải được gửi ngay sau lượt
+   đó, không nằm chờ tới chu kỳ 30 giây (`SyncEngine.schedule`,
+   apps/clinic-web/src/local/sync.ts). Bản sửa cũ để tham khảo: `git show 376bd97`.
+2. Sau khi mất phản hồi ở "Cấp số", hàng chờ chỉ hiện MỘT dòng cho một lượt khám: mỗi
+   `QueueItem` BFF trả về mang `clientUuid` của lần cấp số, và `mergeQueue`
+   (apps/clinic-web/src/local/cache.ts) khớp mục cấp số chưa xong trên máy với lượt khám của
+   máy chủ theo đúng `clientUuid` đó, không theo bệnh nhân + ngày (người khám hai lượt một
+   ngày sẽ bị gộp nhầm). Bản sửa cũ để tham khảo: `git show 6523af3 fc8ebe4 bca1995`.
+Bản sửa cũ chỉ là tài liệu tham khảo: sync.ts, cache.ts, client.ts đã đổi nhiều từ đó (OFF-8,
+PR #20, #22, #25). Không cherry-pick nguyên; viết lại trên mã hiện tại.
+
+Cách làm
+- Nhánh mới `fix/lat5-retry-queue-one-row` tạo từ `origin/main`.
+- Mỗi lỗi: viết kiểm thử tái hiện TRƯỚC, chạy cho thấy ĐỎ trên `main` (giữ đầu ra), rồi mới
+  sửa.
+- Lỗi 2 cần một bước e2e tái hiện chắc chắn, không dựa vào hạt giống ngẫu nhiên: mất phản hồi
+  ở "Cấp số", để máy tải hàng chờ của máy chủ trước khi mục cấp số được gửi lại, rồi đếm số
+  dòng của đúng lượt khám đó. Bài `offline-cycles.mjs` phải coi hai dòng cho một lượt khám là
+  lỗi.
+
+Tiêu chí xong (đo được)
+- Lỗi 1: kiểm thử đơn vị với đồng hồ ảo: mục `retry` có `nextAt` rơi vào giữa một lượt gửi
+  được gửi ngay khi lượt đó xong, không chờ `periodMs`; và bộ máy KHÔNG chạy liên tục khi lượt
+  trước đã xét mục đó mà không gửi (dừng vì lỗi mạng, chờ mục trước).
+- Lỗi 2: kiểm thử đơn vị cho `mergeQueue` (có ca một người hai lượt trong ngày); kiểm thử tích
+  hợp: `GET /api/queue` trả đúng `clientUuid` của lần cấp số; e2e: đúng một dòng.
+- Đột biến, mỗi cái làm ít nhất một bài ĐỎ (đếm số bài thật sự chạy): bỏ phần hẹn lại ngay
+  trong `schedule`; bỏ `clientUuid` khỏi phản hồi hàng chờ; khớp theo bệnh nhân + ngày thay
+  cho `clientUuid`.
+- Xanh: `pnpm typecheck`, `pnpm test`, `pnpm --filter @phongmach/bff test:integration`, `pnpm
+  e2e`, `pnpm e2e:cycles` với hạt giống ngẫu nhiên và với `E2E_SEED=1393699289`, `1256812025`,
+  `1962719789`.
+- Tài liệu: bỏ hai lỗi khỏi "Lỗi đã biết" ở README.md; sửa giới hạn (a) và đoạn "Từ 04/10 đến
+  17/10/2026" ở kế hoạch mục 5.9; chuyển mục này lên bảng "Đã chạy" của
+  docs/prompts/README.md.
+
+Ranh giới (không đụng)
+- Ý nghĩa của `clientUuid`, cách máy chủ cấp số, gói hoàn tất chạy lại được, hàng rào in.
+- Lược đồ IndexedDB. Nếu buộc phải đổi: dừng lại và hỏi chủ dự án.
+- Phản hồi hàng chờ chỉ thêm `clientUuid`, không thêm trường nào khác; không đưa nó vào nhật
+  ký truy cập.
+- Không chữa ở đây chuyện dòng hàng chờ bị dựng lại liên tục trong `Queue.tsx` (nguyên nhân C
+  của PR #20). Nếu nó làm bài mới chập chờn thì ghi lại và báo.
+- Không xóa các nhánh `claude/m0-s3-5*` cũ; báo chủ dự án sau khi PR merge.
+
+Báo cáo trong mô tả PR
+Đầu ra ĐỎ trước khi sửa, danh sách đột biến và bài đỏ tương ứng, hạt giống của mọi lần chạy
+`e2e:cycles`.
+```
+
+##### QT11-V12 — Soạn quy trình phòng khám v1.2
+
+```text
+[QT11-V12] Soạn quy trình phòng khám v1.2. Làm theo "Quy ước chung" ở
+docs/ke-hoach-trien-khai.md mục 11.2, trừ phần nhánh, kiểm thử và PR (việc này không đụng mã).
+
+Mục tiêu
+Từ tệp D:\My Documents D\UNIGIS\PM\Quy-trinh-phong-mach-PHONGMACH-v1.1.docx (bản thảo gửi chủ
+phòng khám), soạn bản v1.2 thành tệp MỚI cùng thư mục, tên
+Quy-trinh-phong-mach-PHONGMACH-v1.2.docx. Không ghi đè v1.1. Đưa vào 10 điểm ở
+docs/ke-hoach-trien-khai.md mục 6.4 "Chỗ cần làm rõ trong QT11", dưới dạng ĐỀ XUẤT chờ chủ
+phòng khám duyệt (đánh dấu rõ chỗ nào mới so với v1.1), và thêm Q19–Q22 (mục 9) vào phần "Câu
+hỏi còn mở" bằng lời thường cho người không làm kỹ thuật.
+
+Tiêu chí xong
+- Có bước "Chẩn đoán", và đường "kết quả quay về bác sĩ" trước khi kê đơn, trong cả mô tả lẫn
+  sơ đồ.
+- Ghi rõ các bước có thể bỏ qua: chỉ định, thủ thuật, đơn thuốc, hẹn tái khám.
+- Có bước "thanh toán cuối lượt" ở quầy lễ tân cho chỉ định, thủ thuật, vật tư.
+- Bước ④ ghi: bác sĩ ký đơn, đơn được gửi lên cổng đơn thuốc quốc gia và sang chỗ in đơn có
+  giá.
+- Bảng góp ý ở mục 5 có thêm dòng cho các bước mới.
+- Không có thuật ngữ kỹ thuật (FHIR, BFF, Medplum, API…). Câu ngắn, dễ hiểu.
+- Sơ đồ: vẽ lại Hình 1 theo luồng mới. Nếu không vẽ được thì giữ hình cũ và ghi "sơ đồ chưa
+  cập nhật" ngay dưới hình.
+
+Ranh giới (không đụng)
+- Không đổi ý của chủ phòng khám đã ghi ở v1.1; chỉ thêm đề xuất và câu hỏi.
+- Không thêm chức năng ngoài 10 điểm; không đưa giá, tên phần mềm của bên khác.
+- Tệp nằm ngoài kho mã: không commit. Ở bảng 11.3 ghi "🔍 Chờ duyệt" và đường dẫn tệp mới thay
+  cho số PR.
+```
+
+##### M0-6 — Diễn tập trình diễn, bản dự phòng
+
+Đang treo theo quyết định chủ dự án. Chỉ chạy khi chủ dự án bỏ treo.
+
+```text
+[M0-6] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Phần mã đã viết nằm ở nhánh cục bộ `feat/m0-6-demo-rehearsal` (worktree
+`.worktrees/m0-6-demo-rehearsal`, chưa đẩy): kịch bản 10 phút, lệnh `pnpm demo:rehearsal`,
+nhãn cho số "Thời gian khám". Rebase nhánh đó lên `main` hiện tại, cho bài diễn tập tự động
+chạy hết kịch bản ở mục 5.3 trên bản build (không phải bản dev), và viết danh sách kiểm tra
+cho máy dự phòng.
+
+Đầu vào cần có trước
+- Chủ dự án đã bỏ treo việc này.
+
+Tiêu chí xong (đo được)
+- `pnpm demo:rehearsal` xanh 2 lần liên tiếp.
+- README có danh sách kiểm tra máy dự phòng: cài đặt, dữ liệu demo, tắt/bật mạng, máy in.
+- Video quay sẵn là việc của người: ghi rõ "chưa có" nếu chưa quay.
+
+Ranh giới (không đụng)
+- Không đổi chức năng; chỉ kịch bản, nhãn, tài liệu.
+- Xung đột ở README hay kế hoạch: giữ nội dung của `main`, thêm phần của nhánh.
+```
+
+#### M1 — Sprint 1 và việc không phụ thuộc bên ngoài
+
+##### Q-ROW — Chữa gốc chuyện dòng hàng chờ bị dựng lại liên tục
+
+```text
+[Q-ROW] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Màn hình hàng chờ (apps/clinic-web/src/components/Queue.tsx) dựng lại các dòng liên tục ở mỗi
+lần thăm dò (nguyên nhân C trong mô tả PR #20; tới nay mới né ở bài kiểm thử, chưa chữa trong
+ứng dụng). Tìm và chữa gốc: một lần thăm dò trả dữ liệu không đổi thì không dòng nào bị dựng
+lại. Sau đó bỏ phần né trong bài kiểm thử.
+
+Đầu vào cần có trước
+- Đọc `gh pr view 20` (nguyên nhân C) và chỗ bài kiểm thử đang né.
+- Nếu M0-S3.5c chưa merge: xếp chồng lên nhánh của nó (cả hai đụng hàng chờ).
+
+Tiêu chí xong (đo được)
+- Kiểm thử thành phần: thăm dò trả dữ liệu y hệt → 0 dòng dựng lại; một lượt đổi → chỉ dòng đó
+  đổi.
+- Bỏ phần né trong e2e mà `pnpm e2e` vẫn xanh 3 lần liên tiếp.
+- Đột biến: bỏ phần giữ ổn định (khóa dòng hoặc so sánh dữ liệu) → bài thành phần ĐỎ.
+
+Ranh giới (không đụng)
+- Nhịp thăm dò, API /api/queue, hàm mergeQueue (thuộc M0-S3.5c).
+```
+
+##### T6-40 — Đo vế "đồng bộ 40 ca ≤ 60 giây" của T6
+
+```text
+[T6-40] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Bài 100 chu kỳ (infra/e2e-cycles.mjs) chỉ có một lượt chờ mỗi chu kỳ, nên vế "đồng bộ 40 ca ≤
+60 giây" của T6 (mục 5.4) chưa được đo đúng nghĩa. Viết bài đo: một máy mất mạng, làm 40 lượt
+khám đầy đủ (tìm/tạo bệnh nhân, cấp số, khám, ký, in), bật mạng lại, đo từ lúc có mạng đến lúc
+hàng đợi đồng bộ về 0, rồi đếm bản ghi trên máy chủ.
+
+Tiêu chí xong (đo được)
+- Một lệnh mới chạy lại được (ví dụ `pnpm e2e:burst`), in ra thời gian đồng bộ và số bản ghi
+  theo từng loại.
+- 0 mất, 0 trùng (đếm thẳng trong Medplum như bài 20 chu kỳ).
+- Chạy 3 lần, ghi cả 3 số vào mục 5.4 dòng T6, đạt hay không đạt đều ghi.
+- Dùng phòng khám thử riêng có hạn mức cao (cách làm của services/bff/scripts/e2e-clinic.ts).
+
+Ranh giới (không đụng)
+- Việc này chỉ đo, không tối ưu đồng bộ. Không đạt 60 giây thì ghi số, nguyên nhân đo được, và
+  đề xuất việc mới.
+```
+
+##### T-SEC0 — Vô hiệu tài khoản mặc định, quản lý bí mật
+
+```text
+[T-SEC0] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Theo mục 8 dòng T-SEC0 và phát hiện F1, F2:
+1. Tài khoản siêu quản trị mặc định admin@example.com không đăng nhập được trên mọi môi trường
+   dựng bằng script của dự án (dev, demo Docker, staging).
+2. Tắt tự đăng ký người dùng trên Medplum (bằng cấu hình nếu có, hoặc chặn ở lớp trước
+   Medplum; ghi cách đã kiểm chứng).
+3. Mọi bí mật (khóa ký phiên, TOTP_ENC_KEY, mật khẩu CSDL, client secret) đọc từ biến môi
+   trường hoặc kho bí mật, không nằm trong mã hay tệp đã commit.
+4. Viết và chạy thử quy trình đổi mật khẩu siêu quản trị không cần gọi ra HIBP (F2).
+
+Tiêu chí xong (đo được)
+- Smoke test mới: đăng nhập admin@example.com bằng mật khẩu mặc định → bị từ chối; tự đăng ký
+  → bị từ chối.
+- Script quét kho mã tìm bí mật (không thêm phụ thuộc nặng) chạy sạch.
+- `infra/dev-up.sh` vẫn dựng được từ đầu trên máy trống.
+
+Ranh giới (không đụng)
+- Luồng đăng nhập nhân viên (T-IDP).
+- Không xóa volume Medplum đang chạy trên máy dev dùng chung khi chưa hỏi chủ dự án.
+```
+
+##### T-EGR — Kiểm soát kết nối ra ngoài
+
+```text
+[T-EGR] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Medplum và BFF chỉ được gọi ra các host trong danh sách cho phép; mặc định chặn. Liệt kê đủ
+các host Medplum tự gọi (F2 kiểm tra mật khẩu HIBP, F7 kiểm tra phiên bản) và chốt cách xử lý
+từng host: cho phép qua proxy, tắt, hay thay thế.
+
+Đầu vào cần có trước
+- Làm trên Docker Compose của dự án. Trên hạ tầng thật cần Q10 (nhà cung cấp cloud): phần đó
+  để T-IAC.
+
+Tiêu chí xong (đo được)
+- Compose có mạng nội bộ không ra Internet và một proxy egress đọc danh sách cho phép từ một
+  tệp cấu hình.
+- Bài kiểm: từ container Medplum gọi một host ngoài danh sách → bị chặn; gọi host trong danh
+  sách → được.
+- dev-up, seed, e2e vẫn xanh.
+- Tài liệu liệt kê host được phép và lý do. Seed demo đang cần Internet (README, mục "Demo
+  bằng Docker"): ghi rõ ảnh hưởng.
+
+Ranh giới (không đụng)
+- Không sửa mã Medplum (không fork).
+```
+
+##### T-TEN — Cấp phòng khám đầy đủ
+
+```text
+[T-TEN] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Một lệnh (hoặc route quản trị của BFF) để tạo, tạm khóa, mở lại một phòng khám: Project,
+ClientApplication, AccessPolicy, hạn mức (T-QUOTA), Project.link tới danh mục dùng chung (A5),
+tài khoản owner đầu tiên (theo T-IDP). Thay cách cấp tối thiểu hiện nay
+(services/bff/src/tenants.ts, tệp .demo-tenants.json). Vận hành thường ngày không dùng quyền
+siêu quản trị.
+
+Tiêu chí xong (đo được)
+- Tạo phòng khám mới bằng một lệnh; chạy lại không tạo trùng.
+- Phòng khám vừa tạo đăng nhập được và không thấy dữ liệu phòng khám khác: chạy bộ cách ly của
+  M0-4 với phòng khám đó.
+- Tạm khóa → mọi request của phòng khám đó bị từ chối, kể cả phiên đang mở; mở lại → dùng tiếp
+  được.
+- Kiểm thử tích hợp cho từng thao tác. Đột biến: bỏ AccessPolicy → bài cách ly ĐỎ.
+
+Ranh giới (không đụng)
+- Cách lấy tenant từ phiên.
+- Xóa dữ liệu phòng khám thuộc T-OFFB: ở đây chỉ để chỗ gọi, không làm.
+```
+
+##### T-IDEM-2a — Phần nhỏ còn lại sau PR #14
+
+```text
+[T-IDEM-2a] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Ba mục còn lại ở kế hoạch mục 5.9, giới hạn (m):
+(2) BFF đang biến 429 (hết hạn mức FHIR) thành 500 cho client. Đổi thành 503 `busy` có
+    Retry-After, giống cách BFF đang trả khi hết lượt thử lại xung đột, để client gửi lại có
+    chờ.
+(3) Câu "Mất mạng: …" hiện cả khi máy chủ trả 5xx lúc đang có mạng. Phân biệt "máy chủ
+    bận/lỗi" với "mất mạng" trên màn hình.
+(6) Dòng log "thử lại vì xung đột giao dịch" ghép ở services/bff/src/server.ts chưa có kiểm
+    thử tự động.
+
+Tiêu chí xong (đo được)
+- Mỗi mục có kiểm thử ĐỎ trước khi sửa.
+- Hàng đợi đồng bộ vẫn coi 503 là lỗi tạm thời và gửi lại cùng clientUuid; `pnpm e2e:cycles`
+  xanh.
+
+Ranh giới (không đụng)
+- Cơ chế thử lại 40001 (services/bff/src/conflict.ts); cách cấp số.
+```
+
+##### T-IAC — Hạ tầng dạng mã
+
+```text
+[T-IAC] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Dựng lại toàn bộ môi trường staging (Medplum, PostgreSQL, Redis, BFF, web, proxy egress của
+T-EGR, sao lưu) từ mã, dưới 1 giờ, trên nhà cung cấp đã chọn.
+
+Đầu vào cần có trước
+- Q10 (nhà cung cấp, tài khoản), Q16 (chạy ở đâu); công cụ do kiến trúc sư chọn
+  (Terraform/OpenTofu, Ansible hoặc tương đương).
+- Giới hạn chi phí tài nguyên do chủ dự án duyệt.
+
+Tiêu chí xong (đo được)
+- Một lệnh dựng từ trống, có ghi thời gian: dưới 60 phút. Một lệnh hủy.
+- Smoke test Medplum và e2e chạy được trên môi trường vừa dựng.
+- Bí mật lấy từ kho bí mật của nhà cung cấp.
+- README có mục "Dựng staging".
+
+Ranh giới (không đụng)
+- Compose dev (infra/medplum, infra/dev-up.sh), trừ khi dùng chung tệp.
+- Không tạo tài nguyên vượt giới hạn chi phí đã duyệt.
+```
+
+##### T-CONSENT — Đồng ý xử lý dữ liệu
+
+```text
+[T-CONSENT] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Thu thập đồng ý của bệnh nhân theo từng mục đích (khám chữa bệnh, liên hệ qua Zalo/SMS…), lưu
+bằng chứng (ai, lúc nào, theo văn bản phiên bản nào), cho rút lại; xuất và xóa dữ liệu theo
+yêu cầu bệnh nhân (dùng lại T-OFFB cho Binary nếu đã có).
+
+Đầu vào cần có trước
+- Văn bản đồng ý và danh sách mục đích do pháp chế duyệt (T-LEGAL), gồm câu trả lời cho kênh
+  Zalo ở mục 5.9 giới hạn (l). Thiếu: dừng, không tự soạn văn bản pháp lý.
+
+Tiêu chí xong (đo được)
+- FHIR Consent cho từng mục đích, lưu kèm phiên bản văn bản.
+- Màn hình tiếp đón hiện trạng thái đồng ý; ghi/rút đồng ý có nhật ký truy cập.
+- Một hàm dùng chung "được liên hệ qua kênh X không", có kiểm thử; T-ZALO sẽ gọi hàm này.
+- Xuất dữ liệu của một bệnh nhân ra tệp; xóa theo yêu cầu có ghi nhận, không xóa phần luật
+  buộc lưu (theo pháp chế).
+- Đột biến: hàm trả "được" khi đồng ý đã rút → bài ĐỎ.
+
+Ranh giới (không đụng)
+- Không gửi tin nào trong việc này.
+```
+
+##### T-MIG — Nhập dữ liệu từ Excel và phần mềm cũ
+
+```text
+[T-MIG] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Nhập bệnh nhân (và lịch sử khám nếu nguồn có) từ Excel và từ bản xuất phần mềm cũ của phòng
+khám pilot. Kiểm tra từng phần tử của batch (F5); tự giảm tốc khi gặp 429 và gửi lại khi gặp
+409 (F13); chạy lại được (định danh xác định + ifNoneExist); báo cáo từng dòng: đã nhập /
+trùng / lỗi kèm lý do. Ghi khóa tìm kiếm trong meta.tag giống createPatient (T-NAME) để người
+vừa nhập tìm được ngay.
+
+Đầu vào cần có trước
+- Tệp mẫu thật đã ẩn danh của ít nhất một phòng khám pilot, và bảng ánh xạ cột do PO xác nhận.
+
+Tiêu chí xong (đo được)
+- Nhập 20.000 bệnh nhân giả trong một lần chạy; chạy lại lần hai: 0 bản ghi mới.
+- Đếm lại trên máy chủ khớp báo cáo. Dòng lỗi có số dòng và lý do.
+- Tìm theo tên không dấu và 4 số cuối ra đúng người vừa nhập.
+- Dùng tài khoản hạn mức cao của T-QUOTA-2 nếu đã có.
+- Chọn màn hình cho owner hoặc lệnh dòng lệnh, cách nào đơn giản hơn; ghi lý do.
+
+Ranh giới (không đụng)
+- Không ghi đè hồ sơ đã có; trùng thì báo, không tự gộp.
+- Không commit tệp mẫu thật.
+```
+
+##### T-PRICE — Bảng giá của phòng khám
+
+```text
+[T-PRICE] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Kế hoạch mục 6.4; quy trình QT11 mục 4: danh mục dịch vụ (tiền khám, thủ thuật, xét nghiệm,
+chiếu chụp), thuốc và vật tư của phòng khám, mỗi mục có giá bán (thuốc và vật tư có thêm giá
+nhập, điền khi làm T-STOCK). Chỉ vai trò owner tạo và sửa giá. Mọi lần đổi giá lưu lịch sử:
+ai, lúc nào, giá cũ, giá mới.
+
+Đầu vào cần có trước
+- Q22 (ai đặt giá dịch vụ), Q24 (lưu ở đâu; đề xuất bảng quan hệ do BFF quản lý). Thiếu: dừng.
+- Danh sách dịch vụ mẫu của phòng khám QT11 nếu có; chưa có thì dùng dữ liệu minh họa có nhãn.
+
+Tiêu chí xong (đo được)
+- Route BFF: owner ghi; mọi vai trò đọc giá bán; chỉ owner đọc giá nhập.
+- Màn hình "Bảng giá" cho owner.
+- Cách ly phòng khám: bài đọc/ghi chéo phòng khám như M0-4.
+- Đột biến: bỏ chốt owner → bài ĐỎ; bỏ lọc phòng khám → bài ĐỎ.
+
+Ranh giới (không đụng)
+- Chưa làm kho (T-STOCK), thu tiền (T-CASH); chưa gắn giá vào đơn thuốc. Đơn bác sĩ in vẫn
+  không ghi giá.
+```
+
+##### T-STOCK — Kho thuốc và vật tư
+
+```text
+[T-STOCK] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Phiếu nhập (mặt hàng, lô, hạn dùng, số lượng, giá nhập, nhà cung cấp); tồn theo lô; phiếu xuất
+(theo chỉ định của T-ORDER, theo bán thuốc của T-PHARM, hủy hàng hỏng, điều chỉnh sau kiểm
+kê). Trừ tồn nguyên tử, không bao giờ âm. Mặc định xuất lô hết hạn sớm nhất trước, người lập
+phiếu chọn lô khác được.
+
+Đầu vào cần có trước
+- Q19 (kho thuốc thuộc ai: quyết định có quản lý thuốc hay chỉ vật tư), Q24 (nơi lưu), câu trả
+  lời của chủ phòng khám cho điểm 6 ở mục 6.4 (đang dùng những thông tin kho nào). Thiếu:
+  dừng.
+- T-PRICE đã merge (hoặc xếp chồng).
+
+Tiêu chí xong (đo được)
+- Tồn = tổng nhập − tổng xuất ở mọi thời điểm (kiểm thử thuộc tính).
+- 20 lần xuất đồng thời cùng một lô: tồn không âm, không lệch (kiểm thử tích hợp chạy song
+  song).
+- Phiếu đã lập không sửa, không xóa; muốn sửa thì lập phiếu điều chỉnh. Phiếu nào cũng có
+  người lập và thời điểm.
+- Chỉ owner lập phiếu nhập và phiếu điều chỉnh. Cách ly phòng khám.
+- Đột biến: bỏ khóa hoặc điều kiện chống âm → bài song song ĐỎ.
+
+Ranh giới (không đụng)
+- Không lưu sổ kho trên FHIR (lý do ở mục 6.4); không sửa Medplum.
+- Không làm báo cáo doanh thu (T-BOOK).
+```
+
+##### T-CASH — Thu tiền tại quầy, sổ thu ngày
+
+```text
+[T-CASH] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Lễ tân lập phiếu thu tiền khám lúc tiếp đón, và phiếu thu cuối lượt cho chỉ định, thủ thuật,
+vật tư (giá lấy từ T-PRICE). Tiền mặt hoặc chuyển khoản nhập tay. Số phiếu tăng dần, không
+trùng trong một phòng khám. Hủy phiếu phải có lý do, không xóa. Sổ thu ngày theo người thu và
+hình thức thu. In phiếu thu (khung in của packages/print).
+
+Đầu vào cần có trước
+- Q22 (ai thu, lúc nào), Q24 (lưu cùng chỗ với kho). T-PRICE đã merge.
+
+Tiêu chí xong (đo được)
+- 20 lần lập phiếu đồng thời: số phiếu không trùng, không lùi.
+- Tổng sổ thu ngày = tổng các phiếu chưa hủy (kiểm thử).
+- Lượt khám hiện "đã thu / còn phải thu".
+- Vai trò assistant lập được phiếu, không sửa được giá. Cách ly phòng khám.
+- Đột biến: bỏ ràng buộc số phiếu duy nhất → bài ĐỎ.
+- Mất mạng: việc này chưa hỗ trợ thu tiền lúc mất mạng. Nút thu tiền báo rõ "cần có mạng"; ghi
+  giới hạn này vào kế hoạch.
+
+Ranh giới (không đụng)
+- QR tự xác nhận (T-PAY), hóa đơn điện tử (T-INV).
+```
+
+##### T-ORDER — Chỉ định, phiếu chỉ định, thực hiện, sổ thủ thuật
+
+```text
+[T-ORDER] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Trong màn hình khám, bác sĩ chọn chỉ định (xét nghiệm, chiếu chụp, thủ thuật, tiểu phẫu) từ
+danh mục dịch vụ của T-PRICE; mỗi dịch vụ có danh sách vật tư mặc định, sửa được khi chỉ định.
+In phiếu chỉ định (khung in của packages/print). Người thực hiện ghi nhận "đã làm" (lúc nào,
+ai, vật tư thực dùng) → tự lập phiếu xuất vật tư (T-STOCK). Có sổ thủ thuật theo ngày. Chỉ
+định là nhánh CÓ THỂ BỎ QUA: lượt khám không có chỉ định đi thẳng tới kê đơn như hiện nay.
+FHIR: ServiceRequest cho chỉ định, Procedure cho thực hiện; ghi theo bước, chạy lại được (F11,
+như planCompletion ở packages/clinical/src/visit.ts).
+
+Đầu vào cần có trước
+- T-PRICE và T-STOCK đã merge (hoặc xếp chồng).
+- Danh mục dịch vụ và vật tư mẫu của phòng khám QT11; chưa có thì dùng dữ liệu minh họa có
+  nhãn.
+
+Tiêu chí xong (đo được)
+- e2e: khám → chỉ định → in phiếu → ghi nhận thực hiện → tồn vật tư giảm đúng → kê đơn → ký và
+  in.
+- e2e lượt khám không chỉ định vẫn xanh và không chậm hơn (so đồng hồ phiên khám với bài e2e
+  cũ).
+- Gửi lại "ghi nhận thực hiện" 2 lần không trừ tồn 2 lần (clientUuid dùng chung cho Procedure
+  và phiếu xuất).
+- Đồng hồ phiên khám vẫn đo đúng.
+
+Ranh giới (không đụng)
+- Phiếu kết quả (T-RESULT); tính tiền (T-CASH chỉ đọc chỉ định).
+- Chỉ định lúc mất mạng: chưa hỗ trợ; báo rõ trên màn hình, ghi giới hạn. Không đổi lược đồ
+  IndexedDB.
+```
+
+##### T-IDEM-2b — Bộ quét lượt khám đã đóng mà thiếu bản ghi
+
+```text
+[T-IDEM-2b] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Kế hoạch mục 5.9, giới hạn (m)(4): lượt khám đã đóng mà thiếu bản ghi (do lỗi trước PR #14)
+hiện không được phát hiện. Viết bộ quét cùng kiểu với reconcilePrescriptions (A2,
+services/bff/src/medplum.ts): tìm Encounter finished thiếu thành phần mà gói hoàn tất
+(planCompletion) lẽ ra phải ghi, và báo cáo.
+
+Tiêu chí xong (đo được)
+- Route quản trị (owner) và nút ở màn hình quản trị, hoặc lệnh; nhật ký truy cập không có dữ
+  liệu cá nhân.
+- Kiểm thử tích hợp: dựng lượt khám thiếu từng loại bản ghi, bộ quét ra đúng từng ca; lượt
+  khám đầy đủ không bị báo nhầm.
+- Đột biến: bỏ một loại kiểm → bài ĐỎ.
+
+Ranh giới (không đụng)
+- Chỉ phát hiện và báo; không tự ghi bù dữ liệu lâm sàng.
+```
+
+##### T-QUOTA-2 — Hạn mức: phần M1
+
+```text
+[T-QUOTA-2] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+1. Tài khoản nhập dữ liệu có hạn mức cao, chỉ dùng cho T-MIG.
+2. Xác định lại rủi ro hạn mức đăng nhập 5 lần/phút/IP (F5) sau T-IDP: nhân viên không còn
+   đăng nhập qua Medplum, chỉ BFF lấy token Medplum cho từng phòng khám. Đo xem ở 300 phòng
+   khám BFF lấy token bao nhiêu lần mỗi phút, có chạm trần không. Chỉ làm proxy chuyển IP thật
+   nếu số đo cho thấy cần.
+
+Tiêu chí xong (đo được)
+- Tài khoản nhập liệu dựng lại được bằng script, có kiểm thử hạn mức đúng giá trị đặt.
+- Số đo lấy token có trong kế hoạch mục 8 dòng T-QUOTA, kèm kết luận làm hay không làm proxy.
+
+Ranh giới (không đụng)
+- Hạn mức của phòng khám thử e2e và phiên thử (đã đặt ở T-QUOTA phần M0).
+```
+
+#### M1 — Sprint 2–3: cổng đơn thuốc và ký số
+
+##### T-RX — Bộ nối thật cổng đơn thuốc quốc gia
+
+```text
+[T-RX] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Bộ nối thật thay SimulatedGateway, sau cùng giao diện Gateway (services/bff/src/gateway.ts):
+sinh hoặc nhận mã đơn theo quy định, gửi, thử lại, theo dõi trạng thái. Hộp thư đi và bộ quét
+đối soát giữ nguyên (T-OUTBOX). Chạy trên sandbox.
+
+Đầu vào cần có trước
+- Tài liệu API và tài khoản sandbox của cổng đơn thuốc quốc gia (TL34 Q1); quyết định Q3 (đơn
+  kê lúc mất mạng). Thiếu: dừng. Đây là rủi ro lịch lớn nhất của M1 (mục 6.3).
+
+Tiêu chí xong (đo được)
+- T1, phần cổng: 100 đơn thử trên sandbox, ≥ 98% thành công; đơn lỗi được giữ lại và gửi lại
+  được.
+- Gửi lại cùng một đơn không tạo đơn trùng bên cổng.
+- Chọn bộ nối bằng cấu hình; dev và demo mặc định vẫn dùng bộ mô phỏng. Nhãn "MÔ PHỎNG" chỉ
+  hiện khi dùng bộ mô phỏng; trang "Phạm vi" cập nhật.
+- Khóa và bí mật của cổng nằm ở kho bí mật.
+
+Ranh giới (không đụng)
+- Giao diện Gateway: nếu bắt buộc phải đổi thì dừng và hỏi. Không bỏ SimulatedGateway.
+```
+
+##### T-SIGN — Ký số từ xa thật
+
+```text
+[T-SIGN] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Ký đơn bằng chữ ký số từ xa của nhà cung cấp 1 (sau đó nhà cung cấp 2), thay "ký mô phỏng"
+(băm SHA-256 lưu trong Provenance.signature). Ký một đơn và ký lô. Đổi nhà cung cấp được sau
+một giao diện chung.
+
+Đầu vào cần có trước
+- Hợp đồng hoặc tài khoản sandbox của ít nhất một nhà cung cấp ký số từ xa; Q5. Thiếu: dừng.
+
+Tiêu chí xong (đo được)
+- T1, phần ký: ký 1 đơn p95 ≤ 5 giây; ký lô 20 đơn ≤ 20 giây (đo trên sandbox, ghi số vào mục
+  5.4).
+- Ký lỗi không làm mất đơn: đơn ở trạng thái chờ ký, ký lại được.
+- Xác minh được chữ ký (một kiểm thử).
+- Nhãn mô phỏng chỉ hiện khi dùng bộ ký mô phỏng; trang "Phạm vi" cập nhật.
+- Khóa của bác sĩ không bao giờ đi qua BFF ở dạng rõ.
+
+Ranh giới (không đụng)
+- Ký lúc mất mạng (T-OFF-2); ký bằng USB token (GĐ2).
+```
+
+#### M1 — Sprint 4: khám đầy đủ
+
+##### T-RESULT — Phiếu kết quả có ảnh
+
+```text
+[T-RESULT] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Nhập kết quả cho chỉ định đã thực hiện (chữ và ảnh), in phiếu kết quả có ảnh (ví dụ "Phiếu kết
+quả nội soi tai mũi họng"). Kết quả hiện ở màn hình khám để bác sĩ đọc trước khi chẩn đoán.
+Gộp việc "ảnh đính kèm" của M1 S4. FHIR: DiagnosticReport kèm ảnh (Media/Binary).
+
+Đầu vào cần có trước
+- T-ORDER đã merge. Mẫu phiếu kết quả thật của phòng khám QT11.
+- Q20: chuyên khoa, và có cần lấy ảnh thẳng từ máy nội soi không. Nếu cần, đó là việc riêng; ở
+  đây chỉ tải ảnh lên từ tệp hoặc máy ảnh của thiết bị.
+
+Tiêu chí xong (đo được)
+- Tải ảnh có giới hạn dung lượng (chốt con số, nén ở máy khách), xem lại, in phiếu đúng một
+  trang.
+- Ảnh chỉ người cùng phòng khám xem được: kiểm thử chéo phòng khám cho Binary. Mở ảnh có ghi
+  nhật ký truy cập.
+- Ghi rõ giới hạn của lưu trữ tệp cục bộ (F10) và việc T-HA.
+- T-OFFB phải xóa được ảnh: nếu T-OFFB chưa làm, thêm ảnh vào danh sách của nó trong kế hoạch.
+
+Ranh giới (không đụng)
+- Lấy hình từ thiết bị nội soi; bệnh án điện tử (T-EMR).
+```
+
+##### T-CAT — Danh mục từ nguồn chính thức
+
+```text
+[T-CAT] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Thay danh mục minh họa (packages/catalogs: ICD-10, thuốc, đơn mẫu) bằng nguồn chính thức đã
+xác nhận giấy phép. Chọn nơi lưu: danh mục dùng chung trong một project riêng (A5,
+Project.link) hay giữ trong gói nếu đủ nhỏ; ghi lý do. Có phiên bản và lệnh cập nhật.
+
+Đầu vào cần có trước
+- Nguồn ICD-10 tiếng Việt và danh mục thuốc chính thức, kèm giấy phép sử dụng (PO hoặc pháp
+  chế xác nhận).
+- Đơn mẫu do cố vấn y khoa duyệt. Thiếu: dừng.
+
+Tiêu chí xong (đo được)
+- Gỡ nhãn "minh họa" khỏi phần đã thay.
+- Tìm không dấu trên danh mục đầy đủ vẫn đạt p95 như M0-3.
+- Đơn mẫu cũ trỏ đúng mã mới, hoặc có danh sách mục không ánh xạ được.
+- Lệnh cập nhật chạy lại được, không tạo trùng.
+
+Ranh giới (không đụng)
+- Mã đã lưu trên đơn cũ.
+```
+
+##### T-RULE-2 — Quy tắc kê đơn theo TT 26/2025 đầy đủ
+
+```text
+[T-RULE-2] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Bổ sung các quy tắc còn thiếu so với TT 26/2025 vào packages/rules (hàm thuần, chạy ở cả giao
+diện và BFF), và cho phòng khám cấu hình bật/tắt, ngưỡng; không lập trình cứng.
+
+Đầu vào cần có trước
+- Danh sách quy tắc rút từ TT 26/2025, mỗi quy tắc kèm trích điều khoản, do cố vấn y khoa hoặc
+  pháp chế duyệt. Thiếu: dừng, không tự diễn giải thông tư.
+
+Tiêu chí xong (đo được)
+- Mỗi quy tắc có kiểm thử ca đúng và ca sai.
+- Cấu hình theo phòng khám đọc qua BFF.
+- Quy tắc cũ (trùng hoạt chất, dị ứng, 30/90 ngày, CCCD, chẩn đoán) giữ nguyên hành vi: kiểm
+  thử cũ xanh, không sửa.
+- Quy tắc vẫn chạy lại khi đồng bộ đơn ký lúc mất mạng.
+
+Ranh giới (không đụng)
+- Tương tác thuốc đầy đủ (GĐ3).
+```
+
+##### T-PRINT-2 — Mẫu đơn in theo TT 26/2025
+
+```text
+[T-PRINT-2] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Mẫu đơn A5 (và A4 nếu quy định cần) có đủ các trường bắt buộc theo TT 26/2025
+(packages/print/src/prescription.ts).
+
+Đầu vào cần có trước
+- Mẫu đơn chuẩn theo thông tư (bản giấy hoặc tệp), do PO hoặc pháp chế cung cấp.
+
+Tiêu chí xong (đo được)
+- Kiểm thử in ra PDF đúng 1 trang, đúng khổ.
+- Bảng đối chiếu từng trường bắt buộc với mẫu chuẩn (để trong mô tả PR).
+- Đơn vẫn không ghi giá.
+- CSP và thoát HTML giữ nguyên. Đột biến: bỏ esc → bài ĐỎ.
+
+Ranh giới (không đụng)
+- Mã QR, trừ khi thông tư yêu cầu.
+```
+
+##### T-EXAM — Mẫu khám theo chuyên khoa, ký phiếu khám
+
+```text
+[T-EXAM] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Phần còn lại của M1 S4: mẫu khám theo chuyên khoa (trường khám riêng cho chuyên khoa của phòng
+khám pilot) và ký phiếu khám. Mục 6.4 đề xuất hoãn việc này sang GĐ2: chỉ chạy khi Q23 chốt
+giữ lại ở M1.
+
+Đầu vào cần có trước
+- Q23 (giữ ở M1), Q20 (chuyên khoa). Danh sách trường khám của chuyên khoa do cố vấn y khoa
+  duyệt.
+
+Tiêu chí xong (đo được)
+- Chuyên khoa mới có trong SPECIALTIES (packages/clinical/src/dto.ts) với trường khám riêng.
+- Ký phiếu khám dùng bộ ký của T-SIGN; T-SIGN chưa xong thì dùng ký mô phỏng có nhãn.
+- Đồng hồ phiên khám trên bài e2e không chậm hơn trước.
+
+Ranh giới (không đụng)
+- Không làm trình thiết kế mẫu khám kéo-thả.
+```
+
+##### T-RXSTOCK — Kê đơn gắn kho
+
+```text
+[T-RXSTOCK] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Khi kê đơn, ô chọn thuốc gợi ý trước mặt hàng còn tồn trong kho của phòng khám, đơn vẫn ghi
+tên hoạt chất. Hết hàng hoặc không có trong kho: cảnh báo, và cho đánh dấu "mua ngoài" (theo
+Q21). Quy tắc kê đơn chạy như cũ.
+
+Đầu vào cần có trước
+- T-STOCK đã merge; Q21. Chọn nơi lập liên kết hoạt chất ↔ mặt hàng (ở T-STOCK hay ở đây) và
+  ghi lý do.
+
+Tiêu chí xong (đo được)
+- Kiểm thử: thuốc có tồn → gợi ý đầu; hết hàng → cảnh báo; "mua ngoài" lưu trên đơn và in ra
+  (không ghi giá).
+- Đơn mẫu và "kê lại" vẫn chạy.
+- Mất mạng: không kiểm được tồn, màn hình ghi rõ "không kiểm được tồn khi mất mạng", vẫn kê
+  được.
+
+Ranh giới (không đụng)
+- Không trừ tồn lúc kê đơn (trừ tồn lúc bán: T-PHARM). Không đổi quy tắc kê đơn.
+```
+
+#### M1 — Sprint 5–6: ngoại tuyến, nhật ký, thu tiền, Zalo
+
+##### T-OFF-2 — Ngoại tuyến mức tối thiểu hoàn chỉnh
+
+```text
+[T-OFF-2] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Đơn ký lúc mất mạng chờ ký số thật và gửi cổng khi có mạng lại (bác sĩ ký hàng loạt). Xử lý
+các giới hạn (d), (e), (f) ở mục 5.9: cách xử lý "đã in đơn rồi mới thấy cảnh báo" theo ý cố
+vấn y khoa; đo hết hạn phiên thật giữa lúc mất mạng với cơ chế phiên của T-IDP; quy trình quản
+trị cho mục chờ của người đã nghỉ việc.
+
+Đầu vào cần có trước
+- T-SIGN và T-RX đã merge; Q3 (giá trị pháp lý của đơn kê lúc mất mạng); cố vấn y khoa duyệt
+  cách xử lý (d).
+
+Tiêu chí xong (đo được)
+- e2e: mất mạng → ký (chờ) → in có nhãn → có mạng → ký hàng loạt → đơn lên cổng sandbox.
+- `pnpm e2e:cycles` 100 chu kỳ xanh.
+- Bài hết hạn phiên thật (không giả lập 401) xanh.
+- Owner chuyển hoặc giải quyết được mục chờ của tài khoản đã khóa; có nhật ký.
+
+Ranh giới (không đụng)
+- Lược đồ IndexedDB: nếu bắt buộc đổi, dừng và hỏi. Hai máy thấy nhau (T-OFF-3).
+```
+
+##### T-AUD — Nhật ký truy cập bất biến ngoài Medplum
+
+```text
+[T-AUD] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+A3: chuyển nhật ký truy cập từ tệp NDJSON cục bộ của BFF (services/bff/src/audit.ts,
+NdjsonAuditSink) sang kho bất biến ngoài Medplum (chỉ ghi thêm, không sửa, không xóa), giữ
+nguyên fail-closed. Phân vùng và thời hạn lưu theo Q13. Cảnh báo truy cập bất thường (ví dụ
+một người mở quá N hồ sơ trong một giờ).
+
+Đầu vào cần có trước
+- Q13 (mức chi tiết, thời hạn lưu). Chọn kho: đề xuất bảng PostgreSQL chỉ-ghi-thêm có chuỗi
+  băm, hoặc dịch vụ của nhà cung cấp cloud (Q10).
+
+Tiêu chí xong (đo được)
+- Kho không ghi được thì request trả lỗi, không trả dữ liệu (như kiểm thử hiện nay).
+- Sửa một dòng cũ thì bị phát hiện (kiểm chuỗi băm).
+- Màn hình AuditLog.tsx đọc từ kho mới. Không có dữ liệu cá nhân trong nhật ký.
+- Đột biến: ghi nhật ký sau khi trả dữ liệu → bài ĐỎ.
+
+Ranh giới (không đụng)
+- Danh sách hành động AuditAction: chỉ thêm, không đổi tên.
+```
+
+##### OFF-PIN — Mã PIN cho kho trên máy
+
+```text
+[OFF-PIN] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Giới hạn (g) ở mục 5.9 và OFF-5: bọc khóa của kho IndexedDB bằng khóa dẫn xuất từ mã PIN
+(PBKDF2 qua WebCrypto), để người dùng chung trình duyệt hoặc người lấy được ổ đĩa không mở
+được kho. Mất mạng vẫn mở được bằng PIN. Kiểm kết quả navigator.storage.persist() và báo nếu
+bị từ chối.
+
+Bước bắt buộc trước khi code
+Việc này đổi cách lưu khóa: viết kế hoạch chuyển đổi cho kho đang có dữ liệu (máy đang có mục
+chờ đồng bộ), gửi chủ dự án duyệt. Dừng ở bước này cho tới khi được duyệt.
+
+Tiêu chí xong (đo được)
+- Sai PIN N lần → khóa tạm. Quên PIN → cảnh báo rõ số mục chưa đồng bộ sẽ mất, rồi mới cho đặt
+  lại.
+- Đổi PIN không mất mục chờ.
+- Kiểm thử: không có PIN thì không giải mã được bản ghi. Đột biến: lưu khóa không bọc → bài
+  ĐỎ.
+- `pnpm e2e:cycles` xanh.
+
+Ranh giới (không đụng)
+- Không dẫn xuất khóa kho từ mật khẩu đăng nhập (quyết định giữ ở T-IDP).
+```
+
+##### T-PHARM — Đơn có giá cho khách
+
+```text
+[T-PHARM] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Theo câu trả lời Q19, làm MỘT trong hai nhánh:
+A. Quầy thuốc chưa có phần mềm: thêm vai trò "quầy thuốc" (ROLES ở services/bff/src/tenants.ts
+   và mọi chốt guard). Quầy thuốc xem đơn đã ký trong ngày, chọn thuốc bệnh nhân mua (có thể
+   ít hơn đơn), in đơn có giá bán lấy từ kho, trừ tồn theo số thực bán (T-STOCK), ghi tiền
+   thuốc vào dòng riêng của sổ thu (T-CASH).
+B. Nhà thuốc đã có phần mềm: bộ xuất hoặc đồng bộ đơn đã ký sang phần mềm đó theo tài liệu
+   tích hợp của họ.
+
+Đầu vào cần có trước
+- Q19 đã trả lời và đã chọn nhánh. Nhánh B: tài liệu API hoặc định dạng tệp của phần mềm nhà
+  thuốc. Thiếu: dừng.
+
+Tiêu chí xong (đo được)
+- Nhánh A: bán thiếu 1 thuốc → tồn chỉ trừ phần đã bán; in lại không trừ lần hai; vai trò quầy
+  thuốc chỉ xem đơn, không xem hồ sơ khám (kiểm thử phân quyền + đột biến); mở đơn có ghi nhật
+  ký truy cập.
+- Nhánh B: gửi lại không tạo trùng bên kia (idempotent theo mã đơn); có hàng đợi và thử lại
+  như hộp thư đi.
+
+Ranh giới (không đụng)
+- Đơn bác sĩ in vẫn không ghi giá. Không đổi luồng ký và gửi cổng.
+```
+
+##### T-APPT — Lịch hẹn và danh sách đến hẹn
+
+```text
+[T-APPT] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Hẹn tái khám có ngày giờ thật: khi bác sĩ ghi "tái khám sau N ngày" (followUpDays) thì gợi ý
+ngày hẹn; lễ tân đặt, đổi, hủy lịch hẹn; danh sách "đến hẹn hôm nay / ngày mai" để gọi hoặc
+nhắn tay, đánh dấu "đã nhắc". Bệnh nhân có hẹn đến thì tiếp đón tự gắn ưu tiên appointment
+(thay cờ chọn tay). FHIR Appointment.
+
+Tiêu chí xong (đo được)
+- e2e: kê đơn có tái khám 7 ngày → tạo lịch hẹn → tới ngày hiện trong danh sách → tiếp đón tự
+  gắn ưu tiên.
+- Trùng giờ vẫn cho đặt (phòng mạch không chia khung giờ) nhưng hiện số người cùng giờ.
+- Ranh giới ngày đúng múi giờ Việt Nam (kiểm thử). Cách ly phòng khám.
+
+Ranh giới (không đụng)
+- Gửi tin tự động (ZNS nhắc hẹn đi cùng T-ZALO); đặt lịch trực tuyến (BOOK-ONLINE, GĐ2).
+```
+
+##### T-BOOK — Sổ khám theo ngày và doanh thu
+
+```text
+[T-BOOK] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Sổ khám theo ngày (mỗi lượt: giờ, bệnh nhân, bác sĩ, chẩn đoán, chỉ định, có đơn hay không),
+lọc theo ngày và bác sĩ, xuất ra Excel và in. Doanh thu theo ngày/tháng, tách dòng: tiền khám,
+chỉ định/thủ thuật, vật tư, và tiền thuốc (chỉ khi T-PHARM làm nhánh A).
+
+Đầu vào cần có trước
+- T-CASH đã merge: doanh thu lấy từ phiếu thu, không tính lại từ bảng giá.
+- Mẫu sổ khám phòng khám đang dùng, nếu Sở Y tế yêu cầu mẫu riêng.
+
+Tiêu chí xong (đo được)
+- Tổng doanh thu = tổng sổ thu ngày của T-CASH (kiểm thử đối chiếu).
+- Tệp xuất mở được bằng Excel, đúng dấu tiếng Việt (CSV UTF-8 có BOM là đủ nếu chủ phòng khám
+  chấp nhận).
+- Chỉ owner xem doanh thu. Xuất sổ khám là xuất dữ liệu bệnh nhân: có ghi nhật ký truy cập.
+  Cách ly phòng khám.
+
+Ranh giới (không đụng)
+- Hóa đơn điện tử, báo cáo thuế.
+```
+
+##### T-PAY — Thanh toán QR tự xác nhận
+
+```text
+[T-PAY] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+QR động qua payOS, Casso hoặc tương đương: tạo QR theo phiếu thu của T-CASH, nhận webhook, tự
+đánh "đã thu" và ghi vào sổ thu; đối soát định kỳ để bắt webhook bị mất.
+
+Đầu vào cần có trước
+- Tài khoản sandbox của nhà cung cấp; T-CASH đã merge.
+
+Tiêu chí xong (đo được)
+- Webhook gửi lại 2 lần không ghi thu 2 lần (idempotent theo mã phiếu).
+- Webhook sai chữ ký bị từ chối. Đột biến: bỏ kiểm chữ ký → bài ĐỎ.
+- Mất webhook → lần đối soát sau bắt được.
+- QR hiện đúng số tiền. Chạy bộ nối giả thì có nhãn mô phỏng.
+
+Ranh giới (không đụng)
+- Không lưu thông tin thẻ hay tài khoản ngân hàng của bệnh nhân.
+```
+
+##### T-ZALO — Gửi ZNS thật
+
+```text
+[T-ZALO] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Gửi ZNS đơn thuốc thật thay bản xem trước (apps/clinic-web/src/visit/ZaloPreview.tsx,
+packages/clinical/src/zalo.ts); sau đó ZNS nhắc hẹn cho danh sách của T-APPT.
+
+Đầu vào cần có trước
+- Zalo OA, mẫu ZNS đã được duyệt, câu trả lời pháp chế cho mục 5.9 giới hạn (l), T-CONSENT đã
+  merge. Thiếu: dừng.
+
+Tiêu chí xong (đo được)
+- Chỉ gửi khi bệnh nhân có đồng ý kênh Zalo còn hiệu lực (gọi hàm của T-CONSENT). Đột biến:
+  gửi khi không có đồng ý → bài ĐỎ.
+- Nội dung đúng mẫu đã duyệt; không có thuốc hay chẩn đoán trừ khi pháp chế cho phép.
+- Hàng đợi, thử lại, idempotent theo mã đơn (như hộp thư đi của cổng).
+- Ghi chi phí từng tin. Nhật ký gửi không chứa nội dung tin.
+- Nhãn mô phỏng chỉ hiện khi dùng bộ gửi giả; trang "Phạm vi" cập nhật.
+
+Ranh giới (không đụng)
+- Facebook Messenger (mục 6.4 điểm 9 đề xuất bỏ).
+```
+
+#### M1 — Việc xuyên suốt
+
+##### T-IDP-2 — IdP tách rời, OTP SMS thật, kho phiên dùng chung
+
+```text
+[T-IDP-2] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Tách IdP tối giản đang nhúng trong BFF (services/bff/src/identity/*) thành IdP chuẩn OIDC (tự
+dựng hoặc dịch vụ), theo ranh giới OIDC-ready đã thiết kế ở T-IDP. Thay SimulatedSmsOtp bằng
+nhà cung cấp SMS thật, hoặc bỏ kênh SMS nếu TOTP là đủ. Kho phiên dùng chung cho nhiều bản BFF
+(kho SQLite cạnh BFF ở sessionStore.ts không đủ khi chạy nhiều bản, xem T-HA).
+
+Đầu vào cần có trước
+- Quyết định của chủ dự án: có tách IdP ở M1 không. Nhà cung cấp SMS và mẫu tin nếu giữ SMS.
+
+Tiêu chí xong (đo được)
+- Đăng nhập, MFA, xoay refresh, thu hồi giữ nguyên hành vi: bộ kiểm thử của T-IDP xanh, không
+  sửa ý nghĩa bài.
+- Hai bản BFF chạy song song dùng chung phiên: thu hồi ở bản này có hiệu lực ở bản kia.
+- Gỡ nhãn mô phỏng đúng chỗ đã thật.
+
+Ranh giới (không đụng)
+- Mô hình khóa-tại-máy của kho ngoại tuyến (OFF-PIN là việc riêng).
+```
+
+##### T-OBS — Quan sát, cảnh báo, số đo KPI pilot
+
+```text
+[T-OBS] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+OpenTelemetry cho BFF và Medplum (Medplum có móc sẵn, F8): vết request, thời gian từng thao
+tác theo phòng khám, số liệu hộp thư đi, tỉ lệ lỗi. Cảnh báo khi luồng lõi lỗi, khi đơn tồn
+trong hộp thư đi quá N phút, khi mất dịch vụ. Đo được các KPI pilot ở mục 6 (≥ 98% đơn lên
+cổng trong 5 phút, uptime luồng lõi ≥ 99,5%).
+
+Đầu vào cần có trước
+- Nơi nhận dữ liệu: bắt đầu bằng collector trong Docker Compose; trên hạ tầng thật chờ Q10.
+
+Tiêu chí xong (đo được)
+- Một bảng theo dõi có: p50/p90 phiên khám, số đơn chờ gửi, tỉ lệ 5xx, p95 tìm bệnh nhân,
+  uptime.
+- Bắn thử được một cảnh báo.
+- Kiểm thử quét vết: không có tên, số điện thoại, CCCD, nội dung truy vấn tìm kiếm.
+
+Ranh giới (không đụng)
+- Không ghi nội dung truy vấn tìm kiếm vào vết hay log.
+```
+
+##### T-FHIR — Hồ sơ FHIR và định danh chuẩn
+
+```text
+[T-FHIR] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Thay URN tạm (urn:phongmach:… ở packages/fhir-vn-model/src/identifiers.ts) bằng định danh
+chuẩn; viết StructureDefinition cho CCCD, mã đơn, ICD-10; chuyển dữ liệu đã có. Phải làm trước
+khi có dữ liệu thật của pilot.
+
+Đầu vào cần có trước
+- Q9 (tên miền, định danh chuẩn của UNIGIS). Thiếu: dừng.
+
+Tiêu chí xong (đo được)
+- Lệnh chuyển dữ liệu chạy lại được; đếm trước và sau khớp.
+- Tìm theo khóa meta.tag vẫn đúng (bộ kiểm thử của M0-3 xanh).
+- Hồ sơ validate được trên Medplum.
+
+Ranh giới (không đụng)
+- Ý nghĩa clientUuid và khóa tìm kiếm.
+```
+
+##### T-ENC — Mã hóa cấp trường, chỉ số mù
+
+```text
+[T-ENC] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+A6: mã hóa CCCD (và các trường Q6 chốt) theo khóa từng phòng khám (KMS hoặc Vault); chỉ số mù
+cho tìm kiếm và cho ifNoneExist theo CCCD. Khóa tìm trong meta.tag (từng từ của tên, 4 số
+cuối) cũng là dữ liệu cá nhân dạng rõ: quyết định cùng lúc.
+
+Đầu vào cần có trước
+- Q6 (trường nào, chấp nhận mất tìm kiếm phía máy chủ cho trường đó); Q10 (KMS).
+
+Bước bắt buộc trước khi làm hết
+Spike 1 tuần, báo số đo (tốc độ tìm, tạo không trùng), chủ dự án duyệt rồi mới làm tiếp.
+
+Tiêu chí xong (đo được)
+- CCCD không đọc được dạng rõ trong CSDL (kiểm bằng SQL).
+- Tìm theo CCCD đúng và p95 ≤ 200 ms (T8). Tạo bệnh nhân không trùng theo CCCD vẫn đúng.
+- Xoay khóa có lệnh và kiểm thử.
+
+Ranh giới (không đụng)
+- Tìm theo tên không dấu và 4 số cuối: không được chậm hơn ngưỡng M0-3.
+```
+
+##### T-UPG — Chính sách phiên bản, diễn tập nâng cấp
+
+```text
+[T-UPG] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Chốt dòng phiên bản Medplum theo Q12, ghim phiên bản, viết quy trình nâng cấp qua staging,
+diễn tập nâng cấp một bản minor (phần nâng cấp của T3).
+
+Đầu vào cần có trước
+- Q12; môi trường staging (T-IAC) hoặc một stack riêng không phải stack dev dùng chung.
+
+Tiêu chí xong (đo được)
+- Biên bản diễn tập: ngừng ≤ 15 phút; 0 mất dữ liệu (đếm trước và sau); migration lúc khởi
+  động (F9) chạy hết.
+- Smoke test và e2e xanh sau nâng cấp.
+- Tài liệu quy trình nâng cấp.
+
+Ranh giới (không đụng)
+- Không nâng môi trường đang có người dùng; không fork Medplum.
+```
+
+##### T-COST — Mô hình chi phí từ số đo
+
+```text
+[T-COST] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2, trừ phần kiểm thử.
+
+Mục tiêu
+Một mô hình chi phí duy nhất (bảng tính .xlsx) lập từ số đo (mục 2, T2 nếu có) và báo giá nhà
+cung cấp; giải mâu thuẫn 15/25/60 triệu (mục 3.3); tính cho 20, 300 và 5.000 phòng khám.
+
+Đầu vào cần có trước
+- Báo giá của ít nhất 2 nhà cung cấp (Q10). Số đo T2 nếu đã có; chưa có thì dùng số ở mục 2 và
+  ghi rõ.
+
+Tiêu chí xong (đo được)
+- Giả định để riêng một trang; mỗi con số có nguồn.
+- Kết luận T5: đạt hay không đạt ngưỡng 25 triệu đồng/tháng cho 300 phòng khám.
+
+Ranh giới (không đụng)
+- Không bịa giá: thiếu báo giá thì để ô trống có nhãn "chưa có báo giá".
+```
+
+#### M1 — Sprint 7: cứng hóa trước pilot
+
+##### T-OFFB — Rời tenant, xóa thật
+
+```text
+[T-OFFB] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+A4: xuất toàn bộ dữ liệu một phòng khám (gồm Binary: ảnh, PDF) mà không lộ secret; nhật ký lưu
+ngoài; rồi xóa thật ($expunge, xóa tệp Binary), có phân quyền và xác nhận hai bước. Gồm cả dữ
+liệu ngoài FHIR (kho, sổ thu của T-STOCK, T-CASH nếu đã có). Dùng lại cho xóa theo yêu cầu
+bệnh nhân (T-CONSENT).
+
+Tiêu chí xong (đo được)
+- T7 đạt: kịch bản tự động, kiểm bằng SQL và đĩa: sau khi xóa không còn bản ghi hay tệp nào
+  của phòng khám đó.
+- Bản xuất mở được, không chứa secret.
+- Phòng khám khác không bị ảnh hưởng: bộ cách ly xanh.
+
+Ranh giới (không đụng)
+- Chỉ chạy trên phòng khám tạm; không chạy trên phòng khám demo của stack dev dùng chung.
+```
+
+##### T-HARDEN — Cứng hóa trước pilot
+
+```text
+[T-HARDEN] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Trước pilot: kiểm thử bảo mật nội bộ (OWASP ASVS mức 1 cho BFF và web); chạy lại bộ cách ly và
+các đột biến cũ; thử tải một ngày khám của 20 phòng khám; chạy thử trên thiết bị thật (máy
+tính bảng, Safari, trình duyệt có giao diện; mục 5.9 giới hạn (j)); sửa lỗi mức cao.
+
+Tiêu chí xong (đo được)
+- Báo cáo phát hiện có mức độ; 0 lỗi mức cao còn mở.
+- Bảng thiết bị × chức năng (ngoại tuyến, in, IndexedDB, Web Locks) có kết quả từng ô; F12
+  kiểm trên trình duyệt có giao diện.
+- Số đo thử tải ghi vào kế hoạch.
+
+Ranh giới (không đụng)
+- Không thay kiểm tra bảo mật độc lập (PENTEST, GĐ2).
+```
+
+##### ONBOARD — Tài liệu cài đặt và onboarding pilot
+
+```text
+[ONBOARD] Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2, trừ phần kiểm thử.
+
+Mục tiêu
+Tài liệu cho nhân viên phòng khám (cài PWA, đăng nhập và TOTP, in, mất mạng thì làm gì) và cho
+đội triển khai (cấp phòng khám bằng T-TEN, nhập dữ liệu bằng T-MIG, kiểm tra trước ngày đầu);
+danh sách kiểm tra ngày đầu pilot.
+
+Đầu vào cần có trước
+- T-TEN đã merge; staging chạy được (T-IAC).
+
+Tiêu chí xong (đo được)
+- Một người ngoài đội làm theo tài liệu, dựng được phòng khám thử trên staging và khám xong
+  một lượt. Ghi thời gian và chỗ vướng; sửa tài liệu theo chỗ vướng.
+
+Ranh giới (không đụng)
+- Onboarding tự phục vụ (SELF-ONBOARD, GĐ2).
+```
+
+#### Giai đoạn 2 (bản nháp, rà lại khi mở GĐ2)
+
+##### T-EMR — Bệnh án điện tử đầy đủ, khóa sau ký
+
+```text
+[T-EMR] (Bản nháp) Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Bệnh án điện tử đầy đủ theo TT 13/2025 và TT 32/2023; khóa sau ký (chính sách truy cập + bằng
+chứng ký). Q4 có thể kéo một bản tinh gọn vào sớm hơn: làm theo phạm vi Q4 chốt.
+
+Đầu vào cần có trước
+- Q4, Q5; danh sách trường bắt buộc rút từ thông tư, do pháp chế và cố vấn y khoa duyệt.
+  T-SIGN đã merge.
+
+Tiêu chí xong (đo được)
+- Bệnh án đã ký không sửa được, chỉ bổ sung có ký. Đột biến: cho sửa sau ký → bài ĐỎ.
+- Xem được lịch sử phiên bản; xuất được bệnh án.
+
+Ranh giới (không đụng)
+- Không tự diễn giải thông tư.
+```
+
+##### T-INV — Hóa đơn điện tử
+
+```text
+[T-INV] (Bản nháp) Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Hóa đơn điện tử theo NĐ 70/2025 qua một nhà cung cấp hóa đơn điện tử; xuất hóa đơn từ phiếu
+thu T-CASH; bảng kê cho kế toán.
+
+Đầu vào cần có trước
+- Nhà cung cấp, tài khoản sandbox, ý kiến pháp chế/kế toán về cách xuất cho phòng khám.
+
+Tiêu chí xong (đo được)
+- Xuất hóa đơn idempotent theo phiếu thu; hủy và điều chỉnh theo quy định; hàng đợi và thử lại
+  như hộp thư đi.
+
+Ranh giới (không đụng)
+- Không đổi số liệu phiếu thu đã lập.
+```
+
+##### T-OFF-3 — Ngoại tuyến đầy đủ, hai máy thấy nhau
+
+```text
+[T-OFF-3] (Bản nháp) Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Hai máy thấy nhau khi phòng khám mất Internet (trạm đồng bộ trong LAN, N5); bộ đệm toàn bộ
+20.000 bệnh nhân; hợp nhất xung đột tự động thay xử lý tay; ký lô; ứng dụng ký USB cho máy
+bàn; tablet đóng gói.
+
+Bước bắt buộc trước khi code
+Việc rất lớn: viết thiết kế và tách thành các việc con (mỗi việc một PR), chủ dự án duyệt rồi
+mới làm.
+
+Tiêu chí xong (đo được)
+- Theo từng việc con trong thiết kế đã duyệt; `pnpm e2e:cycles` xanh ở mọi việc con.
+```
+
+##### T-HA — Chạy nhiều bản Medplum và BFF
+
+```text
+[T-HA] (Bản nháp) Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Nhiều bản Medplum và BFF sau cân bằng tải; kiểm chứng migration lúc khởi động khi nâng cấp
+cuốn chiếu (F9); lưu trữ tệp S3/MinIO thay lưu cục bộ (F10); kho phiên dùng chung (T-IDP-2).
+
+Đầu vào cần có trước
+- T-IAC, T-IDP-2 đã merge.
+
+Tiêu chí xong (đo được)
+- Tắt một bản giữa lúc e2e đang chạy: người dùng không thấy lỗi.
+- Binary đọc được từ mọi bản.
+- Nâng cấp cuốn chiếu không ngừng dịch vụ (biên bản).
+```
+
+##### T-DR — Sao lưu liên tục, vùng dự phòng
+
+```text
+[T-DR] (Bản nháp) Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+WAL/PITR, vùng thứ hai; mất tối đa 15 phút dữ liệu, khôi phục trong 1 giờ; diễn tập (phần khôi
+phục của T3). Gồm cả CSDL ngoài Medplum (kho, sổ thu, nhật ký T-AUD) và tệp Binary.
+
+Đầu vào cần có trước
+- T-IAC đã merge; nhà cung cấp có hai trung tâm ở hai thành phố (Q10).
+
+Tiêu chí xong (đo được)
+- Biên bản diễn tập: khôi phục về một thời điểm bất kỳ trong 24 giờ trong ≤ 60 phút, mất ≤ 15
+  phút dữ liệu.
+- Kiểm thử khôi phục chạy định kỳ hàng tháng (có lịch).
+```
+
+##### T-CAP — Công suất nhiều node
+
+```text
+[T-CAP] (Bản nháp) Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+T2 và T8 ở quy mô thật: dữ liệu 500 project × 5.000 bệnh nhân, k6 (mẫu ở
+infra/medplum/experiments/), triển khai nhiều node trên nhà cung cấp trong nước. Gồm cấp số
+dưới tải (mục 5.9 giới hạn (m)(5)).
+
+Đầu vào cần có trước
+- T-IAC đã merge; ngân sách chạy thử tải được duyệt.
+
+Tiêu chí xong (đo được)
+- p95 patient-summary < 300 ms; tìm bệnh nhân ≤ 200 ms; mở hồ sơ ≤ 400 ms; lưu và in đơn ≤ 2
+  giây; lỗi < 0,1%; 200 người dùng đồng thời. Số đo ghi vào mục 5.4 dòng T2, T8.
+```
+
+##### MULTI-SITE — Nhiều cơ sở, phân quyền chi tiết
+
+```text
+[MULTI-SITE] (Bản nháp) Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Một phòng khám/chuỗi có nhiều cơ sở; phân quyền theo cơ sở và theo chức năng (thay ba vai trò
+cố định).
+
+Đầu vào cần có trước
+- Yêu cầu cụ thể từ ít nhất một khách hàng thật (bao nhiêu cơ sở, ai được xem gì). Thiếu:
+  dừng.
+
+Tiêu chí xong (đo được)
+- Nhân viên cơ sở A không thấy dữ liệu cơ sở B khi không được cấp quyền (kiểm thử + đột biến).
+- Ba vai trò cũ vẫn chạy như trước cho phòng khám một cơ sở.
+```
+
+##### BOOK-ONLINE — Đặt lịch qua Zalo/web, kịch bản chăm sóc
+
+```text
+[BOOK-ONLINE] (Bản nháp) Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Bệnh nhân đặt lịch qua Zalo OA hoặc trang web của phòng khám; lịch vào cùng danh sách của
+T-APPT; kịch bản chăm sóc sau khám (nhắc uống thuốc, hỏi thăm) chỉ gửi cho người đã đồng ý.
+
+Đầu vào cần có trước
+- T-ZALO, T-APPT, T-CONSENT đã merge.
+
+Tiêu chí xong (đo được)
+- Đặt trùng (bấm hai lần) không tạo hai lịch hẹn. Chặn đặt ồ ạt (giới hạn tần suất).
+- Không có đồng ý thì không gửi tin chăm sóc (đột biến → bài ĐỎ).
+```
+
+##### SELF-ONBOARD — Onboarding tự phục vụ
+
+```text
+[SELF-ONBOARD] (Bản nháp) Làm theo "Quy ước chung" ở docs/ke-hoach-trien-khai.md mục 11.2.
+
+Mục tiêu
+Phòng khám tự đăng ký và dùng được trong dưới 30 phút: tự tạo phòng khám (T-TEN tự phục vụ),
+tự nhập dữ liệu (T-MIG), hướng dẫn ngay trong ứng dụng.
+
+Đầu vào cần có trước
+- T-TEN, T-MIG đã merge; quyết định có cần duyệt thủ công trước khi phòng khám dùng thật không
+  (pháp lý).
+
+Tiêu chí xong (đo được)
+- 3 người ngoài đội tự làm từ đầu tới khám xong lượt đầu: trung vị dưới 30 phút.
+- Đăng ký giả mạo hoặc ồ ạt bị chặn (giới hạn tần suất, xác minh).
+```

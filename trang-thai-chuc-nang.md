@@ -7,6 +7,10 @@
 > Cập nhật 17/10/2026 theo commit `ae1f908`: dòng xác thực nhân viên, OTP qua SMS và hạn mức FHIR đã đối chiếu lại với mã ở
 > commit đó (T-IDP ở PR #26, T-QUOTA ở PR #25). Các dòng khác giữ kết quả xác minh ngày 13/10.
 >
+> **Bổ sung 04/11/2026 (đối chiếu code tại commit `2bd557f`):** thêm các chức năng theo tài liệu quy trình phòng khám v1.1
+> (QT11): chỉ định, thủ thuật, kho và giá, thu tiền tại quầy, lịch hẹn, sổ khám, doanh thu. Mốc "M1 (đề xuất)" lấy từ
+> `ke-hoach-trien-khai.md` mục 6.4, **chưa chốt** (Q23).
+>
 > Cập nhật: 13/10/2026. Bảng này **tổng hợp** trạng thái chức năng của toàn bộ phần mềm,
 > gom từ các chỗ rải rác trong `docs/ke-hoach-trien-khai.md` (mục 5.2, 5.6–5.9, 6, 7, 8),
 > `README.md` và trang "Phạm vi" trong ứng dụng, thành một chỗ dễ liếc. Mỗi dòng dẫn nguồn
@@ -43,6 +47,7 @@ GĐ2 = 04–07/2027; GĐ3 = 08–12/2027. Nguồn mốc: `ke-hoach-trien-khai.md
 | Báo "còn người trùng tên" khi >20 kết quả | ✅ | M0 | `medplum.ts` `searchPatients` trả `hasMore`; UI nhắc khi tràn. (Trước ghi ⬜/M1 — đã làm, nâng ✅) |
 | Gõ lẫn tên và số trong một lần tìm ("an 5678") | ✅ | M0 | `packages/fhir-vn-model/src/search.ts` `classifyQuery` nhánh `name+number`; `medplum.ts` tìm tên AND đuôi số. (Trước ghi ⬜/M1 — đã làm, nâng ✅; `ke-hoach` dòng 186 "chưa gõ lẫn" đã cũ) |
 | Đặt lịch qua Zalo, check-in QR, nhập Excel | ⬜ | M1 (Excel), GĐ2 (lịch) | mục 5.2 "Không làm ở M0"; T-MIG, T-ZALO |
+| Lịch hẹn thật (ngày giờ) + danh sách đến hẹn để gọi/nhắn tay | ⬜ | M1 (đề xuất) | Hiện chỉ có cờ ưu tiên `appointment` do lễ tân chọn tay (`queue.ts` `PRIORITY_RANK`), không có tài nguyên lịch hẹn. QT11 bước "Bệnh nhân đến", ⑤ và "Dịch vụ sau khám"; T-APPT, `ke-hoach` 6.4 |
 
 ## 2. Khám
 
@@ -56,6 +61,10 @@ GĐ2 = 04–07/2027; GĐ3 = 08–12/2027. Nguồn mốc: `ke-hoach-trien-khai.md
 | Mẫu khám tự thiết kế, ảnh đính kèm, ký phiếu khám | ⬜ | M1 (S4) | mục 5.2 "Không làm ở M0"; lịch 6.3 |
 | Chuyên khoa khác (ngoài 2 khoa) | ⬜ | M1+ | mục 5.2 |
 | Bệnh án điện tử đầy đủ + khóa sau ký | ⬜ | GĐ2 | mục 7; T-EMR |
+| Chỉ định (xét nghiệm, chiếu chụp, thủ thuật) + in phiếu chỉ định kèm vật tư | ⬜ | M1 (đề xuất) | Chưa có trong mã lẫn kế hoạch cũ. QT11 bước ③; T-ORDER, `ke-hoach` 6.4 |
+| Ghi nhận thực hiện, sổ thủ thuật, phiếu kết quả có ảnh | ⬜ | M1 (đề xuất) | QT11 bước "Thực hiện"; T-ORDER, T-RESULT (gộp "ảnh đính kèm" ở M1 S4). Lấy ảnh từ máy nội soi chờ Q20 |
+| Hẹn tái khám | 🔧 | M0 (một phần) → M1 (đề xuất) | Có ô "Tái khám sau N ngày" in trên đơn (`visit/PrescriptionEditor.tsx`, `followUpDays` trong `packages/clinical/src/prescription.ts`, `packages/print`). Chưa có ngày giờ hẹn thật: T-APPT |
+| Sổ khám theo ngày, xuất Excel/in | 🔧 | M0 (một phần) → M1 (đề xuất) | Có lịch sử khám từng bệnh nhân (`medplum.ts` `patientVisits`); chưa có sổ theo ngày và xuất. QT11 "Ghi / trích sổ khám"; T-BOOK |
 
 ## 3. Kê đơn
 
@@ -68,6 +77,9 @@ GĐ2 = 04–07/2027; GĐ3 = 08–12/2027. Nguồn mốc: `ke-hoach-trien-khai.md
 | Ký số | 🟡 | M0 → M1 | "Ký số MÔ PHỎNG" (băm nội dung), nhãn ở `print` (`.sim`), `visit/SignResult.tsx`, `Scope.tsx`, `DemoBanner.tsx`; T-SIGN (M1 nối nhà cung cấp thật) |
 | Tương tác thuốc đầy đủ, đơn thuốc cổ truyền | ⬜ | GĐ3 | mục 5.2; GĐ3 cần nguồn dữ liệu có bản quyền |
 | Quy tắc kê đơn theo TT 26/2025 (đầy đủ) | 🔧 | M1 (S4) | M0 có tập quy tắc lõi; đầy đủ theo thông tư ở M1 — T-RULE |
+| Đơn bác sĩ in ra không ghi tiền | ✅ | M0 | `packages/print/src/prescription.ts` không có trường giá nào. Khớp QT11 bước ④ |
+| Kê đơn gắn kho (chọn thuốc có trong kho, cảnh báo hết hàng, "mua ngoài") | ⬜ | M1 (đề xuất) | Danh mục thuốc hiện là minh họa (`packages/catalogs`), chưa nối kho. QT11 mục 4; T-RXSTOCK, Q21 |
+| Đơn có giá cho khách (quầy thuốc in, hoặc đồng bộ sang phần mềm nhà thuốc) | ⬜ | M1 (đề xuất) | QT11 bước ④ "đồng bộ sang CSDL độc lập"; T-PHARM, chờ Q19 |
 
 ## 4. Liên thông cổng đơn thuốc quốc gia
 
@@ -104,11 +116,20 @@ GĐ2 = 04–07/2027; GĐ3 = 08–12/2027. Nguồn mốc: `ke-hoach-trien-khai.md
 
 | Chức năng | Trạng thái | Mốc | Ghi chú / nguồn |
 |---|---|---|---|
-| Thanh toán QR, tự xác nhận, sổ thu ngày | ⬜ | M1 (S6) | T-PAY (payOS/Casso) |
+| Thu tiền tại quầy (tiền khám lúc tiếp đón; chỉ định, thủ thuật, vật tư cuối lượt) + sổ thu ngày | ⬜ | M1 (đề xuất) | QT11 bước ①; T-CASH (tách sổ thu khỏi T-PAY), Q22 |
+| Thanh toán QR tự xác nhận | ⬜ | M1 (S6) | T-PAY (payOS/Casso), ghi vào sổ thu của T-CASH |
 | Hóa đơn điện tử (NĐ 70/2025) | ⬜ | GĐ2 | T-INV |
-| Báo cáo doanh thu | ⬜ | GĐ2 | mục 6.2 danh sách cắt |
+| Báo cáo doanh thu | ⬜ | GĐ2 → M1 (đề xuất, bản đơn giản) | mục 6.2 danh sách cắt; QT11 "Dịch vụ sau khám" muốn có; T-BOOK, Q23 |
 
-## 8. Tuân thủ & bảo mật
+## 8. Kho và giá
+
+| Chức năng | Trạng thái | Mốc | Ghi chú / nguồn |
+|---|---|---|---|
+| Bảng giá dịch vụ, thuốc, vật tư; chỉ chủ phòng khám nhập/sửa giá | ⬜ | M1 (đề xuất) | Vai trò `owner` đã có (`services/bff/src/tenants.ts` `ROLES`), chưa có bảng giá. QT11 mục 4; T-PRICE |
+| Kho thuốc và vật tư: nhập (giá nhập, lô, hạn dùng), tồn, xuất, kiểm kê | ⬜ | M1 (đề xuất) | QT11 mục 4; T-STOCK. Đề xuất lưu bảng quan hệ do BFF quản lý, không trên FHIR (Q24). Phần thuốc chờ Q19 |
+| Tự xuất vật tư theo chỉ định | ⬜ | M1 (đề xuất) | QT11 bước ③; T-ORDER + T-STOCK |
+
+## 9. Tuân thủ & bảo mật
 
 | Chức năng | Trạng thái | Mốc | Ghi chú / nguồn |
 |---|---|---|---|
@@ -122,7 +143,7 @@ GĐ2 = 04–07/2027; GĐ3 = 08–12/2027. Nguồn mốc: `ke-hoach-trien-khai.md
 | Mã hóa cấp trường (CCCD, chỉ số mù) | ⬜ | M1 | T-ENC |
 | Phân quyền chi tiết (nhiều cơ sở) | ⬜ | GĐ2 | mục 7 |
 
-## 9. Hạ tầng & vận hành
+## 10. Hạ tầng & vận hành
 
 | Chức năng | Trạng thái | Mốc | Ghi chú / nguồn |
 |---|---|---|---|
@@ -136,7 +157,7 @@ GĐ2 = 04–07/2027; GĐ3 = 08–12/2027. Nguồn mốc: `ke-hoach-trien-khai.md
 | Sao lưu liên tục + vùng dự phòng (PITR, DR) | ⬜ | GĐ2 | T-DR (RPO 15 phút, RTO 1 giờ) |
 | Quan sát (OpenTelemetry, cảnh báo) | ⬜ | M1 | T-OBS (đã có móc) |
 
-## 10. Giai đoạn 3 (đầu việc, chưa chi tiết)
+## 11. Giai đoạn 3 (đầu việc, chưa chi tiết)
 
 | Chức năng | Trạng thái | Mốc | Ghi chú / nguồn |
 |---|---|---|---|
@@ -153,7 +174,8 @@ GĐ2 = 04–07/2027; GĐ3 = 08–12/2027. Nguồn mốc: `ke-hoach-trien-khai.md
   cộng ngoại tuyến từng máy và cách ly tenant, **đã chạy thật**. Ba thứ còn **mô phỏng có nhãn**:
   ký số, cổng đơn thuốc quốc gia, Zalo.
 - **Xác thực nhân viên thật** (mật khẩu + TOTP) đã có từ PR #26; OTP qua SMS và thiết bị tin cậy còn mô phỏng.
-- **Còn phải làm để thành sản phẩm thật (M1 trở đi):** nối thật cổng
-  đơn thuốc + ký số + Zalo + thanh toán, ngoại tuyến đầy đủ (chờ ký, hai máy thấy nhau), bệnh án
-  điện tử đầy đủ, hóa đơn điện tử, HA/DR.
+- **Còn phải làm để thành sản phẩm thật (M1 trở đi):** nối thật cổng đơn thuốc + ký số + Zalo + thanh
+  toán, ngoại tuyến đầy đủ (chờ ký, hai máy thấy nhau), bệnh án điện tử đầy đủ, hóa đơn điện tử, HA/DR.
+- **Theo quy trình phòng khám v1.1 (đề xuất đưa vào M1, chờ chốt):** chỉ định và thủ thuật, kho và giá,
+  thu tiền tại quầy, lịch hẹn, sổ khám, doanh thu (`ke-hoach-trien-khai.md` mục 6.4).
 - Chi tiết lịch và công việc kỹ thuật: `ke-hoach-trien-khai.md` mục 6 (M1), 7 (GĐ2/3), 8 (danh mục T-*).
