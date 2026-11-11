@@ -1,0 +1,20 @@
+$ pnpm typecheck
+# HEAD bacb88a, 2026-11-11T08:02:56+07:00
+$ pnpm -r typecheck
+packages/fhir-vn-model typecheck$ tsc -p tsconfig.json
+packages/fhir-vn-model typecheck: Done
+packages/catalogs typecheck$ tsc -p tsconfig.json
+packages/catalogs typecheck: Done
+packages/rules typecheck$ tsc -p tsconfig.json
+packages/rules typecheck: Done
+packages/clinical typecheck$ tsc -p tsconfig.json
+packages/clinical typecheck: Done
+packages/print typecheck$ tsc -p tsconfig.json
+packages/trial typecheck$ tsc -p tsconfig.json
+packages/trial typecheck: Done
+packages/print typecheck: Done
+apps/clinic-web typecheck$ tsc -p tsconfig.json
+services/bff typecheck$ tsc -p tsconfig.json
+services/bff typecheck: Done
+apps/clinic-web typecheck: Done
+[exit 0]

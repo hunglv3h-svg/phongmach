@@ -1,0 +1,93 @@
+$ E2E_SEED=1393699289 pnpm e2e:cycles
+# HEAD bacb88a, 2026-11-11T08:08:28+07:00
+$ node infra/e2e-cycles.mjs
+$ tsx scripts/e2e-clinic.ts
+Đã tạo phòng khám thử thu-1b2ea0e4 (Project 0dc4e129-0033-40d4-8b1c-9aa391f5484e), bác sĩ thu-1b2ea0e4-doctor.
+Đã ghi D:\My Documents D\UNIGIS\PM\phongmach\.worktrees\lat5-retry-queue-one-row\services\bff\.data\e2e-cycles\tenants.json
+▶ tạo phòng khám thử: 0.9 giây
+$ tsc -p tsconfig.json && vite build
+[36mvite v7.3.6 [32mbuilding client environment for production...[36m[39m
+transforming...
+[32m✓[39m 167 modules transformed.
+rendering chunks...
+computing gzip size...
+[2mdist/[22m[32mregisterSW.js                                               [39m[1m[2m  0.13 kB[22m[1m[22m
+[2mdist/[22m[32mmanifest.webmanifest                                        [39m[1m[2m  0.64 kB[22m[1m[22m
+[2mdist/[22m[32mindex.html                                                  [39m[1m[2m  1.24 kB[22m[1m[22m[2m │ gzip:   0.72 kB[22m
+[2mdist/[22m[32massets/be-vietnam-pro-vietnamese-400-normal-BuGn0gnm.woff   [39m[1m[2m  6.57 kB[22m[1m[22m
+[2mdist/[22m[32massets/be-vietnam-pro-vietnamese-600-normal-DkpCIyan.woff   [39m[1m[2m  6.88 kB[22m[1m[22m
+[2mdist/[22m[32massets/be-vietnam-pro-vietnamese-500-normal-CfdwVo8-.woff   [39m[1m[2m  6.88 kB[22m[1m[22m
+[2mdist/[22m[32massets/be-vietnam-pro-vietnamese-700-normal-By_5yT39.woff   [39m[1m[2m  6.89 kB[22m[1m[22m
+[2mdist/[22m[32massets/be-vietnam-pro-vietnamese-400-normal-CRcqvyg1.woff2  [39m[1m[2m 11.53 kB[22m[1m[22m
+[2mdist/[22m[32massets/be-vietnam-pro-vietnamese-500-normal-DREgrEoJ.woff2  [39m[1m[2m 12.17 kB[22m[1m[22m
+[2mdist/[22m[32massets/be-vietnam-pro-vietnamese-600-normal-nyU-ZL2p.woff2  [39m[1m[2m 12.18 kB[22m[1m[22m
+[2mdist/[22m[32massets/be-vietnam-pro-vietnamese-700-normal-Csr0PCuG.woff2  [39m[1m[2m 12.47 kB[22m[1m[22m
+[2mdist/[22m[32massets/be-vietnam-pro-latin-400-normal-bXgqVju9.woff        [39m[1m[2m 16.43 kB[22m[1m[22m
+[2mdist/[22m[32massets/be-vietnam-pro-latin-700-normal-C2EtzaOi.woff        [39m[1m[2m 16.91 kB[22m[1m[22m
+[2mdist/[22m[32massets/be-vietnam-pro-latin-500-normal-BJkVuMHw.woff        [39m[1m[2m 17.00 kB[22m[1m[22m
+[2mdist/[22m[32massets/be-vietnam-pro-latin-600-normal-5IO4e7bK.woff        [39m[1m[2m 17.02 kB[22m[1m[22m
+[2mdist/[22m[32massets/be-vietnam-pro-latin-400-normal-PpnXBOrz.woff2       [39m[1m[2m 21.17 kB[22m[1m[22m
+[2mdist/[22m[32massets/be-vietnam-pro-latin-500-normal-B6LVzGNe.woff2       [39m[1m[2m 21.89 kB[22m[1m[22m
+[2mdist/[22m[32massets/be-vietnam-pro-latin-600-normal-BZDkUTrt.woff2       [39m[1m[2m 22.03 kB[22m[1m[22m
+[2mdist/[22m[32massets/be-vietnam-pro-latin-700-normal-DlW1Zbsh.woff2       [39m[1m[2m 22.15 kB[22m[1m[22m
+[2mdist/[22m[35massets/index-B7CVfD3I.css                                   [39m[1m[2m 28.94 kB[22m[1m[22m[2m │ gzip:   6.32 kB[22m
+[2mdist/[22m[36massets/index-RchtnRdM.js                                    [39m[1m[33m532.98 kB[39m[22m[2m │ gzip: 170.47 kB[22m
+[33m
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+[32m✓ built in 4.71s[39m
+
+PWA v1.3.0
+mode      generateSW
+precache  17 entries (693.05 KiB)
+files generated
+  dist/sw.js
+  dist/workbox-9c191d2f.js
+▶ build giao diện: 19.6 giây
+▶ BFF http://127.0.0.1:8111 và giao diện http://127.0.0.1:4174 sẵn sàng: 1.7 giây (log: D:\My Documents D\UNIGIS\PM\phongmach\.worktrees\lat5-retry-queue-one-row\services\bff\.data\e2e-cycles)
+Hạt giống: 1393699289 · 20 chu kỳ · chạy lại đúng như cũ: E2E_SEED=1393699289 pnpm e2e:cycles
+· chu kỳ 01: ngắt trước "tạo bệnh nhân", bật lại trước "cấp số"; mất phản hồi ở "gọi vào khám"; tải lại trang sau "tạo bệnh nhân" → số 001, đơn PM-261111-7TPT6Q in từ máy, máy chủ nhận sau 2.4 giây [4.2 giây]
+· chu kỳ 02: ngắt trước "khám", bật lại sau khi ký; mất phản hồi ở "gọi vào khám"; máy sập lúc in → số 002, đơn PM-261111-XMAWXF in từ máy, máy chủ nhận sau 1.5 giây [3.8 giây]
+· chu kỳ 03: ngắt trước "tạo bệnh nhân", bật lại trước "gọi vào khám"; mất phản hồi ở "gọi vào khám" → số 003 (tạm), đơn PM-261111-9M9WT1 in từ máy, máy chủ nhận sau 2.1 giây [3.4 giây]
+· chu kỳ 04: ngắt trước "tạo bệnh nhân", bật lại sau khi ký → số 004 (tạm), đơn PM-261111-A1P05E in từ máy, máy chủ nhận sau 0.9 giây [1.9 giây]
+· chu kỳ 05: ngắt trước "gọi vào khám", bật lại trước "khám"; mất phản hồi ở "cấp số" → số 005 (tạm), đơn PM-261111-CF5J96, máy chủ nhận sau 0.0 giây [1.8 giây]
+· chu kỳ 06: ngắt trước "tạo bệnh nhân", bật lại sau khi ký; máy sập lúc in → số 006 (tạm), đơn PM-261111-9N5HW5 in từ máy, máy chủ nhận sau 0.9 giây [2.8 giây]
+· chu kỳ 07: ngắt trước "gọi vào khám", bật lại trước "khám"; mất phản hồi ở "cấp số" → số 007 (tạm), đơn PM-261111-G4JE1Y, máy chủ nhận sau 0.0 giây [1.8 giây]
+· chu kỳ 08: ngắt trước "tạo bệnh nhân", bật lại trước "ký và in"; mất phản hồi ở "ký và in"; tải lại trang sau "khám" → số 008 (tạm), đơn PM-261111-3HBXN7 in từ máy, máy chủ nhận sau 0.0 giây [2.0 giây]
+· chu kỳ 09: ngắt trước "tạo bệnh nhân", bật lại trước "ký và in"; mất phản hồi ở "ký và in" → số 009 (tạm), đơn PM-261111-2CCCBM, máy chủ nhận sau 0.0 giây [2.2 giây]
+· chu kỳ 10: ngắt trước "gọi vào khám", bật lại trước "ký và in"; mất phản hồi ở "cấp số"; tải lại trang sau "khám" → số 010 (tạm), đơn PM-261111-R5EMFQ, máy chủ nhận sau 0.0 giây [2.7 giây]
+· chu kỳ 11: ngắt trước "cấp số", bật lại trước "khám" → số 011 (tạm), đơn PM-261111-TCS9ZX, máy chủ nhận sau 0.0 giây [1.9 giây]
+· chu kỳ 12: ngắt trước "khám", bật lại trước "ký và in"; mất phản hồi ở "tạo bệnh nhân" → số 012 (tạm), đơn PM-261111-T5GRQX, máy chủ nhận sau 0.0 giây [2.1 giây]
+· chu kỳ 13: ngắt trước "gọi vào khám", bật lại trước "khám"; mất phản hồi ở "tạo bệnh nhân" → số 013 (tạm), đơn PM-261111-9M7HZD, máy chủ nhận sau 0.0 giây [1.9 giây]
+· chu kỳ 14: ngắt trước "cấp số", bật lại trước "khám"; tải lại trang sau "cấp số" → số 014 (tạm), đơn PM-261111-KEM232, máy chủ nhận sau 0.0 giây [2.1 giây]
+· chu kỳ 15: ngắt trước "khám", bật lại trước "ký và in"; mất phản hồi ở "ký và in" → số 015, đơn PM-261111-N1Y337 in từ máy, máy chủ nhận sau 0.0 giây [1.9 giây]
+· chu kỳ 16: ngắt trước "cấp số", bật lại trước "khám"; mất phản hồi ở "tạo bệnh nhân"; tải lại trang sau "gọi vào khám" → số 016 (tạm), đơn PM-261111-9SD4W3, máy chủ nhận sau 0.1 giây [2.5 giây]
+· chu kỳ 17: ngắt trước "khám", bật lại trước "ký và in"; mất phản hồi ở "gọi vào khám" → số 017, đơn PM-261111-XPYAJD, máy chủ nhận sau 0.0 giây [3.5 giây]
+· chu kỳ 18: ngắt trước "ký và in", bật lại sau khi ký; mất phản hồi ở "tạo bệnh nhân"; tải lại trang sau "ký và in" → số 018 (tạm), đơn PM-261111-3RHQ1G in từ máy, máy chủ nhận sau 1.0 giây [2.4 giây]
+· chu kỳ 19: ngắt trước "khám", bật lại sau khi ký; mất phản hồi ở "cấp số"; tải lại trang sau "khám"; máy sập lúc in → số 019 (tạm), đơn PM-261111-VT58NV in từ máy, máy chủ nhận sau 1.1 giây [3.8 giây]
+· chu kỳ 20: ngắt trước "tạo bệnh nhân", bật lại trước "ký và in"; mất phản hồi ở "ký và in" → số 020 (tạm), đơn PM-261111-NPPX0K in từ máy, máy chủ nhận sau 0.0 giây [1.7 giây]
+
+Đã chạy trọn 20/20 chu kỳ trong 51 giây. Kiểm cuối bài:
+✓  1. cả 20 chu kỳ chạy hết, và sau mỗi chu kỳ máy chủ có lượt khám hoàn tất trong 100 giây kể từ khi có mạng
+✓  2. không chu kỳ nào bị "Ký & In" báo chưa in được rồi phải bấm lại (OFF-8)
+✓  3. mỗi chu kỳ in đúng một lần (tổng 20/20)
+      máy chủ có/cần: Patient 20/20 · Encounter 20/20 · List 20/20 · Task 20/20 · Provenance 20/20 · ClinicalImpression 20/20 · MedicationRequest 56/56 · Condition 27/27 · Observation 51/51 · AllergyIntolerance 0/0
+✓  4. Patient = Encounter = List = Task = Provenance = ClinicalImpression = 20: mỗi bệnh nhân, lượt khám, đơn, chữ ký, việc gửi cổng và nhận định có đúng một bản ghi
+✓  5. mọi lượt khám ở trạng thái "finished"; bệnh nhân của mỗi chu kỳ có mặt đúng một lần và có đúng một lượt khám
+✓  6. MedicationRequest 56, Condition 27, Observation 51, AllergyIntolerance 0: đúng bằng số đã nhập, ở tổng số và ở từng lượt khám
+✓  7. 20 số thứ tự khác nhau, liền nhau từ 1 đến 20
+✓  8. mỗi mã đơn đã in (20 tờ, trong đó 10 tờ in từ dữ liệu trên máy) có đúng một đơn và một việc gửi cổng trên máy chủ, đúng bệnh nhân; máy chủ không có đơn nào ngoài các tờ đã in
+✓  9. trên máy không còn mục chờ, mục xung đột hay mục cần xử lý: cả 90 mục của hàng đợi đã xong, chỉ báo ghi 0, không có thông báo nào
+✓ 10. đọc thẳng IndexedDB (drafts 0, ids 50, meta 2, ops 90, patients 20, signed 10, snapshots 1) trước mỗi lần bật lại mạng và ở cuối bài: không có tên, số điện thoại, CCCD, triệu chứng, tên thuốc hay mã ICD ở dạng rõ
+✓ 11. hàng rào in (F12): cả 20 lần gọi print() đều không còn yêu cầu IndexedDB nào đang dở
+✓ 12. 20 lần ngắt và khôi phục mạng; mất phản hồi 16 lần (tạo bệnh nhân 4, cấp số 4, gọi vào khám 4, ký và in 4); tải lại trang khi mất mạng 7 lần; máy sập lúc in 3 lần: mọi lỗi đã định đều thật sự xảy ra
+✓ 13. hàng chờ trên máy hiện đúng một dòng cho mỗi lượt khám ở cả 24 lần mở hàng chờ để vào khám (6 lần ở chu kỳ mất phản hồi khi cấp số)
+✓ 14. không có lỗi nào trong console của trình duyệt, kể cả phản hồi lỗi của máy chủ (chỉ trừ lỗi không tới được máy chủ do cố ý ngắt mạng và cắt phản hồi)
+
+Thời gian chạy: 53 giây. Máy chủ nhận lượt khám sau khi có mạng: trung vị 0.0 giây, lâu nhất 2.4 giây.
+
+Đạt 14/14. M0-2 với hạt giống 1393699289: 20 chu kỳ ngắt và khôi phục mạng, 0 bản ghi mất, 0 bản ghi trùng.
+▶ bài 20 chu kỳ: 54.7 giây; cả lần chạy: 76.9 giây
+[exit 0]

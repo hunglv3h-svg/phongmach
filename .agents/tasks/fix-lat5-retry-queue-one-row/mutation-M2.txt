@@ -1,0 +1,260 @@
+### M2 diff
+diff --git a/packages/clinical/src/queue.ts b/packages/clinical/src/queue.ts
+index 975cda4..391001a 100644
+--- a/packages/clinical/src/queue.ts
++++ b/packages/clinical/src/queue.ts
+@@ -90,7 +90,6 @@ export function toQueueItem(e: Encounter, patient: Patient | undefined): QueueIt
+     ...(doctor ? { doctorName: doctor } : {}),
+     ...(doctorUserId ? { doctorUserId } : {}),
+     ...(reason ? { reason } : {}),
+-    ...(clientUuid ? { clientUuid } : {}),
+   };
+ }
+ 
+
+### pnpm --filter @phongmach/clinical test
+$ vitest run
+
+ RUN  v5.0.3 D:/My Documents D/UNIGIS/PM/phongmach/.worktrees/lat5-retry-queue-one-row/packages/clinical
+
+ ❯ test/clinical.test.ts (37 tests | 2 failed) 56ms
+   ❯ hàng chờ (8)
+     × mục hàng chờ mang clientUuid của lần cấp số (viết thường), kể cả khi lượt đã ký: không lấy nhầm định danh của lần hoàn tất 12ms
+   ❯ kế hoạch hoàn tất lượt khám (7)
+     × khám không kê đơn: một bước ghi, không có đơn; đóng lượt khám là lời ghi riêng 6ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/clinical.test.ts > hàng chờ > mục hàng chờ mang clientUuid của lần cấp số (viết thường), kể cả khi lượt đã ký: không lấy nhầm định danh của lần hoàn tất
+AssertionError: expected undefined to be 'abcdef12-3456-4789-8abc-def123456789' // Object.is equality
+
+- Expected:
+"abcdef12-3456-4789-8abc-def123456789"
+
++ Received:
+undefined
+
+ ❯ test/clinical.test.ts:137:53
+    135|   it('mục hàng chờ mang clientUuid của lần cấp số (viết thường), kể cả…
+    136|     const upper = enc(2, { clientUuid: 'ABCDEF12-3456-4789-8ABC-DEF123…
+    137|     expect(toQueueItem(upper, patient)!.clientUuid).toBe('abcdef12-345…
+       |                                                     ^
+    138|     // Lần hoàn tất ghi thêm một định danh cùng hệ, dạng "<uuid của lầ…
+    139|     const signed: Encounter = { ...enc(2), status: 'finished', identif…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  test/clinical.test.ts > kế hoạch hoàn tất lượt khám > khám không kê đơn: một bước ghi, không có đơn; đóng lượt khám là lời ghi riêng
+AssertionError: expected { id: 'e1', number: 1, …(11) } to match object { status: 'done', …(1) }
+(12 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "clientUuid": "11111111-1111-4111-8111-111111111111",
+    "status": "done",
+  }
+
+ ❯ test/clinical.test.ts:270:44
+    268|     expect(wasCompletedBy(p.closed, UUID)).toBe(true);
+    269|     // Lượt đã đóng bằng kế hoạch này vẫn đọc ra đúng clientUuid của l…
+    270|     expect(toQueueItem(p.closed, patient)).toMatchObject({ status: 'do…
+       |                                            ^
+    271|   });
+    272|   it('kê đơn: thuốc ở bước 1, đơn ở bước 2 trỏ tới id thật của thuốc, …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  2 failed | 82 passed (84)
+   Start at  07:59:42
+   Duration  1.24s (import 50%, transform 45%, tests 4%, worker 1%)
+
+[ELIFECYCLE] Test failed. See above for more details.
+Error: ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL
+
+  × "pnpm recursive run" failed in D:\My Documents
+  │ D\UNIGIS\PM\phongmach\.worktrees\lat5-retry-queue-one-
+  │ row\packages\clinical
+
+[exit 1]
+
+### pnpm --filter @phongmach/bff test
+$ vitest run test/unit
+
+ RUN  v5.0.3 D:/My Documents D/UNIGIS/PM/phongmach/.worktrees/lat5-retry-queue-one-row/services/bff
+
+(node:29744) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:15716) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ test/unit/clinical.test.ts (37 tests | 1 failed) 5082ms
+   ❯ hàng chờ (4)
+     × cấp số, gửi lại cùng clientUuid không cấp thêm, và hủy chỉ áp cho lượt đang chờ 53ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/unit/clinical.test.ts > hàng chờ > cấp số, gửi lại cùng clientUuid không cấp thêm, và hủy chỉ áp cho lượt đang chờ
+AssertionError: expected { …(10) } to match object { …(2) }
+(9 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "clientUuid": "66666666-6666-4666-8666-666666666666",
+    "id": "90c24182-47c7-449a-a294-404397ded7cd",
+  }
+
+ ❯ test/unit/clinical.test.ts:99:28
+     97|     expect(queue.day).toBe('2026-10-20');
+     98|     // Mỗi lượt mang clientUuid của lần cấp số, để máy khách nhận ra l…
+     99|     expect(queue.items[0]).toMatchObject({ id: visitId, clientUuid: U(…
+       |                            ^
+    100|     // Nhật ký truy cập không đổi: dòng đọc hàng chờ chỉ có số kết quả…
+    101|     const read = auditEntries(c).filter((e) => e.action === 'queue-rea…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 12 passed (13)
+      Tests  1 failed | 167 passed (168)
+   Start at  07:59:44
+   Duration  12.16s (import 53%, tests 35%, transform 12%)
+
+[ELIFECYCLE] Test failed. See above for more details.
+Error: ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL
+
+  × "pnpm recursive run" failed in D:\My Documents
+  │ D\UNIGIS\PM\phongmach\.worktrees\lat5-retry-queue-one-row\services\bff
+
+[exit 1]
+
+### pnpm --filter @phongmach/clinic-web test
+$ vitest run
+
+ RUN  v5.0.3 D:/My Documents D/UNIGIS/PM/phongmach/.worktrees/lat5-retry-queue-one-row/apps/clinic-web
+
+
+ Test Files  18 passed (18)
+      Tests  262 passed (262)
+   Start at  07:59:58
+   Duration  4.45s (transform 33%, import 25%, environment 23%, tests 18%, worker 1%)
+
+  Transform  transforming modules took 10.25s · 33% of tracked time, re-done on every run
+             persist transforms across runs with fsModuleCache: true
+             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns
+
+[exit 0]
+
+### pnpm --filter @phongmach/bff test:integration
+$ vitest run test/integration --silent=false
+
+ RUN  v5.0.3 D:/My Documents D/UNIGIS/PM/phongmach/.worktrees/lat5-retry-queue-one-row/services/bff
+
+(node:31736) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | test/integration/conflict.test.ts > tái hiện: nhiều lời tạo bệnh nhân cùng lúc > 20 lời cùng lúc làm Medplum trả 409 mã 40001; BFF thử lại nên mọi lời vẫn 201, không thiếu, không trùng
+[xung đột, tạo bệnh nhân] 1 vòng x 20 lời, 14 xung đột thật, lần thử lại xa nhất: 2, mã trả về: {"201":20}
+
+stdout | test/integration/conflict.test.ts > tái hiện: nhiều lượt khám ký cùng lúc > 12 lượt ký cùng lúc: Medplum từ chối vài mục của gói (409 mã 40001) mà vẫn trả HTTP 200; không lượt nào thiếu hay trùng bản ghi
+[xung đột, ký] 1 vòng x 12 lượt, 10 mục 409 thật, lần thử lại xa nhất: 1, mã trả về lần đầu: {"201":12}, số lượt phải gửi lại: 0
+
+ ❯ test/integration/clinical.test.ts (28 tests | 2 failed) 17867ms
+   ❯ hàng chờ trên Medplum thật (4)
+     × cấp số tăng dần; gửi lại cùng clientUuid không cấp thêm; nhiều lễ tân cùng lúc không trùng số 527ms
+   ❯ luồng khám đầy đủ: mở hồ sơ, kê đơn, ký, in, gửi cổng (10)
+     × lượt khám đã đóng: hàng chờ hiện "done"; mở lại không được 36ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/integration/clinical.test.ts > hàng chờ trên Medplum thật > cấp số tăng dần; gửi lại cùng clientUuid không cấp thêm; nhiều lễ tân cùng lúc không trùng số
+AssertionError: expected undefined to be '51eabde7-85a8-4e8b-8490-51914e3d5126' // Object.is equality
+
+- Expected:
+"51eabde7-85a8-4e8b-8490-51914e3d5126"
+
++ Received:
+undefined
+
+ ❯ test/integration/clinical.test.ts:98:42
+     96|     expect(first.json().item.code).toMatch(/^\d{8}-001$/);
+     97|     // Lượt khám trong hàng chờ mang clientUuid của lần cấp số (đọc từ…
+     98|     expect(first.json().item.clientUuid).toBe(uuid);
+       |                                          ^
+     99|     const listed = (await call('GET', '/api/queue', 'a-assistant')).js…
+    100|     expect(listed.find((i) => i.id === first.json().item.id)!.clientUu…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  test/integration/clinical.test.ts > luồng khám đầy đủ: mở hồ sơ, kê đơn, ký, in, gửi cổng > lượt khám đã đóng: hàng chờ hiện "done"; mở lại không được
+AssertionError: expected undefined to be '16bdaaa9-35fa-442d-9c57-4527418b96c6' // Object.is equality
+
+- Expected:
+"16bdaaa9-35fa-442d-9c57-4527418b96c6"
+
++ Received:
+undefined
+
+ ❯ test/integration/clinical.test.ts:208:62
+    206|     // Lượt đã ký có thêm định danh của lần hoàn tất ("<uuid lần ký>:c…
+    207|     // không phải của lần ký.
+    208|     expect(items.find((i) => i.id === visit.id)!.clientUuid).toBe(visi…
+       |                                                              ^
+    209|     expect(visit.checkInUuid).not.toBe(uuid);
+    210|     expect((await call('POST', `/api/visits/${visit.id}/open`, 'a-doct…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  2 failed | 79 passed (81)
+   Start at  08:00:13
+   Duration  27.52s (tests 91%, import 7%, transform 2%)
+
+[ELIFECYCLE] Command failed with exit code 1.
+Error: ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL
+
+  × "pnpm recursive run" failed in D:\My Documents
+  │ D\UNIGIS\PM\phongmach\.worktrees\lat5-retry-queue-one-row\services\bff
+
+exit=1
+
+### E2E_URL=http://127.0.0.1:5183 pnpm --filter @phongmach/clinic-web e2e:offline (BFF restarted on mutated code)
+$ node e2e/offline-sign.mjs
+✓  1. tự thoát "Mất mạng" khi hết mục chờ: cắt /api ở tầng mạng (không sự kiện trình duyệt), bỏ chặn, thăm dò /api/health đưa về "Có mạng" trong ~30s
+✓  2. có mạng: cấp số 42 cho Nguyễn Văn An; máy đã nạp trước hàng chờ và hồ sơ (bộ đệm mã hóa)
+✓  3. mất mạng: tìm "nguyen van an" trong bộ đệm ("Mất mạng: chỉ tìm trong 1 hồ sơ trên máy này"), mở hồ sơ từ máy, vẫn thấy dị ứng Penicillin
+✓  4. mất mạng: tạo "Zq Ngoại Tuyến y27nv" và cấp số 043 (tạm); tìm lại được bằng CCCD trong bộ đệm
+✓  5. hàng chờ và màn hình chờ khi mất mạng: gộp ảnh chụp với lượt cấp trên máy, số có nhãn "tạm"; nút "Hủy" bị khóa (cần mạng)
+✓  6. gọi vào khám khi mất mạng: máy không có dị ứng của người mới nên đòi xác nhận "allergy-unknown"; tiền sử "chưa tải"
+✓  7. ký khi mất mạng: mã PM-261111-NPG6RD sinh ở máy, trang in có nhãn "KÝ KHI MẤT MẠNG", xuất PDF đúng 1 trang A5
+✓  8. đọc thẳng IndexedDB: 6 mục chờ và bộ đệm, không có tên, số điện thoại, CCCD, triệu chứng, thuốc ở dạng rõ
+✓  9. mất mạng: "Gửi đơn qua Zalo" (mô phỏng) vẫn mở bản xem trước từ dữ liệu trên máy, số đã che, không thuốc hay chẩn đoán, 0 yêu cầu mạng; Esc đóng
+✓ 10. có mạng lại: tự đồng bộ hết; máy chủ có đúng 1 bệnh nhân, 1 lượt khám, 1 đơn mã PM-261111-NPG6RD, giữ số 43
+✓ 11. mất phản hồi khi ký (máy chủ đã ghi): in từ máy, gửi lại cùng UUID, máy chủ vẫn chỉ có 1 lượt khám mới, mã PM-261111-XFZVFD trùng
+✓ 12. 503 lúc ký (OFF-8): in một tờ A5 từ máy, không im lặng; tự gửi lại, máy chủ có đúng 1 lượt khám mới, mã PM-261111-281KQ0 trùng
+✓ 13. ba lần in đều gọi print() khi không còn yêu cầu IndexedDB nào đang dở (hàng rào in)
+
+✗ Hỏng ở bước 14 
+ AssertionError [ERR_ASSERTION]: một lượt khám thì một dòng: dòng của máy chủ và lượt tạm trên máy phải là một
+
+2 !== 1
+
+    at file:///D:/My%20Documents%20D/UNIGIS/PM/phongmach/.worktrees/lat5-retry-queue-one-row/apps/clinic-web/e2e/offline-sign.mjs:344:10 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 2,
+  expected: 1,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+[ELIFECYCLE] Command failed with exit code 1.
+Error: ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL
+
+  × "pnpm recursive run" failed in D:\My Documents
+  │ D\UNIGIS\PM\phongmach\.worktrees\lat5-retry-queue-one-row\apps\clinic-web
+
+exit=1

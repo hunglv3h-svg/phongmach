@@ -1,0 +1,91 @@
+# M3 (tạm, đã trả lại): cache.ts adoptedVisits khớp theo patientId (mọi mục hàng chờ là của hôm nay, tức bệnh nhân + ngày) thay cho clientUuid
+# $ pnpm --filter @phongmach/clinic-web exec vitest run
+
+
+ RUN  v5.0.3 D:/My Documents D/UNIGIS/PM/phongmach/.worktrees/lat5-retry-queue-one-row/apps/clinic-web
+
+ ❯ src/local/cache.test.ts (17 tests | 2 failed) 50ms
+   ❯ gộp hàng chờ của máy chủ với thao tác trên máy (11)
+     ❯ máy chủ đã có lượt khám mà mục cấp số trên máy chưa xong (mất phản hồi ở cấp số) (6)
+       × một người hai lượt trong ngày (cùng bệnh nhân, cùng ngày, clientUuid khác): hai lượt khám, hai dòng, không gộp theo bệnh nhân + ngày 22ms
+       × máy chủ bản cũ không trả clientUuid: như trước (hai dòng cho tới khi mục cấp số gửi lại xong), không lỗi 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/local/cache.test.ts > gộp hàng chờ của máy chủ với thao tác trên máy > máy chủ đã có lượt khám mà mục cấp số trên máy chưa xong (mất phản hồi ở cấp số) > một người hai lượt trong ngày (cùng bệnh nhân, cùng ngày, clientUuid khác): hai lượt khám, hai dòng, không gộp theo bệnh nhân + ngày
+AssertionError: expected [ [ 'srv-sang', 1, 'done', { …(2) } ] ] to deeply equal [ …(2) ]
+
+- Expected
++ Received
+
+  [
+    [
+-     "tmp-v3",
+-     3,
+-     "waiting",
+-     {
+-       "pending": true,
+-       "tentative": true,
+-     },
+-   ],
+-   [
+      "srv-sang",
+      1,
+      "done",
+-     undefined,
++     {
++       "pending": true,
++       "renumbered": {
++         "from": 3,
++         "to": 1,
++       },
++     },
+    ],
+  ]
+
+ ❯ src/local/cache.test.ts:137:70
+    135|       const morning = item({ id: 'srv-sang', number: 1, status: 'done'…
+    136|       const merged = mergeQueue([morning], [lost()], new Map(), ME);
+    137|       expect(merged.map((i) => [i.id, i.number, i.status, i.local])).t…
+       |                                                                      ^
+    138|         ['tmp-v3', 3, 'waiting', { tentative: true, pending: true }],
+    139|         ['srv-sang', 1, 'done', undefined],
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/local/cache.test.ts > gộp hàng chờ của máy chủ với thao tác trên máy > máy chủ đã có lượt khám mà mục cấp số trên máy chưa xong (mất phản hồi ở cấp số) > máy chủ bản cũ không trả clientUuid: như trước (hai dòng cho tới khi mục cấp số gửi lại xong), không lỗi
+AssertionError: expected [ 'srv-E' ] to deeply equal [ 'srv-E', 'tmp-v3' ]
+
+- Expected
++ Received
+
+  [
+    "srv-E",
+-   "tmp-v3",
+  ]
+
+ ❯ src/local/cache.test.ts:148:75
+    146|     it('máy chủ bản cũ không trả clientUuid: như trước (hai dòng cho t…
+    147|       const { clientUuid: _, ...old } = E;
+    148|       expect(mergeQueue([old], [lost()], new Map(), ME).map((i) => i.i…
+       |                                                                           ^
+    149|     });
+    150|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 17 passed (18)
+      Tests  2 failed | 260 passed (262)
+   Start at  07:58:43
+   Duration  3.87s (transform 32%, import 26%, environment 22%, tests 19%, worker 1%)
+
+  Transform  transforming modules took 8.72s · 32% of tracked time, re-done on every run
+             persist transforms across runs with fsModuleCache: true
+             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns
+
+Error: ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL
+
+  × "pnpm recursive exec" failed in D:\My Documents
+  │ D\UNIGIS\PM\phongmach\.worktrees\lat5-retry-queue-one-row\apps\clinic-web
+

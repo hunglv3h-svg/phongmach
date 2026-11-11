@@ -1,0 +1,93 @@
+$ pnpm test
+# HEAD bacb88a, 2026-11-11T08:03:02+07:00
+$ pnpm -r --workspace-concurrency=1 test
+Scope: 8 of 9 workspace projects
+$ vitest run
+
+ RUN  v5.0.3 D:/My Documents D/UNIGIS/PM/phongmach/.worktrees/lat5-retry-queue-one-row/packages/fhir-vn-model
+
+
+ Test Files  1 passed (1)
+      Tests  54 passed (54)
+   Start at  08:03:03
+   Duration  523ms (import 54%, transform 36%, tests 8%, worker 2%)
+
+$ vitest run
+
+ RUN  v5.0.3 D:/My Documents D/UNIGIS/PM/phongmach/.worktrees/lat5-retry-queue-one-row/packages/catalogs
+
+
+ Test Files  1 passed (1)
+      Tests  16 passed (16)
+   Start at  08:03:05
+   Duration  642ms (import 54%, transform 39%, tests 5%, worker 2%)
+
+$ vitest run
+
+ RUN  v5.0.3 D:/My Documents D/UNIGIS/PM/phongmach/.worktrees/lat5-retry-queue-one-row/packages/rules
+
+
+ Test Files  1 passed (1)
+      Tests  28 passed (28)
+   Start at  08:03:06
+   Duration  798ms (import 53%, transform 41%, tests 3%, worker 2%)
+
+$ vitest run
+
+ RUN  v5.0.3 D:/My Documents D/UNIGIS/PM/phongmach/.worktrees/lat5-retry-queue-one-row/packages/clinical
+
+
+ Test Files  2 passed (2)
+      Tests  84 passed (84)
+   Start at  08:03:07
+   Duration  831ms (import 51%, transform 44%, tests 5%, worker 1%)
+
+$ vitest run
+
+ RUN  v5.0.3 D:/My Documents D/UNIGIS/PM/phongmach/.worktrees/lat5-retry-queue-one-row/packages/print
+
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  08:03:09
+   Duration  1.16s (import 55%, transform 42%, tests 3%, worker 1%)
+
+$ vitest run
+
+ RUN  v5.0.3 D:/My Documents D/UNIGIS/PM/phongmach/.worktrees/lat5-retry-queue-one-row/packages/trial
+
+
+ Test Files  1 passed (1)
+      Tests  13 passed (13)
+   Start at  08:03:11
+   Duration  1.04s (import 54%, transform 40%, tests 4%, worker 1%)
+
+$ vitest run
+
+ RUN  v5.0.3 D:/My Documents D/UNIGIS/PM/phongmach/.worktrees/lat5-retry-queue-one-row/apps/clinic-web
+
+
+ Test Files  18 passed (18)
+      Tests  262 passed (262)
+   Start at  08:03:12
+   Duration  4.56s (transform 32%, environment 25%, import 24%, tests 18%, worker 1%)
+
+  Transform  transforming modules took 9.16s · 32% of tracked time, re-done on every run
+             persist transforms across runs with fsModuleCache: true
+             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns
+
+$ vitest run test/unit
+
+ RUN  v5.0.3 D:/My Documents D/UNIGIS/PM/phongmach/.worktrees/lat5-retry-queue-one-row/services/bff
+
+(node:21900) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:19092) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  13 passed (13)
+      Tests  168 passed (168)
+   Start at  08:03:18
+   Duration  4.24s (import 46%, tests 29%, transform 24%, worker 1%)
+
+[exit 0]
