@@ -4,9 +4,12 @@
 > Mỗi ô ✅/🟡/🔧/⬜ dưới đây đã được đối chiếu trực tiếp với mã nguồn (tên file/hàm ghi ở cột Ghi chú),
 > không chỉ chép lại từ tài liệu. Bất biến "web không import `@medplum/*`" đã kiểm: 0 import trong `apps/clinic-web/src`.
 >
-> **Bổ sung 04/11/2026 (đối chiếu code tại commit `2bd557f`):** sửa dòng xác thực nhân viên theo PR #26 (T-IDP);
-> thêm các chức năng theo tài liệu quy trình phòng khám v1.1 (QT11): chỉ định, thủ thuật, kho và giá, thu tiền tại quầy,
-> lịch hẹn, sổ khám, doanh thu. Mốc "M1 (đề xuất)" lấy từ `ke-hoach-trien-khai.md` mục 6.4, **chưa chốt** (Q23).
+> Cập nhật 17/10/2026 theo commit `ae1f908`: dòng xác thực nhân viên, OTP qua SMS và hạn mức FHIR đã đối chiếu lại với mã ở
+> commit đó (T-IDP ở PR #26, T-QUOTA ở PR #25). Các dòng khác giữ kết quả xác minh ngày 13/10.
+>
+> **Bổ sung 04/11/2026 (đối chiếu code tại commit `2bd557f`):** thêm các chức năng theo tài liệu quy trình phòng khám v1.1
+> (QT11): chỉ định, thủ thuật, kho và giá, thu tiền tại quầy, lịch hẹn, sổ khám, doanh thu. Mốc "M1 (đề xuất)" lấy từ
+> `ke-hoach-trien-khai.md` mục 6.4, **chưa chốt** (Q23).
 >
 > Cập nhật: 13/10/2026. Bảng này **tổng hợp** trạng thái chức năng của toàn bộ phần mềm,
 > gom từ các chỗ rải rác trong `docs/ke-hoach-trien-khai.md` (mục 5.2, 5.6–5.9, 6, 7, 8),
@@ -133,7 +136,8 @@ GĐ2 = 04–07/2027; GĐ3 = 08–12/2027. Nguồn mốc: `ke-hoach-trien-khai.md
 | Cách ly đa tenant (mỗi phòng khám một Project) | ✅ | M0 | Tenant lấy từ phiên JWT đã ký (`services/bff/src/session.ts`), KHÔNG từ tham số request; 2 phòng khám demo; `infra/medplum/smoke-test`; tiêu chí M0-4 |
 | Nhật ký truy cập (fail-closed, không PII) + màn hình xem | ✅ | M0 | `services/bff/src/audit.ts` (`NdjsonAuditSink`, `h.sync()` trước khi trả; `AuditEntry` không chứa nội dung truy vấn/tên/token); ghi trước khi trả dữ liệu ở `routes/context.ts`; `components/AuditLog.tsx` |
 | Trang "Phạm vi" (đã thật / mô phỏng / chưa làm) | ✅ | M0 | `components/Scope.tsx` (3 nhóm REAL/SIMULATED/MISSING) + `DemoBanner.tsx`; tiêu chí M0-5 |
-| Xác thực nhân viên thật (đăng nhập, MFA) | ✅ | M0 | PR #26 (T-IDP, Phương án B): `services/bff/src/identity/*` (mật khẩu Argon2id ở `crypto.ts`, TOTP ở `totp.ts`), kho phiên SQLite `sessionStore.ts`, `session.ts`. Chọn chế độ bằng `AUTH_MODE` `real`/`demo`, không có mặc định (`config.ts`); chế độ demo tách riêng, có nhãn. **Mô phỏng có nhãn:** OTP qua SMS (`SimulatedSmsOtp`), thiết bị tin cậy. IdP OIDC tách rời: M1 |
+| Xác thực nhân viên thật (đăng nhập, MFA) | ✅ | M0 | T-IDP, PR #26 (Phương án B: IdP tối giản nhúng trong BFF). `AUTH_MODE=real` hoặc `demo`, không có mặc định (`services/bff/src/config.ts`). Mật khẩu Argon2id (`identity/crypto.ts`), TOTP bắt buộc cho chủ phòng khám và bác sĩ (`identity/totp.ts`, `MFA_REQUIRED_ROLES`), kho phiên và refresh xoay-một-lần trên SQLite (`sessionStore.ts` `SqliteSessionStore`); màn `components/Login.tsx`. Chế độ `demo` (chọn người dùng, không mật khẩu, chỉ localhost) giữ cho dev, e2e và buổi thử. IdP OIDC tách rời: M1 |
+| OTP qua SMS, thiết bị tin cậy | 🟡 | M0 → M1 | `identity/connectors.ts` `SimulatedSmsOtp`: không gửi gì ra ngoài. Thiết bị tin cậy cũng mô phỏng có nhãn (README, mục "Giới hạn"). TOTP là MFA thật |
 | Nhật ký bất biến ngoài Medplum | ⬜ | M1 (S5) | M0 ghi file cục bộ; T-AUD |
 | Đồng ý điện tử đầy đủ, xuất/xóa theo yêu cầu, DPIA | ⬜ | M1 | T-CONSENT, T-OFFB, T-LEGAL |
 | Mã hóa cấp trường (CCCD, chỉ số mù) | ⬜ | M1 | T-ENC |
@@ -148,7 +152,7 @@ GĐ2 = 04–07/2027; GĐ3 = 08–12/2027. Nguồn mốc: `ke-hoach-trien-khai.md
 | Ghi nhiều bản ghi chạy lại được (idempotent, chốt cuối) + chịu xung đột giao dịch | ✅ | M0 | `medplum.ts` `completeVisit`/`writeAll` (kiểm `failedEntries` từng mục dù HTTP 200, chốt đóng lượt khám cuối cùng — F11); `conflict.ts` `retryOnConflict` cho 40001 (`05af7cb`) |
 | Cấp phòng khám tự động (Project/Client/AccessPolicy) | 🔧 | M0 (tối thiểu) → M1 | `services/bff/src/tenants.ts`; M0 đủ cho 2 demo; đầy đủ ở T-TEN |
 | Hạ tầng dạng mã (dựng lại < 1 giờ) | 🔧 | M0 (staging) → M1 | T-IAC |
-| Hạn mức FHIR theo project (nâng cho nhập liệu) | ⬜ | M1 | T-QUOTA (cần trước T6 100 chu kỳ) |
+| Hạn mức FHIR theo project (nâng cho nhập liệu) | 🔧 | M0 (phần T6) → M1 | T-QUOTA, PR #25: phòng khám thử của `e2e:cycles` và buổi thử đặt `userFhirQuota` và `totalFhirQuota` = 1.000.000 điểm/phút (`services/bff/scripts/e2e-clinic.ts`, `scripts/trial/clinic.ts`); T6 100 chu kỳ chạy xanh, 0 kết quả 429. Còn lại M1: tài khoản nhập dữ liệu hạn mức cao, proxy chuyển IP thật cho hạn mức đăng nhập |
 | Chạy nhiều bản Medplum (HA) | ⬜ | GĐ2 | T-HA |
 | Sao lưu liên tục + vùng dự phòng (PITR, DR) | ⬜ | GĐ2 | T-DR (RPO 15 phút, RTO 1 giờ) |
 | Quan sát (OpenTelemetry, cảnh báo) | ⬜ | M1 | T-OBS (đã có móc) |
@@ -169,7 +173,7 @@ GĐ2 = 04–07/2027; GĐ3 = 08–12/2027. Nguồn mốc: `ke-hoach-trien-khai.md
 - **M0 (demo nhà đầu tư):** luồng lõi tiếp đón → hàng chờ → khám → kê đơn → in A5/QR → liên thông,
   cộng ngoại tuyến từng máy và cách ly tenant, **đã chạy thật**. Ba thứ còn **mô phỏng có nhãn**:
   ký số, cổng đơn thuốc quốc gia, Zalo.
-- **Xác thực nhân viên thật** (mật khẩu + TOTP) đã xong ở M0 (PR #26).
+- **Xác thực nhân viên thật** (mật khẩu + TOTP) đã có từ PR #26; OTP qua SMS và thiết bị tin cậy còn mô phỏng.
 - **Còn phải làm để thành sản phẩm thật (M1 trở đi):** nối thật cổng đơn thuốc + ký số + Zalo + thanh
   toán, ngoại tuyến đầy đủ (chờ ký, hai máy thấy nhau), bệnh án điện tử đầy đủ, hóa đơn điện tử, HA/DR.
 - **Theo quy trình phòng khám v1.1 (đề xuất đưa vào M1, chờ chốt):** chỉ định và thủ thuật, kho và giá,
