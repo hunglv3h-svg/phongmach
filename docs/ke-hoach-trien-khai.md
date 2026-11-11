@@ -1,6 +1,6 @@
 # Kế hoạch triển khai chi tiết — PHONGMACH
 
-Cập nhật 04/10/2026 (lần 8: sửa tính đúng của tìm kiếm, M0-3 đạt, mục 2; lần 7: chuẩn bị phiên thử với bác sĩ, mục 5.9; lần 6: đo M0-3 qua BFF, mục 2). Dựa trên ba nguồn:
+Cập nhật 17/10/2026 (lần 9: trạng thái sau PR #16 đến #26, mục 5.9, đoạn "Từ 04/10 đến 17/10/2026"; lần 8: sửa tính đúng của tìm kiếm, M0-3 đạt, mục 2; lần 7: chuẩn bị phiên thử với bác sĩ, mục 5.9; lần 6: đo M0-3 qua BFF, mục 2). Dựa trên ba nguồn:
 
 1. Báo cáo "Quản lý Phòng mạch Việt Nam" v2.0 (29/09/2026), viết cho nhà đầu tư.
 2. Tài liệu nội bộ "Phân tích – Kế hoạch triển khai SaaS Quản lý Phòng mạch" v1.0 (29/09/2026, 34 trang), viết tắt **TL34**.
@@ -9,6 +9,7 @@ Cập nhật 04/10/2026 (lần 8: sửa tính đúng của tìm kiếm, M0-3 đ�
 **Quyết định của chủ dự án (02/10/2026):** làm sớm và cắt phạm vi; nhiệm vụ là ra MVP nhanh để nhà đầu tư được thuyết phục hơn.
 Hệ quả: mục 5 và 6 được viết lại quanh hai cột mốc MVP, **M0 (13/11/2026, trình nhà đầu tư)** và **M1 (31/03/2027, pilot)**.
 Đội có sẵn từ 05/10 (xác nhận 02/10). **M0-S1, M0-S2, phần ngoại tuyến của M0-S3 và nút Zalo mô phỏng đã làm xong trước lịch**; trạng thái ở mục 5.6, 5.7 và 5.9. Phiên thử với bác sĩ (M0-1) đã chuẩn bị xong, **chưa đo** (mục 5.9, đoạn "M0-THU").
+Tính đến 17/10/2026: chức năng M0 đã đủ; xác thực nhân viên thật (T-IDP), T6 100 chu kỳ, sửa OFF-8 và tự thoát "Mất mạng" đã vào `main`, CI xanh. Còn hai lỗi đã biết của hàng đợi đồng bộ có bản sửa nằm ngoài `main`, M0-1 chưa đo, M0-6 đang treo (mục 5.9, đoạn "Từ 04/10 đến 17/10/2026").
 
 Quy ước độ tin cậy:
 
@@ -885,7 +886,7 @@ Lát 4 tách làm hai commit. **Lát 4-1 xong** (hàm thuần, chỉ báo, danh 
 - **Đi khác thiết kế, hoặc chi tiết thêm:**
   1. Tên tệp là `offline-cycles.mjs` và script là `e2e:cycles`, không phải `offline.mjs` (script `e2e:offline` đang trỏ tới `offline-sign.mjs`).
   2. Thêm kiểu lỗi thứ ba ngoài hai kiểu thiết kế nêu: máy sập đúng lúc in. Không có nó thì đột biến "in trước khi lưu bền" không làm lệch số đếm nào, vì bản ghi vẫn được lưu ngay sau khi in. Cách làm: mỗi lần `print()` gửi một yêu cầu đồng bộ tới bài kiểm thử kèm nguyên văn trang in; bài đóng trang trong lúc trang còn đứng yên bên trong `print()`, mở trang mới và đăng nhập lại (phiên mất theo tab, kho trên máy còn).
-  3. Hạn mức FHIR của phòng khám thử được nâng qua `Project.systemSetting`. Lúc làm lát 6 chỉ đặt `userFhirQuota = 500.000`; T-QUOTA (04/2026, cho T6) nâng đặt **cả `userFhirQuota` lẫn `totalFhirQuota` = 1.000.000 điểm/phút** vì phòng khám thử chỉ có một tài khoản máy nên trần tổng-project mặc định (500.000) là nút thắt. Lý do ở phát hiện 1 bên dưới.
+  3. Hạn mức FHIR của phòng khám thử được nâng qua `Project.systemSetting`. Lúc làm lát 6 chỉ đặt `userFhirQuota = 500.000`; T-QUOTA (10/2026, cho T6) nâng đặt **cả `userFhirQuota` lẫn `totalFhirQuota` = 1.000.000 điểm/phút** vì phòng khám thử chỉ có một tài khoản máy nên trần tổng-project mặc định (500.000) là nút thắt. Lý do ở phát hiện 1 bên dưới.
   4. Thiết kế ghi "chờ danh sách chờ đồng bộ về 0"; bài chờ theo máy chủ (có lượt khám `finished` của bệnh nhân vừa khám), tối đa 100 giây vì bộ máy đồng bộ chờ gửi lại tới 60 giây và chạy định kỳ 30 giây.
   5. Sau một chu kỳ hỏng giữa chừng, bài dựng lại máy (có mạng, trang mới, đăng nhập lại) và chạy tiếp, rồi vẫn đếm.
   6. Khi "Ký & In" báo chưa ký được mà không in (phát hiện 3), bài bấm lại như bác sĩ sẽ làm và ghi số lần ở cuối bài. Khi hàng chờ hiện hai dòng cho cùng một lượt khám (phát hiện 5), bài bấm "Tiếp tục khám" nếu có, không thì "Gọi vào khám", và ghi lại chu kỳ đó ở cuối bài. Cả hai không làm bài đỏ: tiêu chí M0-2 tính trên bản ghi của máy chủ.
@@ -915,7 +916,9 @@ Lát 4 tách làm hai commit. **Lát 4-1 xong** (hàm thuần, chỉ báo, danh 
 - `README.md` (dòng hiện trạng, bảng cấu trúc, đoạn ngắt mạng trên một máy trong kịch bản, mục "Giới hạn"), chú thích ở `vite.config.ts`, `styles.css`, `OfflineSignResult.tsx`, mô tả gói `clinic-web`, và các mục 2, 5.2, 5.3, 5.7 của kế hoạch.
 - **Phát hiện khi rà, chưa sửa (ngoài phạm vi lát này):** bản sửa phát hiện 2 của lát 5 (commit `376bd97`, PR #7) được merge vào nhánh của lát 5 **sau** khi nhánh đó đã vào `main`, nên `main` chưa có bản sửa này [Đã đo: `git log origin/main..origin/claude/m0-s3-5-network-cycles-098118` còn 3 commit]. PR #9 (sửa phát hiện 5) còn là bản nháp và đang lấy nhánh của lát 5 làm gốc.
 
-#### Thiết kế OFF-8: "Ký & In" lúc có mạng mà máy chủ chưa nhận ngay [Chờ duyệt] (03/10/2026)
+#### Thiết kế OFF-8: "Ký & In" lúc có mạng mà máy chủ chưa nhận ngay [Đã sửa mã, PR #17] (03/10/2026)
+
+**Cập nhật 12/10/2026:** đã sửa mã sản phẩm theo phương án A + C1 + A-1 (commit `d589343` và `c5940ba`, vào `main` qua PR #17); commit ghi thiết kế đã được duyệt. Phần dưới giữ nguyên như lúc viết (03/10/2026), làm hồ sơ thiết kế.
 
 Thiết kế cho phát hiện 3 của lát 5. **Chưa sửa mã sản phẩm, chưa sửa BFF**: mới có kiểm thử tái hiện và bản thiết kế này. Chờ chủ dự án duyệt hướng làm và trả lời bốn câu hỏi ở cuối mục.
 
@@ -1063,7 +1066,7 @@ Cách sửa tận gốc nằm ở BFF: gói hoàn tất đọc lại giờ ký v
 
 Các điểm mặc định đã nêu và được duyệt cùng thiết kế: số tạm được ưu tiên giữ (OFF-2); giờ không hợp lý thì vẫn lưu, chỉ không tính số đo (OFF-3); đơn ngoại tuyến bị quy tắc chặn khi đồng bộ thì chờ bác sĩ xác nhận (OFF-7); đăng xuất khi còn mục chờ thì giữ dữ liệu đã mã hóa thay vì xóa (OFF-6).
 
-### 5.9 Trạng thái M0-S3 (cập nhật 04/10/2026)
+### 5.9 Trạng thái M0-S3 (cập nhật 17/10/2026)
 
 M0-S3 (02–13/11) được làm trước lịch, ngay sau M0-S2. Phần ngoại tuyến xong qua sáu lát: lát 1–3b (PR #2), lát 4 (PR #4), lát 5 (PR #6), lát 6 (nhãn và tài liệu). Các việc còn lại của M0-S3 theo mục 5.5 cần người thật hoặc chưa làm; bảng dưới gồm cả hai. Thiết kế (N1–N5, OFF-1 đến OFF-7) và chi tiết từng lát nằm ở mục 5.8, không chép lại ở đây. Mọi con số chỉ nói về một máy dev và runner CI, dữ liệu giả, Chromium không giao diện: **chưa có bác sĩ thật dùng thử, chưa thử trên máy tính bảng hay trình duyệt khác**.
 
@@ -1077,15 +1080,29 @@ M0-S3 (02–13/11) được làm trước lịch, ngay sau M0-S2. Phần ngoại
 | Hàng đợi đồng bộ, phiên hết hạn (N1–N3, OFF-6) | Xong | Lưu bền rồi mới gửi, rồi mới in; một thao tác một `clientUuid`; gửi theo phụ thuộc, chờ lũy thừa 2 có trần 60 giây; một tab gửi (Web Locks). 401 thì tạm dừng, không xóa mục nào; đăng xuất khi còn mục chờ thì giữ kho đã mã hóa; không có nút xóa hay hủy mục chưa đồng bộ |
 | Quyền và mục bị từ chối khi đồng bộ (OFF-7) | Xong phần **phát hiện và báo**; giải quyết xung đột ngoài M0 | 409: giữ bản khám trên máy, in lại được, không gửi lại, không ghi đè. 422 quy tắc: bác sĩ ghi lý do rồi gửi lại cùng `clientUuid`. Lỗi khác: hiện nguyên thông điệp. Bài e2e hai máy `offline-conflict.mjs` (12 bước) |
 | Chỉ báo mạng, danh sách "Chờ đồng bộ", thông báo | Xong | `SyncBar`, `SyncPanel`: "Có mạng" hoặc "Mất mạng", số mục chờ ("đang đếm" trước lần đếm đầu), huy hiệu "N cần xử lý" không tắt được, thông báo có họ tên không hiện ở màn hình chờ |
-| Bài 20 chu kỳ ngắt và khôi phục mạng (M0-2) | **Đạt** | Xem "Kết quả M0-2" bên dưới |
+| Bài 20 chu kỳ ngắt và khôi phục mạng (M0-2) | **Đạt** (13 bước kiểm) | Xem "Kết quả M0-2" bên dưới. Ngày 12/10 CI của `main` đỏ 2 trong 3 lần (ba lỗi tiềm ẩn, sửa ở PR #20); từ khi PR #20 vào `main` (13/10), 7 lần chạy CI liên tiếp trên `main` đều xanh, mỗi lần một hạt giống ngẫu nhiên [Đã đo, đọc kết quả CI]. Điều kiện "đạt bền vững" ở "Kết quả M0-2" (ba hạt giống bắt buộc trên cả Linux lẫn Windows): chưa thấy ghi lần chạy CI Linux nào với ba hạt giống đó |
 | Nhãn và tài liệu sau ngoại tuyến (M0-5) | Xong | Trang "Phạm vi" và dải nhãn nói đúng hiện trạng theo cả hai chiều; `e2e:visit` bước 22 (bước 23 từ M0-ZALO) kiểm từng khối, 6 đột biến đều đỏ ở đúng bước đó (mục 5.8, "Lát 6 xong") |
 | Màn hình nhật ký truy cập cho quản trị | Xong từ M0-S1 | Mục 5.6 |
 | Đo M0-3: tìm bệnh nhân qua BFF trên 20.000 bệnh nhân | **Đạt** (04/10/2026, sau khi sửa tính đúng) | p95 tuần tự 19–31 ms cho 4 số cuối và tên không dấu (ngưỡng 200 ms). Người cần tìm có mặt mỗi khi không quá 20 người khớp: 4 số cuối 200/200 (ca khó 50/50), tên hai từ 116/116 và 121/121, đủ họ tên 194/194 và 189/189. Lần đo đầu ngày 03/10 chưa đạt tính đúng. Cách sửa, kiểm thử và phần còn lại ở mục 2 ("Sau khi sửa") |
 | Zalo mô phỏng (nút, bản xem trước tin nhắn) | Xong (M0-ZALO, PR #11) | Nút có huy hiệu MÔ PHỎNG ở màn hình kết quả ký, cả khi có mạng lẫn khi ký lúc mất mạng; hộp thoại ghi "MÔ PHỎNG: không có tin nhắn nào được gửi". Tin không có thuốc hay chẩn đoán, số nhận đã che; bài e2e ghi mọi yêu cầu mạng từ lúc bấm tới lúc đóng. Trang "Phạm vi" và dải nhãn đưa Zalo trở lại "Mô phỏng". Xem đoạn "M0-ZALO" bên dưới |
 | Phiên thử với 3 bác sĩ (M0-1) | **Đã sẵn sàng đo, chưa đo**: cần người thật | Phòng khám thử riêng, bộ ca, lệnh xếp hàng chờ và xuất số đo, tài liệu điều phối; diễn tập kỹ thuật đạt (đoạn "M0-THU" bên dưới). Chưa có con số M0-1 nào |
-| Kịch bản 10 phút, bản dự phòng, diễn tập hai lần (M0-6) | **Chưa** | `README.md` có các bước đi qua bằng tay, gồm đoạn ngắt mạng trên một máy; chưa có bài diễn tập tự động, video hay máy dự phòng |
-| T6 đầy đủ (100 chu kỳ, đồng bộ 40 ca trong 60 giây) | ✅ **Đã chạy xanh (13/11/2026)** | T-QUOTA đã nâng hạn mức phòng khám thử (cả `userFhirQuota` lẫn `totalFhirQuota` = 1.000.000 điểm/phút), gỡ trần `totalFhirQuota` mặc định (500.000) vốn là nút thắt. Chạy thật `E2E_CYCLES=100 pnpm e2e:cycles` trên stack Medplum thật (Windows + Git Bash): **100/100 chu kỳ, 13/13 kiểm cuối bài đạt, 0 bản ghi mất, 0 trùng, 0 kết quả 429** (hạt giống 3495038889, 243 giây; máy chủ nhận lượt khám sau khi có mạng: trung vị 0.0s, lâu nhất 2.3s — dư xa ngưỡng 60s). Mức 80 chu kỳ cũng đã chạy xanh 13/13 (hạt giống 1217833390/1905334753). Bằng chứng: `.agents/tasks/tquota-fhir-quota/verification.md` |
+| Kịch bản 10 phút, bản dự phòng, diễn tập hai lần (M0-6) | **Treo lại** theo quyết định chủ dự án (`docs/prompts/README.md`) | Trên `main`: `README.md` có các bước đi qua bằng tay, gồm đoạn ngắt mạng trên một máy; chưa có bài diễn tập tự động, video hay máy dự phòng. Phần mã đã viết (kịch bản 10 phút, `pnpm demo:rehearsal`, nhãn cho số "Thời gian khám") nằm ở nhánh cục bộ `feat/m0-6-demo-rehearsal` (12/10/2026), chưa đẩy, tách ra trước PR #16 |
+| T6 đầy đủ (100 chu kỳ, đồng bộ 40 ca trong 60 giây) | ✅ **Đã chạy xanh (13/10/2026)**; vế "40 ca trong 60 giây" chưa đo đúng nghĩa (xem cuối dòng) | T-QUOTA đã nâng hạn mức phòng khám thử (cả `userFhirQuota` lẫn `totalFhirQuota` = 1.000.000 điểm/phút), gỡ trần `totalFhirQuota` mặc định (500.000) vốn là nút thắt. Chạy thật `E2E_CYCLES=100 pnpm e2e:cycles` trên stack Medplum thật (Windows + Git Bash): **100/100 chu kỳ, 13/13 kiểm cuối bài đạt, 0 bản ghi mất, 0 trùng, 0 kết quả 429** (hạt giống 3495038889, 243 giây; máy chủ nhận lượt khám sau khi có mạng: trung vị 0.0s, lâu nhất 2.3s — dư xa ngưỡng 60s). Mức 80 chu kỳ cũng đã chạy xanh 13/13 (hạt giống 1217833390/1905334753). Bằng chứng: `.agents/tasks/tquota-fhir-quota/verification.md`. **Giới hạn [Phân tích, 17/10/2026]:** mỗi chu kỳ chỉ có một lượt khám chờ đồng bộ, nên số "lâu nhất 2,3 giây" là thời gian của một lượt; chưa có lần nào 40 lượt dồn lại lúc mất mạng rồi đồng bộ cùng lúc khi có mạng, là điều vế thứ hai của T6 hỏi |
 | Nhiều lời ghi tới cùng lúc (xung đột giao dịch của Medplum, F13) | Xong (PR #14) | Tạo bệnh nhân, cấp số, dị ứng, tiền sử: BFF thử lại có giới hạn, hết lượt trả 503 `busy`. Hoàn tất lượt khám ghi theo bước, đóng lượt khám sau cùng: 3, 5, 12 lượt ký cùng lúc từ 5/24, 12/25, 20/24 lượt thiếu bản ghi xuống 0. Xem đoạn "Ghi cùng lúc" bên dưới |
+| "Ký & In" lúc có mạng mà máy chủ chưa nhận ngay (OFF-8) | Xong (PR #17, 12/10/2026) | Mục hoàn tất chưa dứt điểm được in từ dữ liệu trên máy, hoặc báo rõ "CHƯA in"; `e2e:offline` và `e2e:conflict` có ca 503 và 401 đúng lúc ký. Thiết kế ở mục 5.8 |
+| Tự thoát chế độ "Mất mạng" khi máy chủ hồi (phát hiện 4 của lát 5) | Xong (PR #22, 13/10/2026) | Khi ứng dụng coi là mất mạng, nó thăm dò `GET /api/health` khoảng 12 giây một lần, cả khi hàng đợi rỗng; nút "Thử kết nối lại" luôn bấm được. Điều tra: `.agents/tasks/dieu-tra-che-do-mat-mang.md` |
+| Xử lý tay mục "cần xử lý" (409, lỗi dữ liệu) | Xong (PR #25, 14/10/2026) | "Đánh dấu đã xử lý" có xác nhận hai bước: mục rời danh sách, không gửi gì lên máy chủ, không ghi đè (N3). Hợp nhất tự động vẫn là GĐ2 (giới hạn (c)) |
+| Bản demo Docker, giao diện v0.2, dữ liệu demo dày | Xong (PR #17, #16, #19, 12/10/2026) | `infra/demo/docker-compose.yml` (cổng 8081, tái dùng Medplum đang chạy); giao diện v0.2 trên các màn M0; seed 300 bệnh nhân mỗi phòng khám và hàng chờ của hôm nay. Chưa thử trên máy tính bảng |
+
+**Từ 04/10 đến 17/10/2026.** Kiểm ngày 17/10/2026, `origin/main` = `ae1f908`. Chi tiết từng việc nằm ở PR và ở `.agents/tasks/`; đoạn này chỉ ghi trạng thái.
+
+- **Đã vào `main`:** PR #16 (giao diện v0.2), #17 (OFF-8, tìm kiếm P2, bản demo Docker), #19 (dữ liệu demo dày), #20 (ba lỗi tiềm ẩn làm đỏ bài 20 chu kỳ, xem "Kết quả M0-2"), #22 (tự thoát "Mất mạng"), #25 (xử lý tay mục "cần xử lý", T-QUOTA và T6 100 chu kỳ, báo cáo rà soát giao diện), #26 (T-IDP, mục 5.7), cùng commit `ac109ae` (bộ quét đối soát đơn đã ký thiếu việc gửi cổng, A2/F11) và #21, #24 (tài liệu, bảng `trang-thai-chuc-nang.md`).
+- **CI của `main` ở `ae1f908` [Đã đo, đọc log]:** kiểu, đơn vị và build đạt; 600 kiểm thử đơn vị = 54 (mô hình) + 16 (danh mục) + 28 (quy tắc) + 83 (clinical) + 4 (in) + 13 (trial) + 234 (web) + 168 (BFF); 81 kiểm thử tích hợp; e2e 13 + 26 + 16 + 14 bước; bài 20 chu kỳ 13/13 (hạt giống 1574043129). Gói JS của bản build 531,3 KB (nén 169,8 KB).
+- **Còn trên `main`:** hai lỗi của lát 5 (giới hạn (a) dưới đây). Bản sửa của chúng (commit `376bd97` của PR #7; bốn commit của PR #9) được merge vào nhánh `claude/m0-s3-5-network-cycles-098118` sau khi nhánh đó đã vào `main` (bài học 8), nên chưa có trên `main` [Đã đo bằng git, 17/10/2026]. Từ đó `sync.ts`, `cache.ts`, `client.ts` đã đổi nhiều (OFF-8, PR #20, #22, #25), nên phải làm lại trên `main` chứ không cherry-pick nguyên.
+- **Chưa làm ở gốc:** dòng hàng chờ bị dựng lại liên tục (nguyên nhân C của PR #20) mới chữa ở bài kiểm thử, chưa chữa ở `Queue.tsx`.
+- **M0-1:** chưa đo; Q15 đến Q18 (đoạn "M0-THU") chưa có câu trả lời nào ghi trong kho; bộ ca và danh mục chưa có cố vấn y khoa duyệt.
+- **M0-6:** treo lại theo quyết định chủ dự án; phần mã đã viết ở nhánh cục bộ chưa đẩy (dòng M0-6 trong bảng).
+- **Việc kế tiếp đề xuất [Đề xuất]:** đưa hai bản sửa của lát 5 về `main` (prompt ở `docs/prompts/README.md`, mục "Còn phải chạy"), vì đây là hai lỗi cuối cùng đã biết trên `main` và lỗi hàng chờ hai dòng có thể gặp trên sân khấu.
 
 **M0-ZALO (03/10/2026, PR #11).** Thiết kế được chủ dự án duyệt cùng ngày, gồm ba điểm chốt: e2e lọc đúng các yêu cầu nền của màn hình thay vì đổi ứng dụng cho dễ kiểm; che số còn 3 số đầu và 3 số cuối; thêm một bước vào `offline-sign.mjs`.
 
@@ -1165,7 +1182,7 @@ Bài học từ M0-S3:
 
 Giới hạn đã biết, cần quyết định. Mục (a) nên quyết trước buổi trình diễn 13/11; còn lại cho M1:
 
-- (a) **Bốn lỗi đã biết của lát 5 còn trên `main`**, không lỗi nào làm mất hay trùng bản ghi trên máy chủ: mục "thử lại" có thể nằm chờ thêm tới 30 giây (đã có bản sửa ở PR #7, chưa vào `main`); "Ký & In" lúc có mạng mà máy chủ chưa nhận ngay có lúc không in đơn (thiết kế OFF-8 chờ duyệt, bốn câu hỏi ở cuối mục đó); chế độ "Mất mạng" không tự thoát khi không còn mục chờ; hàng chờ có lúc hiện hai dòng cho một lượt khám (PR #9, bản nháp). Lỗi thứ hai và thứ tư có thể gặp ngay trên sân khấu [Phân tích].
+- (a) **Lỗi đã biết còn trên `main` (cập nhật 17/10/2026)**, không lỗi nào làm mất hay trùng bản ghi trên máy chủ. Trong bốn lỗi của lát 5, "Ký & In" không in đơn (OFF-8) đã sửa ở PR #17 và chế độ "Mất mạng" không tự thoát đã sửa ở PR #22. Còn hai: mục "thử lại" có thể nằm chờ thêm tới 30 giây (bản sửa ở PR #7) và hàng chờ có lúc hiện hai dòng cho một lượt khám (bản sửa ở PR #9); hai PR đó merge vào nhánh lát 5 nên bản sửa chưa có trên `main`. Lỗi hàng chờ hai dòng có thể gặp ngay trên sân khấu [Phân tích].
 - (b) **Hai máy không thấy nhau khi phòng khám mất Internet (N5).** Cần một trạm đồng bộ trong mạng LAN: T-OFF-3, Giai đoạn 2. Tới lúc đó phải nói rõ trong tài liệu bán hàng.
 - (c) **Mục bị từ chối không có đường ra.** Xung đột 409 chỉ được phát hiện và báo. Đơn 422 có lỗi chặn (`blocking`) không có ô lý do và không có nút gửi lại: chỉ còn liên hệ bệnh nhân và kê lại. Không có nút xóa hay hủy, nên các mục này nằm lại trong danh sách, huy hiệu "cần xử lý" không về 0, và mỗi lần in lại thêm một mục. M1 cần quy trình giải quyết (gộp, tách thành lượt khám riêng, hủy có ghi nhận) và người có quyền làm việc đó.
 - (d) **"Đã in đơn rồi mới thấy cảnh báo".** Đơn ký khi mất mạng bị quy tắc của máy chủ bắt lại lúc đồng bộ (ví dụ dị ứng vừa được ghi ở máy khác) khi bệnh nhân đã cầm đơn. Hiện bác sĩ ghi lý do rồi gửi lại, màn hình nhắc liên hệ bệnh nhân. Cần cố vấn y khoa duyệt cách xử lý trước M1.
@@ -1262,7 +1279,7 @@ Mục "Mới" là việc phát sinh từ thử nghiệm hoặc từ quyết đ�
 | T-NAME | Tìm tên không dấu | Hai hướng ở A7; gồm xếp hạng kết quả theo 4 số cuối. Sau đo M0-3 (mục 2): đã có khóa chính xác cho 4 số cuối và cho từng từ của tên, người khớp đúng xếp trước (04/10). Còn: báo khi còn người trùng tên, gõ lẫn tên và số, ghi bổ sung khóa cho hồ sơ cũ khi triển khai | M | M0, 1 | |
 | T-FHIR | Hồ sơ FHIR và định danh | `StructureDefinition` cho CCCD, mã đơn, ICD-10; định danh chuẩn thay URN tạm | M | 1 | |
 | T-IDEM | Ghi lặp lại được | A1: identifier + `If-None-Exist`, kiểm thử gửi lại. Từ PR #14: không dùng `urn:uuid:` giữa các mục của một gói; ghi theo bước, trỏ id thật; thử lại khi Medplum báo xung đột giao dịch (F11, F13) | M | M0, 1 | ✓ |
-| T-OUTBOX | Gửi cổng không mất đơn | A2: outbox ý định, đối soát, gửi idempotent theo mã đơn; gộp với T-RX khi thiết kế | L | 1 | ✓ |
+| T-OUTBOX | Gửi cổng không mất đơn | A2: outbox ý định, đối soát, gửi idempotent theo mã đơn; gộp với T-RX khi thiết kế. ✅ **M0: bộ quét đối soát** đơn đã ký thiếu việc gửi cổng (`reconcilePrescriptions`, nút "Quét đối soát", commit `ac109ae`) | L | 1 | ✓ |
 | T-ENC | Mã hóa cấp trường | A6: trường nào, khóa theo tenant (KMS/Vault), chỉ số mù cho CCCD | L | 0 (spike), 1 | ✓ |
 | T-OFFB | Rời tenant | A4: export tự viết, lưu nhật ký ngoài, xóa Binary + file, `$expunge`, quyền | M | 0 (spike), 1 | ✓ |
 | T-MIG | Công cụ chuyển dữ liệu | Excel và phần mềm cũ; kiểm tra từng phần tử `batch`, tự giảm tốc theo hạn mức, chạy lại được, báo cáo từng dòng | L | 1 | |
