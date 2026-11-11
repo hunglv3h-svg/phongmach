@@ -1149,7 +1149,7 @@ Kiểm thử đã chạy [Đã đo, 03/10/2026, mã của lát 6; máy dev Windo
 - CI: lần chạy đầu đỏ ở chu kỳ 02 do chính bài kiểm thử (bộ định vị gặp hai nút, phát hiện 5 của lát 5), 19 chu kỳ còn lại vẫn đúng số bản ghi; đã sửa bài. Ba lần chạy đã đọc log sau đó đều 11/11: hạt giống 1428297068 (nhánh lát 5), 1300616032 và 578461091 (`main`).
 - Bài chỉ có nghĩa vì đã thấy nó đỏ: sinh `clientUuid` mới khi gửi lại cho Patient 24/20; bỏ mục khi gặp lỗi mạng cho Encounter 13/20 và List 5/20; in trước khi lưu bền cho List 17/20.
 - Thời gian: bài 20 chu kỳ 44–60 giây trên máy dev, thêm khoảng 1 phút cho job e2e của CI. Máy chủ nhận lượt khám sau khi có mạng lại: trung vị 0,3–1,5 giây, lâu nhất 4,3 giây.
-- **M0-2 không đo điều gì:** tiêu chí tính trên bản ghi của máy chủ, nên hai lỗi phía người dùng đi qua mà bài vẫn xanh: "Ký & In" có lúc không in (phát hiện 3) và hàng chờ có lúc hiện hai dòng cho một lượt khám (phát hiện 5). Bài tự bấm lại và ghi số lần ở cuối. Bài cũng chỉ chạy một máy, một người dùng: vì vậy nó không thể thấy lỗi mất bản ghi khi nhiều lượt ký cùng lúc (đoạn "Ghi cùng lúc" ở trên). "0 mất" của M0-2 chỉ nói về một máy.
+- **M0-2 không đo điều gì:** tiêu chí tính trên bản ghi của máy chủ, nên hai lỗi phía người dùng đi qua mà bài vẫn xanh: "Ký & In" có lúc không in (phát hiện 3) và hàng chờ có lúc hiện hai dòng cho một lượt khám (phát hiện 5). Bài tự bấm lại và ghi số lần ở cuối. Từ M0-S3.5c (PR #PRNUM), hai dòng cho một lượt khám làm `e2e:cycles` đỏ (bước kiểm cuối bài đếm số dòng mỗi lần mở hàng chờ; dòng thừa hiện ra sau lúc đếm thì không bắt được), và `e2e:offline` có một bước tái hiện tất định cho lỗi này. Bài cũng chỉ chạy một máy, một người dùng: vì vậy nó không thể thấy lỗi mất bản ghi khi nhiều lượt ký cùng lúc (đoạn "Ghi cùng lúc" ở trên). "0 mất" của M0-2 chỉ nói về một máy.
 
 Bài học từ M0-S3:
 
@@ -1164,9 +1164,9 @@ Bài học từ M0-S3:
 9. **Điểm chốt chỉ là điểm chốt khi nó là một lời ghi riêng.** Thiết kế "mục đóng lượt khám đứng cuối gói" dựa vào giả định máy chủ dừng ở mục lỗi đầu tiên. Medplum không dừng (F11), nên một xung đột giao dịch ở mục đầu (F13) để lại lượt khám đã đóng mà thiếu bản ghi, và lần gửi lại "idempotent" chỉ xác nhận lại cái sai. Bài kiểm thử cũ chèn lỗi vào đúng mục đóng nên không thấy; bài 20 chu kỳ chạy một máy nên cũng không thấy. Mọi đường ghi nhiều bản ghi cần một bài chèn lỗi vào **từng** mục và một bài nhiều lời cùng lúc có đếm bản ghi.
 10. **Bài tái hiện phải tự chứng minh là nó đã tái hiện.** Hai bài "cùng lúc" đòi thấy ít nhất một xung đột thật. Nhờ điều kiện đó mới lộ ra rằng 5 lượt ký cùng lúc có lần không sinh xung đột nào (bài lẽ ra xanh mà không kiểm được gì), và phải nâng lên 12 lượt.
 
-Giới hạn đã biết, cần quyết định. Mục (a) nên quyết trước buổi trình diễn 13/11; còn lại cho M1:
+Giới hạn đã biết, cần quyết định cho M1. Mục (a) đã đóng, giữ lại để biết lịch sử:
 
-- (a) **Bốn lỗi đã biết của lát 5 còn trên `main`**, không lỗi nào làm mất hay trùng bản ghi trên máy chủ: mục "thử lại" có thể nằm chờ thêm tới 30 giây (đã có bản sửa ở PR #7, chưa vào `main`); "Ký & In" lúc có mạng mà máy chủ chưa nhận ngay có lúc không in đơn (thiết kế OFF-8 chờ duyệt, bốn câu hỏi ở cuối mục đó); chế độ "Mất mạng" không tự thoát khi không còn mục chờ; hàng chờ có lúc hiện hai dòng cho một lượt khám (PR #9, bản nháp). Lỗi thứ hai và thứ tư có thể gặp ngay trên sân khấu [Phân tích].
+- (a) **Bốn lỗi đã biết của lát 5: đã sửa cả bốn.** Không lỗi nào từng làm mất hay trùng bản ghi trên máy chủ. "Ký & In" lúc có mạng mà máy chủ chưa nhận ngay có lúc không in đơn: sửa ở PR #17 (OFF-8). Chế độ "Mất mạng" không tự thoát khi không còn mục chờ: sửa ở PR #22. Hai lỗi còn lại có bản sửa từ 03–04/10 (PR #7, #9) nhưng bản sửa nằm ở nhánh `claude/m0-s3-5-network-cycles-098118`, không vào `main` (bài học 8); M0-S3.5c (PR #PRNUM) làm lại cả hai trên mã hiện tại: mục "thử lại" hết thời gian chờ đúng lúc một lượt gửi đang chạy được gửi ngay sau lượt đó (`SyncEngine.schedule`), không nằm chờ tới chu kỳ 30 giây; sau khi mất phản hồi ở "Cấp số", hàng chờ chỉ hiện một dòng cho một lượt khám, vì mỗi mục hàng chờ BFF trả về mang `clientUuid` của lần cấp số và `mergeQueue` khớp mục cấp số chưa xong trên máy với lượt khám của máy chủ theo đúng `clientUuid` đó (không theo bệnh nhân + ngày, nên người khám hai lượt một ngày vẫn là hai dòng).
 - (b) **Hai máy không thấy nhau khi phòng khám mất Internet (N5).** Cần một trạm đồng bộ trong mạng LAN: T-OFF-3, Giai đoạn 2. Tới lúc đó phải nói rõ trong tài liệu bán hàng.
 - (c) **Mục bị từ chối không có đường ra.** Xung đột 409 chỉ được phát hiện và báo. Đơn 422 có lỗi chặn (`blocking`) không có ô lý do và không có nút gửi lại: chỉ còn liên hệ bệnh nhân và kê lại. Không có nút xóa hay hủy, nên các mục này nằm lại trong danh sách, huy hiệu "cần xử lý" không về 0, và mỗi lần in lại thêm một mục. M1 cần quy trình giải quyết (gộp, tách thành lượt khám riêng, hủy có ghi nhận) và người có quyền làm việc đó.
 - (d) **"Đã in đơn rồi mới thấy cảnh báo".** Đơn ký khi mất mạng bị quy tắc của máy chủ bắt lại lúc đồng bộ (ví dụ dị ứng vừa được ghi ở máy khác) khi bệnh nhân đã cầm đơn. Hiện bác sĩ ghi lý do rồi gửi lại, màn hình nhắc liên hệ bệnh nhân. Cần cố vấn y khoa duyệt cách xử lý trước M1.
@@ -1463,7 +1463,7 @@ Agent đọc mục này trước khi làm bất kỳ việc nào ở 11.4.
 
 | Mã | Việc | Đợt | Chặn bởi | Trạng thái | PR | Ngày DONE |
 |---|---|---|---|---|---|---|
-| M0-S3.5c | Đưa hai bản sửa của lát 5 (PR #7, #9) về `main` | M0 | — | ⏳ | | |
+| M0-S3.5c | Đưa hai bản sửa của lát 5 (PR #7, #9) về `main` | M0 | — | 🔍 Chờ duyệt | #PRNUM | |
 | QT11-V12 | Soạn quy trình phòng khám v1.2 gửi chủ phòng khám | M0 | — | ⏳ | | |
 | M0-1 | Phiên thử 3 bác sĩ thật, đo p50/p90 | M0 | Cần 3 bác sĩ | 👤 | | |
 | M0-6 | Diễn tập trình diễn, bản dự phòng | M0 | Chủ dự án bỏ treo | ⏸ | | |
