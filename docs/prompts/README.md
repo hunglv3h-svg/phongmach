@@ -8,7 +8,7 @@ Sổ theo dõi các phiên làm việc với agent (Claude Code trước đây, 
 
 ---
 
-## Đã chạy (theo lịch sử `origin/main`)
+## Đã chạy (theo lịch sử `origin/main`, kiểm 17/10/2026 ở `ae1f908`)
 
 | # | Phiên | PR | Kết quả |
 |---|---|---|---|
@@ -28,15 +28,17 @@ Sổ theo dõi các phiên làm việc với agent (Claude Code trước đây, 
 | ✅ | M0-TIM-SUA: tìm bệnh nhân — tính đúng (khóa chính xác vào meta.tag) | #15 | `4013df1` |
 | ✅ | Docker demo (BFF + web) + OFF-8 + P2 search | #17 | `96a22ad` |
 | ✅ | OFF-8: "Ký & In" lúc có mạng mà máy chủ chưa nhận ngay vẫn phải in | #17 | `d589343`, `c5940ba` |
-| ✅ | P2: tìm bệnh nhân — gõ lẫn tên/số, báo "còn người trùng tên", xếp hạng ổn định | #15, #17 | `2a7c1cc` |
+| ✅ | P2: tìm bệnh nhân — gõ lẫn tên/số, báo "còn người trùng tên", xếp hạng ổn định | #17 | `3347540` |
 | ✅ | Demo seed phong phú + UI v0.2 | #16, #19 | `02c6fc8` |
+| ✅ | M0-2: sửa ba lỗi tiềm ẩn làm đỏ `e2e:cycles` (quy tắc `cccd-unknown`, tìm người chưa đồng bộ, bài bấm lại nút hàng chờ) | #20 | `8847519` |
 | ✅ | Tự thoát chế độ "Mất mạng" khi máy chủ hồi (thăm dò /api/health) | #22 | `7bb77a5` |
 | ✅ | T-QUOTA: nâng hạn mức FHIR theo project; T6 100 chu kỳ chạy xanh | #25 | `af7d800`, `8625b95` |
 | ✅ | Xử lý tay mục offline "cần xử lý" (xung đột/lỗi dữ liệu) | #25 | `36490c8`, `488323f` |
 | ✅ | Tracker chức năng: xác minh sâu, chuyển ra gốc, script .docx, hook nhắc | #24 | `51a8527`, `52c0054` |
 | ✅ | T-OUTBOX: đối soát idempotent đơn đã ký thiếu Task gửi (A2/F11), nút "Quét đối soát" | — | `ac109ae` |
-| ✅ | T-IDP: xác thực nhân viên thật (mật khẩu Argon2id + TOTP, phiên xoay vòng), `AUTH_MODE` thay `DEMO_AUTH=1` | #26 | `a79cae1`, `82aa76b` |
+| ✅ | T-IDP: xác thực nhân viên thật (Phương án B, mật khẩu + TOTP, `AUTH_MODE=real` hoặc `demo`, kho phiên SQLite) | #26 | `a79cae1`, `82aa76b` (merge `ae1f908`) |
 | ✅ | Demo Docker cổng 8081: chờ Medplum sẵn sàng trước khi seed; `AUTH_MODE=demo` cho ảnh demo | #28 | `ab22fd3`, `b9c03ba` |
+| ✅ | Cập nhật trạng thái dự án theo `main` `ae1f908`, prompt M0-S3.5c | #27 | `abd1d1d` (merge `ed4f4aa`) |
 
 > Ngoài git: migrate môi trường Claude Code → Kiro (steering file, đồng bộ git về origin/main, giữ mockup ở nhánh `ui-mockups`, dọn 6 worktree). Không nằm trong lịch sử commit sản phẩm.
 
@@ -44,18 +46,15 @@ Sổ theo dõi các phiên làm việc với agent (Claude Code trước đây, 
 
 ## Còn phải chạy
 
-> Chức năng M0 đã kín (xem `trang-thai-chuc-nang.md`). Các mục P1 (OFF-8) và P2 (tìm bệnh nhân)
-> trước đây ở đây đã merge — chuyển lên bảng "Đã chạy". Chưa có việc code M0 nào mở; việc M0
-> còn lại nằm ở mục "Cần con người / treo lại" bên dưới.
->
 > **Từ 11/11/2026: danh sách đủ mọi việc còn lại, prompt chép-dán và cột đánh DONE nằm ở
-> `docs/ke-hoach-trien-khai.md` mục 11** (bản Word: `docs/ke-hoach-trien-khai.docx`). Sổ này giữ lịch sử
-> các phiên đã chạy; đoạn dưới đây chỉ còn để tham khảo.
+> `docs/ke-hoach-trien-khai.md` mục 11** (bản Word: `docs/ke-hoach-trien-khai.docx`). Sổ này chỉ còn giữ lịch sử
+> các phiên đã chạy.
 >
-> T-IDP (xác thực nhân viên thật) đã xong ở #26. Khi mở M1, nhóm việc không phụ thuộc nguồn ngoài
-> đáng làm trước là **lõi vận hành phòng khám** theo quy trình v1.1: T-PRICE, T-STOCK, T-CASH, T-ORDER
-> (`ke-hoach-trien-khai.md` mục 6.4). **Chưa viết prompt**: chờ chủ phòng khám góp ý QT11 và trả lời
-> Q19–Q24. Các mục nối hệ thật (T-RX cổng, T-SIGN ký số, T-ZALO, T-PAY) chờ tài liệu API / sandbox / pháp chế.
+> Chức năng M0 đã kín (xem `trang-thai-chuc-nang.md`) và T-IDP đã xong. Trên `main` còn **hai lỗi đã biết** của hàng đợi
+> đồng bộ, cả hai đã có bản sửa từ 03–04/10 nhưng bản sửa lạc ngoài `main` (PR #7 và #9 merge vào nhánh lát 5). Đó là
+> việc code M0 duy nhất còn mở, nên làm trước buổi trình diễn 13/11: **M0-S3.5c**, prompt ở kế hoạch mục 11.4 (nguyên
+> văn prompt của PR #27). Các ứng viên kế tiếp mà PR #27 nêu nay là các việc **Q-ROW**, **T6-40**, **T-AUD** và
+> **OFF-PIN** ở bảng 11.3, đều đã có prompt.
 
 ---
 
@@ -64,8 +63,7 @@ Sổ theo dõi các phiên làm việc với agent (Claude Code trước đây, 
 | | Hạng mục | Ghi chú |
 |---|---|---|
 | 👤 | **M0-1**: phiên thử 3 bác sĩ thật, đo thời gian mở hồ sơ → in đơn (p50 ≤ 60s, p90 ≤ 120s) | Công cụ đã sẵn (`pnpm trial:up`, `pnpm trial:rehearsal`), chỉ cần người thật ngồi đo |
-| ⏸ | **M0-6**: diễn tập trình diễn + máy dự phòng + video quay sẵn | Treo lại theo quyết định chủ dự án |
-| ⏳ | **T6 đầy đủ**: ngoại tuyến 100 chu kỳ + đồng bộ 40 ca ≤ 60s | Phụ thuộc nới hạn mức FHIR (T-QUOTA) trước |
+| ⏸ | **M0-6**: diễn tập trình diễn + máy dự phòng + video quay sẵn | Treo lại theo quyết định chủ dự án. Phần mã đã viết (kịch bản 10 phút, `pnpm demo:rehearsal`, nhãn cho số "Thời gian khám") nằm ở nhánh cục bộ `feat/m0-6-demo-rehearsal`, chưa đẩy; muốn dùng thì phải rebase lên `main` |
 
 ---
 
