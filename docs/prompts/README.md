@@ -2,7 +2,7 @@
 
 Sổ theo dõi các phiên làm việc với agent (Claude Code trước đây, Kiro từ nay). Mỗi mục là một phiên: mục tiêu, prompt đã dùng (hoặc sẽ dùng), và trạng thái. Dùng để kiểm tra tiến độ nhanh mà không phải lần giở git log.
 
-**Quy ước trạng thái:** ✅ Đã chạy & merge · 🔧 Đang làm · ⏳ Còn phải chạy · 👤 Cần con người (không code được) · ⏸ Treo lại theo quyết định chủ dự án.
+**Quy ước trạng thái:** ✅ Đã chạy & merge · 🔍 Đã có PR, chờ duyệt · 🔧 Đang làm · ⏳ Còn phải chạy · 👤 Cần con người (không code được) · ⏸ Treo lại theo quyết định chủ dự án.
 
 **Lưu ý viết prompt cho Kiro:** bối cảnh dự án và quy ước (BFF là lớp duy nhất gọi Medplum, Medplum transaction không nguyên tử, chạy bằng Git Bash, các lệnh test…) đã nằm trong `.kiro/steering/` ở workspace root và tự nạp vào mọi phiên — **đừng lặp lại trong prompt**. Prompt chỉ nên chứa thứ riêng của nhiệm vụ: mục tiêu, tiêu chí done đo được, ranh giới (cái KHÔNG đụng), cách verify.
 
@@ -39,6 +39,7 @@ Sổ theo dõi các phiên làm việc với agent (Claude Code trước đây, 
 | ✅ | T-IDP: xác thực nhân viên thật (Phương án B, mật khẩu + TOTP, `AUTH_MODE=real` hoặc `demo`, kho phiên SQLite) | #26 | `a79cae1`, `82aa76b` (merge `ae1f908`) |
 | ✅ | Demo Docker cổng 8081: chờ Medplum sẵn sàng trước khi seed; `AUTH_MODE=demo` cho ảnh demo | #28 | `ab22fd3`, `b9c03ba` |
 | ✅ | Cập nhật trạng thái dự án theo `main` `ae1f908`, prompt M0-S3.5c | #27 | `abd1d1d` (merge `ed4f4aa`) |
+| 🔍 | M0-S3.5c: đưa hai bản sửa của lát 5 về `main` (mục "thử lại" gửi ngay sau lượt đang chạy; hàng chờ một dòng cho một lượt khám, khớp theo `clientUuid`). Chờ duyệt: đổi thành ✅ khi PR merge | #30 | `a8096d7`, `7461db6`, `bacb88a` |
 
 > Ngoài git: migrate môi trường Claude Code → Kiro (steering file, đồng bộ git về origin/main, giữ mockup ở nhánh `ui-mockups`, dọn 6 worktree). Không nằm trong lịch sử commit sản phẩm.
 
@@ -50,11 +51,10 @@ Sổ theo dõi các phiên làm việc với agent (Claude Code trước đây, 
 > `docs/ke-hoach-trien-khai.md` mục 11** (bản Word: `docs/ke-hoach-trien-khai.docx`). Sổ này chỉ còn giữ lịch sử
 > các phiên đã chạy.
 >
-> Chức năng M0 đã kín (xem `trang-thai-chuc-nang.md`) và T-IDP đã xong. Trên `main` còn **hai lỗi đã biết** của hàng đợi
-> đồng bộ, cả hai đã có bản sửa từ 03–04/10 nhưng bản sửa lạc ngoài `main` (PR #7 và #9 merge vào nhánh lát 5). Đó là
-> việc code M0 duy nhất còn mở, nên làm trước buổi trình diễn 13/11: **M0-S3.5c**, prompt ở kế hoạch mục 11.4 (nguyên
-> văn prompt của PR #27). Các ứng viên kế tiếp mà PR #27 nêu nay là các việc **Q-ROW**, **T6-40**, **T-AUD** và
-> **OFF-PIN** ở bảng 11.3, đều đã có prompt.
+> Chức năng M0 đã kín (xem `trang-thai-chuc-nang.md`) và T-IDP đã xong. **Hai lỗi đã biết** cuối cùng của hàng đợi
+> đồng bộ (bản sửa cũ lạc ngoài `main`, PR #7 và #9 merge vào nhánh lát 5) đã được làm lại trên `main` ở **M0-S3.5c**
+> (PR #30, chờ duyệt; prompt ở kế hoạch mục 11.4, nguyên văn prompt của PR #27). Các ứng viên kế tiếp mà PR #27 nêu
+> nay là các việc **Q-ROW**, **T6-40**, **T-AUD** và **OFF-PIN** ở bảng 11.3, đều đã có prompt.
 
 ---
 

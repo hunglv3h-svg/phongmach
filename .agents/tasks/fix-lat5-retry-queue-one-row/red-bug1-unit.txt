@@ -1,0 +1,63 @@
+$ pnpm --filter @phongmach/clinic-web exec vitest run src/local/sync.test.ts
+
+ RUN  v5.0.3 D:/My Documents D/UNIGIS/PM/phongmach/.worktrees/lat5-retry-queue-one-row/apps/clinic-web
+
+ ❯ src/local/sync.test.ts (44 tests | 2 failed) 948ms
+   ❯ hẹn lượt sau (7)
+     × mục thử lại hết thời gian chờ trong lúc một lượt khác đang gửi: được gửi ngay sau lượt đó, không chờ hết chu kỳ 30 giây 87ms
+     × mục lỗi tạm ngay trong lượt đang chạy, hết thời gian chờ trước khi lượt đó xong: cũng được gửi ngay sau lượt đó 124ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/local/sync.test.ts > hẹn lượt sau > mục thử lại hết thời gian chờ trong lúc một lượt khác đang gửi: được gửi ngay sau lượt đó, không chờ hết chu kỳ 30 giây
+AssertionError: expected [ 30000 ] to deeply equal [ +0 ]
+
+- Expected
++ Received
+
+  [
+-   0,
++   30000,
+  ]
+
+ ❯ src/local/sync.test.ts:920:29
+    918|     await run;
+    919|     expect(await statuses(e)).toEqual({ [a.id]: 'retry', [b.id]: 'done…
+    920|     expect(clock.pending()).toEqual([0]);
+       |                             ^
+    921|
+    922|     clock.advance(5);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/local/sync.test.ts > hẹn lượt sau > mục lỗi tạm ngay trong lượt đang chạy, hết thời gian chờ trước khi lượt đó xong: cũng được gửi ngay sau lượt đó
+AssertionError: expected 1 to be 2 // Object.is equality
+
+- Expected
++ Received
+
+- 2
++ 1
+
+ ❯ src/local/sync.test.ts:949:28
+    947|     clock.advance(5);
+    948|     await e.idle();
+    949|     expect(bff.sent(a.id)).toBe(2);
+       |                            ^
+    950|     expect(await statuses(e)).toEqual({ [a.id]: 'done', [b.id]: 'done'…
+    951|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 42 passed (44)
+   Start at  07:16:53
+   Duration  2.03s (tests 52%, import 26%, transform 22%)
+
+Error: ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL
+
+  × "pnpm recursive exec" failed in D:\My Documents
+  │ D\UNIGIS\PM\phongmach\.worktrees\lat5-retry-queue-one-row\apps\clinic-web
+
+[exit 1]

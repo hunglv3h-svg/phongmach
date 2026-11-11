@@ -1,0 +1,370 @@
+$ pnpm --filter @phongmach/clinic-web exec vitest run src/local/cache.test.ts src/local/client.test.ts
+
+ RUN  v5.0.3 D:/My Documents D/UNIGIS/PM/phongmach/.worktrees/lat5-retry-queue-one-row/apps/clinic-web
+
+ ❯ src/local/cache.test.ts (17 tests | 4 failed) 22ms
+   ❯ gộp hàng chờ của máy chủ với thao tác trên máy (11)
+     ❯ máy chủ đã có lượt khám mà mục cấp số trên máy chưa xong (mất phản hồi ở cấp số) (6)
+       × nhận ra lượt của máy chủ và lượt tạm là một theo clientUuid: MỘT dòng, mang id và số của máy chủ, trạng thái theo thao tác trên máy 7ms
+       × chưa mở hồ sơ: một dòng đang chờ, có nhãn chờ đồng bộ, không còn là số tạm; đã ký trên máy: một dòng đã xong 3ms
+       × máy chủ cấp số khác số tạm: vẫn một dòng, ghi lại số cũ và số mới 1ms
+       × máy chủ ghi clientUuid bằng chữ thường: khớp không phân biệt hoa thường 1ms
+ ❯ src/local/client.test.ts (27 tests | 4 failed) 653ms
+   ❯ mất phản hồi ở cấp số rồi tải được hàng chờ của máy chủ trước khi mục cấp số gửi lại (4)
+     × hàng chờ trên máy hiện MỘT dòng, mang id của máy chủ, còn nhãn chờ đồng bộ; ánh xạ id tạm được lưu bền ngay 21ms
+     × đang khám dở dưới id tạm: mở lại qua dòng của máy chủ vẫn là bản nháp đó, không mở hồ sơ lần hai; ký xong máy chủ có một lượt, một đơn 14ms
+     × chưa mở hồ sơ: "Gọi vào khám" ở dòng của máy chủ vẫn chờ mục cấp số như dòng tạm, và chỉ có một mục mở hồ sơ 13ms
+     × hàng chờ của máy chủ về kịp trước khi "Cấp số" trả lời: vẫn báo đã cấp số (theo dòng của máy chủ), không báo lỗi 9ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/local/cache.test.ts > gộp hàng chờ của máy chủ với thao tác trên máy > máy chủ đã có lượt khám mà mục cấp số trên máy chưa xong (mất phản hồi ở cấp số) > nhận ra lượt của máy chủ và lượt tạm là một theo clientUuid: MỘT dòng, mang id và số của máy chủ, trạng thái theo thao tác trên máy
+AssertionError: expected [ …(2) ] to have a length of 1 but got 2
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ src/local/cache.test.ts:110:58
+    108|     it('nhận ra lượt của máy chủ và lượt tạm là một theo clientUuid: M…
+    109|       const merged = mergeQueue([item({}), E], [lost(), op('open', { v…
+    110|       expect(merged.filter((i) => i.patientId === 'p9')).toHaveLength(…
+       |                                                          ^
+    111|       expect(merged.map((i) => [i.id, i.number, i.status, i.local])).t…
+    112|         ['srv-E', 3, 'in-exam', { pending: true }],
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  src/local/cache.test.ts > gộp hàng chờ của máy chủ với thao tác trên máy > máy chủ đã có lượt khám mà mục cấp số trên máy chưa xong (mất phản hồi ở cấp số) > chưa mở hồ sơ: một dòng đang chờ, có nhãn chờ đồng bộ, không còn là số tạm; đã ký trên máy: một dòng đã xong
+AssertionError: expected [ …(2) ] to deeply equal [ [ 'srv-E', 'waiting', …(1) ] ]
+
+- Expected
++ Received
+
+  [
+    [
+      "srv-E",
+      "waiting",
++     undefined,
++   ],
++   [
++     "tmp-v3",
++     "waiting",
+      {
+        "pending": true,
++       "tentative": true,
+      },
+    ],
+  ]
+
+ ❯ src/local/cache.test.ts:120:61
+    118|     it('chưa mở hồ sơ: một dòng đang chờ, có nhãn chờ đồng bộ, không c…
+    119|       const waiting = mergeQueue([E], [lost()], new Map(), ME);
+    120|       expect(waiting.map((i) => [i.id, i.status, i.local])).toEqual([[…
+       |                                                             ^
+    121|       const signed = mergeQueue([E], [lost(), op('open', { visitId: 't…
+    122|       expect(signed.map((i) => [i.id, i.status, i.local])).toEqual([['…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  src/local/cache.test.ts > gộp hàng chờ của máy chủ với thao tác trên máy > máy chủ đã có lượt khám mà mục cấp số trên máy chưa xong (mất phản hồi ở cấp số) > máy chủ cấp số khác số tạm: vẫn một dòng, ghi lại số cũ và số mới
+AssertionError: expected [ [ 'tmp-v3', 2, { …(2) } ], …(1) ] to deeply equal [ [ 'srv-E', 3, { …(2) } ] ]
+
+- Expected
++ Received
+
+  [
+    [
+-     "srv-E",
+-     3,
++     "tmp-v3",
++     2,
+      {
+        "pending": true,
+-       "renumbered": {
+-         "from": 2,
+-         "to": 3,
++       "tentative": true,
+      },
+-     },
++   ],
++   [
++     "srv-E",
++     3,
++     undefined,
+    ],
+  ]
+
+ ❯ src/local/cache.test.ts:127:60
+    125|     it('máy chủ cấp số khác số tạm: vẫn một dòng, ghi lại số cũ và số …
+    126|       const merged = mergeQueue([E], [lost({ proposedNumber: 2 })], ne…
+    127|       expect(merged.map((i) => [i.id, i.number, i.local])).toEqual([['…
+       |                                                            ^
+    128|     });
+    129|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  src/local/cache.test.ts > gộp hàng chờ của máy chủ với thao tác trên máy > máy chủ đã có lượt khám mà mục cấp số trên máy chưa xong (mất phản hồi ở cấp số) > máy chủ ghi clientUuid bằng chữ thường: khớp không phân biệt hoa thường
+AssertionError: expected [ …(2) ] to have a length of 1 but got 2
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ src/local/cache.test.ts:131:92
+    129|
+    130|     it('máy chủ ghi clientUuid bằng chữ thường: khớp không phân biệt h…
+    131|       expect(mergeQueue([E], [lost({ clientUuid: UUID_E.toUpperCase() …
+       |                                                                                            ^
+    132|     });
+    133|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  src/local/client.test.ts > mất phản hồi ở cấp số rồi tải được hàng chờ của máy chủ trước khi mục cấp số gửi lại > hàng chờ trên máy hiện MỘT dòng, mang id của máy chủ, còn nhãn chờ đồng bộ; ánh xạ id tạm được lưu bền ngay
+AssertionError: expected [ [ …(4) ], [ …(4) ] ] to deeply equal [ [ …(4) ] ]
+
+- Expected
++ Received
+
+  [
+    [
+      "cbfacb41-2de0-422f-9614-3fce177cf251",
+      1,
+      "waiting",
++     undefined,
++   ],
++   [
++     "tmp-f77e44d4-adca-46e4-8871-f9f77f848d2d",
++     1,
++     "waiting",
+      {
+        "pending": true,
++       "tentative": true,
+      },
+    ],
+  ]
+
+ ❯ src/local/client.test.ts:665:78
+    663|     expect((await rowsOf()).map((i) => i.id)).toEqual([tmp.id]);
+    664|     await snapshotArrives();
+    665|     expect((await rowsOf()).map((i) => [i.id, i.number, i.status, i.lo…
+       |                                                                              ^
+    666|     expect((await store.ids()).get(tmp.id)).toBe(server.id);
+    667|     expect((await client.syncData()).queue.filter((i) => i.patientName…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  src/local/client.test.ts > mất phản hồi ở cấp số rồi tải được hàng chờ của máy chủ trước khi mục cấp số gửi lại > đang khám dở dưới id tạm: mở lại qua dòng của máy chủ vẫn là bản nháp đó, không mở hồ sơ lần hai; ký xong máy chủ có một lượt, một đơn
+AssertionError: expected [ [ …(3) ], [ …(3) ] ] to deeply equal [ [ …(3) ] ]
+
+- Expected
++ Received
+
+  [
+    [
+-     "bab0d995-b02d-4413-b7b8-38195d87112f",
++     "tmp-5f198486-0a3d-40a5-b584-72584e3699c4",
+      "in-exam",
+      "doc",
++   ],
++   [
++     "bab0d995-b02d-4413-b7b8-38195d87112f",
++     "waiting",
++     undefined,
+    ],
+  ]
+
+ ❯ src/local/client.test.ts:685:63
+    683|     await snapshotArrives();
+    684|     const rows = await rowsOf();
+    685|     expect(rows.map((i) => [i.id, i.status, i.doctorUserId])).toEqual(…
+       |                                                               ^
+    686|
+    687|     // Bấm "Tiếp tục khám" ở dòng duy nhất đó (giờ mang id của máy chủ…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  src/local/client.test.ts > mất phản hồi ở cấp số rồi tải được hàng chờ của máy chủ trước khi mục cấp số gửi lại > chưa mở hồ sơ: "Gọi vào khám" ở dòng của máy chủ vẫn chờ mục cấp số như dòng tạm, và chỉ có một mục mở hồ sơ
+AssertionError: expected [] to deeply equal [ Array(1) ]
+
+- Expected
++ Received
+
+- [
+-   "1b41774b-e7cb-4125-bcbe-5e5539505e42",
+- ]
++ []
+
+ ❯ src/local/client.test.ts:719:29
+    717|     expect(opened).toMatchObject({ offline: true, context: { visit: { …
+    718|     const [open] = await openOps();
+    719|     expect(open!.meta.deps).toEqual([(await engine.ops()).find((o) => …
+       |                             ^
+    720|     expect((await rowsOf()).map((i) => [i.id, i.status])).toEqual([[se…
+    721|     await goOnline();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+
+ FAIL  src/local/client.test.ts > mất phản hồi ở cấp số rồi tải được hàng chờ của máy chủ trước khi mục cấp số gửi lại > hàng chờ của máy chủ về kịp trước khi "Cấp số" trả lời: vẫn báo đã cấp số (theo dòng của máy chủ), không báo lỗi
+AssertionError: expected { Object (item, created, ...) } to match object { tentative: true, item: { …(2) } }
+(11 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "item": {
+-     "id": "3529450d-d6ad-407b-ae1b-f1c1a57eec61",
+-     "number": 1,
++     "id": "tmp-11c7f5e4-d42f-47ad-9980-7126b1f63feb",
++     "number": 2,
+    },
+    "tentative": true,
+  }
+
+ ❯ src/local/client.test.ts:739:21
+    737|     const checkIn = await client.checkIn(patient, { clientUuid: crypto…
+    738|     const server = [...bff.visits.values()][0]!.item;
+    739|     expect(checkIn).toMatchObject({ tentative: true, item: { id: serve…
+       |                     ^
+    740|     // Số của máy chủ là số thật: không đề xuất số khác, nên không có …
+    741|     expect(checkIn.item.local).toEqual({ pending: true });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  8 failed | 36 passed (44)
+   Start at  07:22:25
+   Duration  1.60s (import 38%, tests 33%, transform 29%, worker 1%)
+
+Error: ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL
+
+  × "pnpm recursive exec" failed in D:\My Documents
+  │ D\UNIGIS\PM\phongmach\.worktrees\lat5-retry-queue-one-row\apps\clinic-web
+
+[exit 1]
+$ pnpm --filter @phongmach/clinical test
+$ vitest run
+
+ RUN  v5.0.3 D:/My Documents D/UNIGIS/PM/phongmach/.worktrees/lat5-retry-queue-one-row/packages/clinical
+
+ ❯ test/clinical.test.ts (37 tests | 2 failed) 40ms
+   ❯ hàng chờ (8)
+     × mục hàng chờ mang clientUuid của lần cấp số (viết thường), kể cả khi lượt đã ký: không lấy nhầm định danh của lần hoàn tất 11ms
+   ❯ kế hoạch hoàn tất lượt khám (7)
+     × khám không kê đơn: một bước ghi, không có đơn; đóng lượt khám là lời ghi riêng 5ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/clinical.test.ts > hàng chờ > mục hàng chờ mang clientUuid của lần cấp số (viết thường), kể cả khi lượt đã ký: không lấy nhầm định danh của lần hoàn tất
+AssertionError: expected undefined to be 'abcdef12-3456-4789-8abc-def123456789' // Object.is equality
+
+- Expected:
+"abcdef12-3456-4789-8abc-def123456789"
+
++ Received:
+undefined
+
+ ❯ test/clinical.test.ts:137:53
+    135|   it('mục hàng chờ mang clientUuid của lần cấp số (viết thường), kể cả…
+    136|     const upper = enc(2, { clientUuid: 'ABCDEF12-3456-4789-8ABC-DEF123…
+    137|     expect(toQueueItem(upper, patient)!.clientUuid).toBe('abcdef12-345…
+       |                                                     ^
+    138|     // Lần hoàn tất ghi thêm một định danh cùng hệ, dạng "<uuid của lầ…
+    139|     const signed: Encounter = { ...enc(2), status: 'finished', identif…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  test/clinical.test.ts > kế hoạch hoàn tất lượt khám > khám không kê đơn: một bước ghi, không có đơn; đóng lượt khám là lời ghi riêng
+AssertionError: expected { id: 'e1', number: 1, …(11) } to match object { status: 'done', …(1) }
+(12 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "clientUuid": "11111111-1111-4111-8111-111111111111",
+    "status": "done",
+  }
+
+ ❯ test/clinical.test.ts:270:44
+    268|     expect(wasCompletedBy(p.closed, UUID)).toBe(true);
+    269|     // Lượt đã đóng bằng kế hoạch này vẫn đọc ra đúng clientUuid của l…
+    270|     expect(toQueueItem(p.closed, patient)).toMatchObject({ status: 'do…
+       |                                            ^
+    271|   });
+    272|   it('kê đơn: thuốc ở bước 1, đơn ở bước 2 trỏ tới id thật của thuốc, …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  2 failed | 82 passed (84)
+   Start at  07:22:27
+   Duration  717ms (import 54%, transform 40%, tests 5%, worker 1%)
+
+[ELIFECYCLE] Test failed. See above for more details.
+Error: ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL
+
+  × "pnpm recursive run" failed in D:\My Documents
+  │ D\UNIGIS\PM\phongmach\.worktrees\lat5-retry-queue-one-
+  │ row\packages\clinical
+
+[exit 1]
+$ pnpm --filter @phongmach/bff test
+$ vitest run test/unit
+
+ RUN  v5.0.3 D:/My Documents D/UNIGIS/PM/phongmach/.worktrees/lat5-retry-queue-one-row/services/bff
+
+(node:32144) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27352) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ test/unit/clinical.test.ts (37 tests | 1 failed) 1818ms
+   ❯ hàng chờ (4)
+     × cấp số, gửi lại cùng clientUuid không cấp thêm, và hủy chỉ áp cho lượt đang chờ 53ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/unit/clinical.test.ts > hàng chờ > cấp số, gửi lại cùng clientUuid không cấp thêm, và hủy chỉ áp cho lượt đang chờ
+AssertionError: expected { …(10) } to match object { …(2) }
+(9 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "clientUuid": "66666666-6666-4666-8666-666666666666",
+    "id": "80ab635f-19df-4a23-ae07-28a6da19ce45",
+  }
+
+ ❯ test/unit/clinical.test.ts:99:28
+     97|     expect(queue.day).toBe('2026-10-20');
+     98|     // Mỗi lượt mang clientUuid của lần cấp số, để máy khách nhận ra l…
+     99|     expect(queue.items[0]).toMatchObject({ id: visitId, clientUuid: U(…
+       |                            ^
+    100|     // Nhật ký truy cập không đổi: dòng đọc hàng chờ chỉ có số kết quả…
+    101|     const read = auditEntries(c).filter((e) => e.action === 'queue-rea…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 12 passed (13)
+      Tests  1 failed | 167 passed (168)
+   Start at  07:22:29
+   Duration  4.10s (import 44%, tests 36%, transform 20%, worker 1%)
+
+[ELIFECYCLE] Test failed. See above for more details.
+Error: ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL
+
+  × "pnpm recursive run" failed in D:\My Documents
+  │ D\UNIGIS\PM\phongmach\.worktrees\lat5-retry-queue-one-row\services\bff
+
+[exit 1]

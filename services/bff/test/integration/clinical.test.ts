@@ -41,9 +41,10 @@ async function newPatient(name: string, extra: object = { birthDate: '1985-03-15
   return res.json().patient.id as string;
 }
 async function enqueue(patientId: string, extra: object = {}) {
-  const res = await call('POST', '/api/queue', 'a-assistant', { clientUuid: randomUUID(), patientId, specialty: 'noi', ...extra });
+  const checkInUuid = randomUUID();
+  const res = await call('POST', '/api/queue', 'a-assistant', { clientUuid: checkInUuid, patientId, specialty: 'noi', ...extra });
   expect(res.statusCode).toBe(201);
-  return res.json().item as { id: string; number: number; code: string };
+  return { ...(res.json().item as { id: string; number: number; code: string; clientUuid?: string }), checkInUuid };
 }
 const complete = (visitId: string, who: string, payload: object) => call('POST', `/api/visits/${visitId}/complete`, who, payload);
 const completionBody = (clientUuid: string, over: object = {}) => ({
@@ -93,6 +94,12 @@ describe('hàng chờ trên Medplum thật', () => {
     expect(again.json().item.id).toBe(first.json().item.id);
     expect(first.json().item.number).toBe(1);
     expect(first.json().item.code).toMatch(/^\d{8}-001$/);
+    // Lượt khám trong hàng chờ mang clientUuid của lần cấp số (đọc từ Encounter.identifier trên Medplum thật).
+    expect(first.json().item.clientUuid).toBe(uuid);
+    const listed = (await call('GET', '/api/queue', 'a-assistant')).json().items as Array<{ id: string; clientUuid?: string }>;
+    expect(listed.find((i) => i.id === first.json().item.id)!.clientUuid).toBe(uuid);
+    // Nhật ký truy cập không chứa clientUuid của lần cấp số (dòng đọc hàng chờ chỉ có số kết quả).
+    expect(JSON.stringify(audit.entries)).not.toContain(uuid);
 
     const concurrent = await Promise.all(ids.slice(1).map((patientId) => call('POST', '/api/queue', 'a-assistant', { clientUuid: randomUUID(), patientId, specialty: 'noi' })));
     expect(concurrent.every((r) => r.statusCode === 201)).toBe(true);
@@ -131,7 +138,7 @@ describe('hàng chờ trên Medplum thật', () => {
 
 describe('luồng khám đầy đủ: mở hồ sơ, kê đơn, ký, in, gửi cổng', () => {
   let patientId = '';
-  let visit: { id: string };
+  let visit: { id: string; clientUuid?: string; checkInUuid: string };
   let prescriptionId = '';
   let code = '';
   const uuid = randomUUID();
@@ -194,8 +201,12 @@ describe('luồng khám đầy đủ: mở hồ sơ, kê đơn, ký, in, gửi c
     expect([other.statusCode, other.json().error]).toEqual([409, 'already-closed']);
   });
   it('lượt khám đã đóng: hàng chờ hiện "done"; mở lại không được', async () => {
-    const items = (await call('GET', '/api/queue', 'a-doctor')).json().items as Array<{ id: string; status: string }>;
+    const items = (await call('GET', '/api/queue', 'a-doctor')).json().items as Array<{ id: string; status: string; clientUuid?: string }>;
     expect(items.find((i) => i.id === visit.id)!.status).toBe('done');
+    // Lượt đã ký có thêm định danh của lần hoàn tất ("<uuid lần ký>:complete"): hàng chờ vẫn trả đúng clientUuid của lần cấp số,
+    // không phải của lần ký.
+    expect(items.find((i) => i.id === visit.id)!.clientUuid).toBe(visit.checkInUuid);
+    expect(visit.checkInUuid).not.toBe(uuid);
     expect((await call('POST', `/api/visits/${visit.id}/open`, 'a-doctor')).statusCode).toBe(409);
   });
   it('đọc lại đơn: chi tiết, lịch sử khám của bệnh nhân, ngữ cảnh lần khám sau', async () => {

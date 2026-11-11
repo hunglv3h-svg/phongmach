@@ -1,0 +1,21 @@
+$ pnpm --filter @phongmach/bff test:integration
+# HEAD bacb88a, 2026-11-11T08:03:34+07:00
+$ vitest run test/integration --silent=false
+
+ RUN  v5.0.3 D:/My Documents D/UNIGIS/PM/phongmach/.worktrees/lat5-retry-queue-one-row/services/bff
+
+(node:25384) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | test/integration/conflict.test.ts > tái hiện: nhiều lời tạo bệnh nhân cùng lúc > 20 lời cùng lúc làm Medplum trả 409 mã 40001; BFF thử lại nên mọi lời vẫn 201, không thiếu, không trùng
+[xung đột, tạo bệnh nhân] 1 vòng x 20 lời, 16 xung đột thật, lần thử lại xa nhất: 2, mã trả về: {"201":20}
+
+stdout | test/integration/conflict.test.ts > tái hiện: nhiều lượt khám ký cùng lúc > 12 lượt ký cùng lúc: Medplum từ chối vài mục của gói (409 mã 40001) mà vẫn trả HTTP 200; không lượt nào thiếu hay trùng bản ghi
+[xung đột, ký] 1 vòng x 12 lượt, 6 mục 409 thật, lần thử lại xa nhất: 1, mã trả về lần đầu: {"201":12}, số lượt phải gửi lại: 0
+
+
+ Test Files  4 passed (4)
+      Tests  81 passed (81)
+   Start at  08:03:35
+   Duration  26.17s (tests 92%, import 6%, transform 2%)
+
+[exit 0]
