@@ -1,7 +1,7 @@
 import type { Bundle, Encounter, List, MedicationRequest, Patient, Task } from '@medplum/fhirtypes';
 import { describe, expect, it } from 'vitest';
 import { drugCode, getDrug, getIcd10, resolveLine, type LineInput } from '@phongmach/catalogs';
-import { DomainError, EXTENSIONS, buildPatient, toPatientSummary } from '@phongmach/fhir-vn-model';
+import { DomainError, EXTENSIONS, SYSTEMS, buildPatient, toPatientSummary } from '@phongmach/fhir-vn-model';
 import {
   DEFAULT_RETRY,
   attemptsOf,
@@ -132,6 +132,16 @@ describe('hàng chờ', () => {
     const item = toQueueItem({ ...enc(2, { specialty: 'nhi', priority: 'appointment' }), subject: { reference: 'Patient/p1' } }, patient)!;
     expect(item).toMatchObject({ id: 'e2', number: 2, status: 'waiting', priority: 'appointment', specialty: 'nhi', patientId: 'p1', patientName: 'Nguyễn Văn An', birthDate: '1985-03-15' });
   });
+  it('mục hàng chờ mang clientUuid của lần cấp số (viết thường), kể cả khi lượt đã ký: không lấy nhầm định danh của lần hoàn tất', () => {
+    const upper = enc(2, { clientUuid: 'ABCDEF12-3456-4789-8ABC-DEF123456789' });
+    expect(toQueueItem(upper, patient)!.clientUuid).toBe('abcdef12-3456-4789-8abc-def123456789');
+    // Lần hoàn tất ghi thêm một định danh cùng hệ, dạng "<uuid của lần ký>:complete"; đặt nó lên trước để chắc không chọn theo thứ tự.
+    const signed: Encounter = { ...enc(2), status: 'finished', identifier: [{ system: SYSTEMS.clientUuid, value: '22222222-2222-4222-8222-222222222222:complete' }, ...enc(2).identifier!] };
+    expect(toQueueItem(signed, patient)).toMatchObject({ status: 'done', clientUuid: UUID });
+    // Lượt khám không có định danh đó (dữ liệu không do ứng dụng tạo): không có trường này, không lỗi.
+    const foreign: Encounter = { ...enc(2), identifier: enc(2).identifier!.filter((i) => i.system !== SYSTEMS.clientUuid) };
+    expect(toQueueItem(foreign, patient)).not.toHaveProperty('clientUuid');
+  });
   it('bác sĩ mở hồ sơ: đang khám, ghi mốc mở', () => {
     const called = markCalled(enc(1), { id: 'dr1', name: 'BS. Hà' }, NOW);
     const item = toQueueItem(called, patient)!;
@@ -256,6 +266,8 @@ describe('kế hoạch hoàn tất lượt khám', () => {
     // Điểm chốt không nằm trong gói nào: người gọi gửi nó sau cùng, kèm If-Match theo phiên bản đã đọc (meta.versionId giữ nguyên).
     expect(p.closed).toMatchObject({ resourceType: 'Encounter', id: 'e1', meta: { versionId: 'v7' }, status: 'finished', reasonCode: [{ text: 'Đau họng 2 ngày' }], period: { end: base.now.toISOString() } });
     expect(wasCompletedBy(p.closed, UUID)).toBe(true);
+    // Lượt đã đóng bằng kế hoạch này vẫn đọc ra đúng clientUuid của lần cấp số.
+    expect(toQueueItem(p.closed, patient)).toMatchObject({ status: 'done', clientUuid: UUID });
   });
   it('kê đơn: thuốc ở bước 1, đơn ở bước 2 trỏ tới id thật của thuốc, chữ ký mô phỏng và Task ở bước 3 trỏ tới id thật của đơn', () => {
     const lines = [line('Amoxicillin 500 mg', { perDose: 1, timesPerDay: 3, days: 5 }), line('Paracetamol 500 mg', { perDose: 1, quantity: 10 })];

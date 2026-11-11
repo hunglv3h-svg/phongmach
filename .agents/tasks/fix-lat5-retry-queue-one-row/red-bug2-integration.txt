@@ -1,0 +1,72 @@
+$ pnpm --filter @phongmach/bff test:integration
+$ vitest run test/integration --silent=false
+
+ RUN  v5.0.3 D:/My Documents D/UNIGIS/PM/phongmach/.worktrees/lat5-retry-queue-one-row/services/bff
+
+(node:9764) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | test/integration/conflict.test.ts > tái hiện: nhiều lời tạo bệnh nhân cùng lúc > 20 lời cùng lúc làm Medplum trả 409 mã 40001; BFF thử lại nên mọi lời vẫn 201, không thiếu, không trùng
+[xung đột, tạo bệnh nhân] 1 vòng x 20 lời, 11 xung đột thật, lần thử lại xa nhất: 2, mã trả về: {"201":20}
+
+stdout | test/integration/conflict.test.ts > tái hiện: nhiều lượt khám ký cùng lúc > 12 lượt ký cùng lúc: Medplum từ chối vài mục của gói (409 mã 40001) mà vẫn trả HTTP 200; không lượt nào thiếu hay trùng bản ghi
+[xung đột, ký] 1 vòng x 12 lượt, 7 mục 409 thật, lần thử lại xa nhất: 1, mã trả về lần đầu: {"201":12}, số lượt phải gửi lại: 0
+
+ ❯ test/integration/clinical.test.ts (28 tests | 2 failed) 15675ms
+   ❯ hàng chờ trên Medplum thật (4)
+     × cấp số tăng dần; gửi lại cùng clientUuid không cấp thêm; nhiều lễ tân cùng lúc không trùng số 492ms
+   ❯ luồng khám đầy đủ: mở hồ sơ, kê đơn, ký, in, gửi cổng (10)
+     × lượt khám đã đóng: hàng chờ hiện "done"; mở lại không được 41ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/integration/clinical.test.ts > hàng chờ trên Medplum thật > cấp số tăng dần; gửi lại cùng clientUuid không cấp thêm; nhiều lễ tân cùng lúc không trùng số
+AssertionError: expected undefined to be '9fb20c73-d95f-479e-ae2a-d308c61ca56f' // Object.is equality
+
+- Expected:
+"9fb20c73-d95f-479e-ae2a-d308c61ca56f"
+
++ Received:
+undefined
+
+ ❯ test/integration/clinical.test.ts:98:42
+     96|     expect(first.json().item.code).toMatch(/^\d{8}-001$/);
+     97|     // Lượt khám trong hàng chờ mang clientUuid của lần cấp số (đọc từ…
+     98|     expect(first.json().item.clientUuid).toBe(uuid);
+       |                                          ^
+     99|     const listed = (await call('GET', '/api/queue', 'a-assistant')).js…
+    100|     expect(listed.find((i) => i.id === first.json().item.id)!.clientUu…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  test/integration/clinical.test.ts > luồng khám đầy đủ: mở hồ sơ, kê đơn, ký, in, gửi cổng > lượt khám đã đóng: hàng chờ hiện "done"; mở lại không được
+AssertionError: expected undefined to be 'dc675afd-0067-4753-a7fa-8bb4b1ba05a3' // Object.is equality
+
+- Expected:
+"dc675afd-0067-4753-a7fa-8bb4b1ba05a3"
+
++ Received:
+undefined
+
+ ❯ test/integration/clinical.test.ts:208:62
+    206|     // Lượt đã ký có thêm định danh của lần hoàn tất ("<uuid lần ký>:c…
+    207|     // không phải của lần ký.
+    208|     expect(items.find((i) => i.id === visit.id)!.clientUuid).toBe(visi…
+       |                                                              ^
+    209|     expect(visit.checkInUuid).not.toBe(uuid);
+    210|     expect((await call('POST', `/api/visits/${visit.id}/open`, 'a-doct…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  2 failed | 79 passed (81)
+   Start at  07:21:54
+   Duration  23.65s (tests 92%, import 6%, transform 2%)
+
+[ELIFECYCLE] Command failed with exit code 1.
+Error: ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL
+
+  × "pnpm recursive run" failed in D:\My Documents
+  │ D\UNIGIS\PM\phongmach\.worktrees\lat5-retry-queue-one-row\services\bff
+
+[exit 1]

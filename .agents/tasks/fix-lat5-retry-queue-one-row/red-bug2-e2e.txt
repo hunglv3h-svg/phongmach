@@ -1,0 +1,39 @@
+$ E2E_URL=http://127.0.0.1:5183 pnpm --filter @phongmach/clinic-web e2e:offline
+$ node e2e/offline-sign.mjs
+✓  1. tự thoát "Mất mạng" khi hết mục chờ: cắt /api ở tầng mạng (không sự kiện trình duyệt), bỏ chặn, thăm dò /api/health đưa về "Có mạng" trong ~30s
+✓  2. có mạng: cấp số 1 cho Nguyễn Văn An; máy đã nạp trước hàng chờ và hồ sơ (bộ đệm mã hóa)
+✓  3. mất mạng: tìm "nguyen van an" trong bộ đệm ("Mất mạng: chỉ tìm trong 1 hồ sơ trên máy này"), mở hồ sơ từ máy, vẫn thấy dị ứng Penicillin
+✓  4. mất mạng: tạo "Zq Ngoại Tuyến k3qxo" và cấp số 002 (tạm); tìm lại được bằng CCCD trong bộ đệm
+✓  5. hàng chờ và màn hình chờ khi mất mạng: gộp ảnh chụp với lượt cấp trên máy, số có nhãn "tạm"; nút "Hủy" bị khóa (cần mạng)
+✓  6. gọi vào khám khi mất mạng: máy không có dị ứng của người mới nên đòi xác nhận "allergy-unknown"; tiền sử "chưa tải"
+✓  7. ký khi mất mạng: mã PM-261111-PQT655 sinh ở máy, trang in có nhãn "KÝ KHI MẤT MẠNG", xuất PDF đúng 1 trang A5
+✓  8. đọc thẳng IndexedDB: 6 mục chờ và bộ đệm, không có tên, số điện thoại, CCCD, triệu chứng, thuốc ở dạng rõ
+✓  9. mất mạng: "Gửi đơn qua Zalo" (mô phỏng) vẫn mở bản xem trước từ dữ liệu trên máy, số đã che, không thuốc hay chẩn đoán, 0 yêu cầu mạng; Esc đóng
+✓ 10. có mạng lại: tự đồng bộ hết; máy chủ có đúng 1 bệnh nhân, 1 lượt khám, 1 đơn mã PM-261111-PQT655, giữ số 2
+✓ 11. mất phản hồi khi ký (máy chủ đã ghi): in từ máy, gửi lại cùng UUID, máy chủ vẫn chỉ có 1 lượt khám mới, mã PM-261111-W3D8NW trùng
+✓ 12. 503 lúc ký (OFF-8): in một tờ A5 từ máy, không im lặng; tự gửi lại, máy chủ có đúng 1 lượt khám mới, mã PM-261111-3C07DB trùng
+✓ 13. ba lần in đều gọi print() khi không còn yêu cầu IndexedDB nào đang dở (hàng rào in)
+
+✗ Hỏng ở bước 14 
+ AssertionError [ERR_ASSERTION]: một lượt khám thì một dòng: dòng của máy chủ và lượt tạm trên máy phải là một
+
+2 !== 1
+
+    at file:///D:/My%20Documents%20D/UNIGIS/PM/phongmach/.worktrees/lat5-retry-queue-one-row/apps/clinic-web/e2e/offline-sign.mjs:344:10 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 2,
+  expected: 1,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+[ELIFECYCLE] Command failed with exit code 1.
+Error: ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL
+
+  × "pnpm recursive run" failed in D:\My Documents
+  │ D\UNIGIS\PM\phongmach\.worktrees\lat5-retry-queue-one-row\apps\clinic-web
+
+[exit 1]
+
+# Ảnh chụp: apps/clinic-web/e2e/screenshots/35-one-row-after-lost-checkin.png (hai dòng cho ONE_NAME) và FAILED-offline.png (không commit, thư mục bị .gitignore)
+# Mã đang chạy: HEAD 1a5ba3f (chưa sửa) + chỉ các thay đổi kiểm thử; BFF và giao diện dựng bằng infra/dev-up.sh (giao diện ở 5183 vì 5173 bận).
