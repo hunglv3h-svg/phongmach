@@ -102,13 +102,38 @@ export interface LocalQueueItem extends QueueItem {
   };
 }
 
+/** id của lượt khám trên máy khi mục cấp số chưa có id máy chủ. */
+const localVisitId = (op: Op<'checkin'>): string => op.body.payload.visitTmpId ?? op.id;
+
+/**
+ * Lượt khám của máy chủ ứng với các mục cấp số CHƯA XONG trên máy: id trên máy (id tạm) → id máy chủ, khớp theo `clientUuid`
+ * của lần cấp số (không phân biệt hoa thường). Có khi yêu cầu cấp số tới được máy chủ mà phản hồi không về: máy chủ đã có lượt
+ * khám, máy vẫn giữ mục cấp số với id tạm. Khớp theo `clientUuid` vì nó chỉ đúng một lần bấm "Cấp số"; KHÔNG khớp theo bệnh
+ * nhân và ngày (gộp nhầm người khám hai lượt trong một ngày). Máy chủ không trả `clientUuid` (bản cũ): không khớp gì.
+ */
+export function adoptedVisits(serverItems: QueueItem[], ops: AnyOp[]): Map<string, string> {
+  const byUuid = new Map(serverItems.filter((i) => i.clientUuid).map((i) => [i.clientUuid!.toLowerCase(), i.id]));
+  const out = new Map<string, string>();
+  if (byUuid.size === 0) return out;
+  for (const op of ops) {
+    if (op.meta.kind !== 'checkin' || isTerminal(op.meta.status)) continue;
+    const checkin = op as Op<'checkin'>;
+    const serverId = byUuid.get(checkin.body.payload.body.clientUuid.toLowerCase());
+    if (serverId) out.set(localVisitId(checkin), serverId);
+  }
+  return out;
+}
+
 /**
  * Gộp hàng chờ của máy chủ với các thao tác trên máy (OFF-2, N3): người cấp số khi mất mạng hiện với số tạm, lượt đã mở
  * hoặc đã ký trên máy hiện đúng trạng thái dù máy chủ chưa biết. `ops` theo thứ tự hàng đợi, chỉ của hôm nay.
+ * Mỗi lượt khám đúng một dòng: mục cấp số chưa xong mà máy chủ đã có lượt khám của nó (`adoptedVisits`) thì dùng dòng của máy chủ.
  */
 export function mergeQueue(snapshot: QueueItem[], ops: AnyOp[], ids: Map<string, string>, me: { id: string; name: string }): LocalQueueItem[] {
   const items = new Map<string, LocalQueueItem>(snapshot.map((i) => [i.id, { ...i }]));
-  const find = (visitId: string) => items.get(ids.get(visitId) ?? visitId) ?? items.get(visitId);
+  const adopted = adoptedVisits(snapshot, ops);
+  const serverIdOf = (localId: string) => ids.get(localId) ?? adopted.get(localId);
+  const find = (visitId: string) => items.get(serverIdOf(visitId) ?? visitId) ?? items.get(visitId);
   const mark = (item: LocalQueueItem, op: AnyOp) => {
     // Mục đã kết thúc (máy chủ nhận, hoặc người dùng đã đóng) không còn là "pending" trong hàng chờ trên máy.
     const done = isTerminal(op.meta.status);
@@ -117,10 +142,11 @@ export function mergeQueue(snapshot: QueueItem[], ops: AnyOp[], ids: Map<string,
 
   for (const op of ops) {
     if (op.meta.kind === 'checkin') {
-      const { body, display, visitTmpId } = (op as Op<'checkin'>).body.payload;
+      const { body, display } = (op as Op<'checkin'>).body.payload;
       const result = (op as Op<'checkin'>).body.result;
       const proposed = body.proposedNumber;
-      const serverId = result?.item.id ?? (visitTmpId ? ids.get(visitTmpId) : undefined);
+      const id = localVisitId(op as Op<'checkin'>);
+      const serverId = result?.item.id ?? serverIdOf(id);
       const known = serverId ? items.get(serverId) : undefined;
       if (known || result) {
         const item = known ?? { ...result!.item };
@@ -129,7 +155,6 @@ export function mergeQueue(snapshot: QueueItem[], ops: AnyOp[], ids: Map<string,
         items.set(item.id, item);
         continue;
       }
-      const id = visitTmpId ?? op.id;
       const item: LocalQueueItem = {
         id,
         number: proposed ?? 0,
