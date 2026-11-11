@@ -530,7 +530,7 @@ export class SyncEngine {
     ops = [...byId.values()].sort((a, b) => a.meta.seq - b.meta.seq);
     await this.settleFocus(ops);
     ops = await this.refreshCounts();
-    this.schedule(ops, !this.isOnline());
+    this.schedule(ops, !this.isOnline(), now);
   }
 
   private update(byId: Map<string, AnyOp>, op: AnyOp, status: OpStatus, body: OpBody): void {
@@ -609,15 +609,19 @@ export class SyncEngine {
 
   /**
    * Hẹn lượt sau: lúc mục thử lại sớm nhất hết thời gian chờ, và tối đa sau `periodMs` khi còn mục chưa xong.
+   * `since` là thời điểm lượt vừa chạy dùng để xét mục nào tới hạn. Mục hết thời gian chờ SAU mốc đó (kể cả trong lúc lượt
+   * đang gửi, khi đã quá hạn lúc hẹn) chưa được lượt này xét: hẹn ngay (0 ms), không nằm chờ tới chu kỳ. Mục tới hạn từ trước
+   * `since` thì lượt vừa rồi đã xét mà không gửi (dừng vì lỗi mạng, chờ mục trước, bị giữ): không kéo lượt sau lại gần, nên mỗi
+   * lần hết thời gian chờ gây thêm nhiều nhất một lượt, không chạy liên tục.
    * Trình duyệt báo mất mạng thì chỉ hẹn theo chu kỳ (sự kiện `online` sẽ đánh thức sớm hơn).
    */
-  private schedule(ops: AnyOp[], browserOffline: boolean): void {
+  private schedule(ops: AnyOp[], browserOffline: boolean, since: number): void {
     if (this.stopped || this.current.paused) return;
     this.clock.clearTimeout(this.timer);
     const open = ops.filter((o) => o.meta.status === 'pending' || o.meta.status === 'retry');
     if (open.length === 0) return;
     const now = this.clock.now();
-    const later = browserOffline ? [] : open.map((o) => o.meta.nextAt).filter((t) => t > now);
+    const later = browserOffline ? [] : open.map((o) => o.meta.nextAt).filter((t) => t > since).map((t) => Math.max(t, now));
     const soonest = Math.min(...later, now + this.periodMs);
     this.timer = this.clock.setTimeout(() => void this.run(), soonest - now);
   }
