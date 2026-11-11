@@ -1464,7 +1464,7 @@ Agent đọc mục này trước khi làm bất kỳ việc nào ở 11.4.
 | Mã | Việc | Đợt | Chặn bởi | Trạng thái | PR | Ngày DONE |
 |---|---|---|---|---|---|---|
 | M0-S3.5c | Đưa hai bản sửa của lát 5 (PR #7, #9) về `main` | M0 | — | ⏳ | | |
-| QT11-V12 | Soạn quy trình phòng khám v1.2 gửi chủ phòng khám | M0 | — | ⏳ | | |
+| QT11-V12 | Soạn quy trình phòng khám v1.2 gửi chủ phòng khám | M0 | — | 🔍 Chờ duyệt | `D:\My Documents D\UNIGIS\PM\Quy-trinh-phong-mach-PHONGMACH-v1.2.docx` | |
 | M0-1 | Phiên thử 3 bác sĩ thật, đo p50/p90 | M0 | Cần 3 bác sĩ | 👤 | | |
 | M0-6 | Diễn tập trình diễn, bản dự phòng | M0 | Chủ dự án bỏ treo | ⏸ | | |
 | GO-1311 | Họp đi/không đi 13/11, gói bằng chứng T1–T10 | M0 | — | 👤 | | |
